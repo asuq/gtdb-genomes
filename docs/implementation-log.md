@@ -214,3 +214,19 @@ This log records what was actually implemented while
   - the data was committed in grouped release batches rather than one release
     per commit to keep the history reviewable without creating an excessive
     number of tiny data commits
+
+### Commit `2112b72` - `chore(data): add bundled GTDB taxonomy releases 202 to 214`
+
+- Implemented:
+  - added the bundled GTDB taxonomy TSV files for releases 202, 207, and 214
+- Files:
+  - `data/gtdb_taxonomy/202.0/`
+  - `data/gtdb_taxonomy/207.0/`
+  - `data/gtdb_taxonomy/214.0/`
+- Checks run:
+  - verified the downloaded file set with `find data/gtdb_taxonomy -maxdepth 2 -type f | sort`
+  - verified rough payload sizes with `du -sh data/gtdb_taxonomy/* | sort -h`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none beyond the grouped data-batch approach already recorded above
