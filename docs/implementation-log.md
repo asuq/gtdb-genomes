@@ -346,3 +346,21 @@ This log records what was actually implemented while
   - yes
 - Deviations:
   - none
+
+## Phase 4: Metadata lookup and `GCA` preference
+
+### Commit `7e15df1` - `feat(metadata): add datasets-based accession metadata lookup`
+
+- Implemented:
+  - added a dedicated metadata module for `datasets summary genome accession`
+  - added command construction for metadata lookup with optional API key
+  - added JSON-lines parsing and recursive accession extraction from summary
+    payloads
+- Files:
+  - `src/gtdb_genomes/metadata.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev python -c 'from gtdb_genomes.metadata import choose_preferred_accession, parse_summary_json_lines; text = "{\"accession\":\"GCF_000001.1\",\"paired\":\"GCA_000001.1\"}\\n"; parsed = parse_summary_json_lines(text, ["GCF_000001.1"]); print(parsed); print(choose_preferred_accession("GCF_000001.1", parsed["GCF_000001.1"]))'`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none
