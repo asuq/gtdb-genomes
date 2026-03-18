@@ -199,3 +199,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"gtdb-genomes: error: {error}", file=sys.stderr)
         return 5
     return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

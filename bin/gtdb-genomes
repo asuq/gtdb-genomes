@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! command -v uv >/dev/null 2>&1; then
+    printf '%s\n' "gtdb-genomes: error: uv is required on PATH for the repo-local wrapper" >&2
+    exit 5
+fi
+
+exec uv run --no-dev --python 3.12 python -m gtdb_genomes.cli "$@"
