@@ -193,3 +193,24 @@ This log records what was actually implemented while
   - yes
 - Deviations:
   - none
+
+### Commit `e8845d1` - `chore(data): add bundled GTDB taxonomy releases 80 to 95`
+
+- Implemented:
+  - added the bundled GTDB taxonomy TSV files for releases 80, 83, 86, 89,
+    and 95
+- Files:
+  - `data/gtdb_taxonomy/80.0/`
+  - `data/gtdb_taxonomy/83.0/`
+  - `data/gtdb_taxonomy/86.0/`
+  - `data/gtdb_taxonomy/89.0/`
+  - `data/gtdb_taxonomy/95.0/`
+- Checks run:
+  - verified the downloaded file set with `find data/gtdb_taxonomy -maxdepth 2 -type f | sort`
+  - verified rough payload sizes with `du -sh data/gtdb_taxonomy/* | sort -h`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - the data was committed in grouped release batches rather than one release
+    per commit to keep the history reviewable without creating an excessive
+    number of tiny data commits
