@@ -559,3 +559,44 @@ PY`
   - yes
 - Deviations:
   - none
+
+### Commit `08cf7d8` - `feat(layout): add duplicate-copy and zero-match handling`
+
+- Implemented:
+  - added output helpers for accession payload copying into per-taxon folders
+  - added duplicate-accession detection across requested taxa
+  - added zero-match output initialisation with header-only root and per-taxon
+    TSV files
+- Files:
+  - `src/gtdb_genomes/layout.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev python - <<'PY'
+from pathlib import Path
+from gtdb_genomes.layout import (
+    get_duplicate_accessions,
+    initialise_run_directories,
+    write_zero_match_outputs,
+)
+
+run_directories = initialise_run_directories(Path('/tmp/gtdb_zero_match_check'))
+write_zero_match_outputs(
+    run_directories,
+    ('g__Escherichia', 's__Escherichia coli'),
+    {
+        'g__Escherichia': 'g__Escherichia',
+        's__Escherichia coli': 's__Escherichia_coli',
+    },
+    [{'run_id': 'run-1', 'exit_code': 4}],
+    [{'requested_taxon': 'g__Escherichia', 'taxon_slug': 'g__Escherichia'}],
+)
+print(sorted(path.name for path in run_directories.taxa_root.iterdir()))
+print(get_duplicate_accessions([
+    {'taxon_slug': 'g__Escherichia', 'final_accession': 'GCA_1'},
+    {'taxon_slug': 's__Escherichia_coli', 'final_accession': 'GCA_1'},
+    {'taxon_slug': 'g__Bacillus', 'final_accession': 'GCA_2'},
+]))
+PY`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none
