@@ -812,3 +812,47 @@ PY`
 - Deviations:
   - the recipe now reflects the current implementation dependencies rather than
     the earlier speculative dependency list from the documentation phase.
+
+## Post-implementation runtime policy cleanup
+
+### Commit `eda1162` - `chore(entrypoint): remove repo-local uv wrapper`
+
+- Implemented:
+  - removed `bin/gtdb-genomes` so the repository no longer ships a second
+    launcher that implies `uv` is part of the runtime model
+  - removed the wrapper-shape tests
+  - replaced them with entrypoint tests for the published console script, the
+    module entrypoint, and the installed environment command
+- Files:
+  - `bin/gtdb-genomes`
+  - `tests/test_entrypoints.py`
+  - `tests/test_wrapper.py`
+- Checks run:
+  - `.venv/bin/pytest tests/test_entrypoints.py tests/test_cli.py tests/test_cli_integration.py`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - this intentionally supersedes the earlier repo-local `uv` wrapper so the
+    shipped runtime model matches the Bioconda target: Conda installs the
+    public `gtdb-genomes` command and `uv` remains development-only
+
+### Commit `d5f4ad3` - `docs(runtime): clarify uv as development-only`
+
+- Implemented:
+  - updated the root README to separate packaged runtime use from
+    source-checkout development
+  - documented `uv run gtdb-genomes ...` and
+    `uv run python -m gtdb_genomes ...` as developer workflows
+  - updated the Bioconda template comments to say that the package must not
+    depend on `uv` at runtime
+- Files:
+  - `README.md`
+  - `packaging/bioconda/meta.yaml`
+  - `tests/test_entrypoints.py`
+- Checks run:
+  - `.venv/bin/pytest tests/test_entrypoints.py tests/test_cli.py tests/test_cli_integration.py`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the documentation now reflects the shipped runtime policy rather than the
+    earlier source-checkout wrapper model from the first implementation pass
