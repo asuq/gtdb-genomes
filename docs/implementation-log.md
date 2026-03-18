@@ -421,3 +421,22 @@ This log records what was actually implemented while
   - yes
 - Deviations:
   - none
+
+### Commit `4114178` - `feat(download): add auto preview and method selection`
+
+- Implemented:
+  - added `datasets --preview` command construction and execution
+  - added tolerant preview-size parsing with binary unit conversion
+  - added a reusable download-method decision object for direct versus
+    dehydrate mode
+- Files:
+  - `src/gtdb_genomes/download.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev python -c "from gtdb_genomes.download import parse_preview_size_bytes, select_download_method; preview = 'Package size: 16.5 GB\\n'; print(parse_preview_size_bytes(preview)); print(select_download_method('auto', 12, preview))"`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - preview parsing currently chooses the largest size value present in the
+    output rather than keying off one exact label, because the upstream
+    preview text format is not stable enough to trust a single hard-coded
+    prompt phrase
