@@ -402,3 +402,22 @@ This log records what was actually implemented while
   - yes
 - Deviations:
   - none
+
+## Phase 5: Download orchestration
+
+### Commit `1146023` - `feat(download): add datasets command builder and include validation`
+
+- Implemented:
+  - added a dedicated download module for `datasets download genome accession`
+    and `datasets rehydrate` command construction
+  - centralised `--include` validation in the download module
+  - switched the CLI parser to use the shared include validator
+- Files:
+  - `src/gtdb_genomes/cli.py`
+  - `src/gtdb_genomes/download.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev python -c "from pathlib import Path; from gtdb_genomes.download import build_download_command, build_rehydrate_command; print(build_download_command(['GCA_1', 'GCA_1', 'GCF_2'], Path('/tmp/out.zip'), 'genome,gff3', api_key='secret', dehydrated=True)); print(build_rehydrate_command(Path('/tmp/bag'), 7, api_key='secret'))"`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none
