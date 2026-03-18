@@ -43,3 +43,25 @@ This log records what was actually implemented while
   - yes
 - Deviations:
   - none
+
+### Commit `f6f5e96` - `feat(cli): add documented options and validation rules`
+
+- Implemented:
+  - added the full documented Phase 1 CLI flag surface
+  - added normalisation and validation for `--release`, `--taxon`,
+    `--threads`, `--output`, and `--include`
+  - implemented ordered de-duplication for repeated `--taxon` values
+  - added an internal `CliArgs` container for normalised arguments
+- Files:
+  - `src/gtdb_genomes/cli.py`
+- Checks run:
+  - `PYTHONPATH=src /opt/homebrew/bin/python3.12 -m gtdb_genomes --help`
+  - `PYTHONPATH=src /opt/homebrew/bin/python3.12 -m gtdb_genomes --release ' ' --taxon g__Escherichia --output /tmp/gtdb_check`
+  - `PYTHONPATH=src /opt/homebrew/bin/python3.12 -m gtdb_genomes --release latest --taxon ' ' --output /tmp/gtdb_check`
+  - `PYTHONPATH=src /opt/homebrew/bin/python3.12 -m gtdb_genomes --release latest --taxon g__Escherichia --output /tmp/gtdb_check --include gff3`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - required `--release`, `--taxon`, and `--output` were enforced at the
+    parser layer immediately because the documented command form and later
+    phases assume all three inputs are always present
