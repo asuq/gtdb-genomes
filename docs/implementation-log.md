@@ -143,3 +143,18 @@ This log records what was actually implemented while
 - Deviations:
   - this repo-level preparation commit was added before the manifest loader so
     the later bundled-data commits can be tracked correctly
+
+### Commit `43e1950` - `feat(release): add bundled release manifest loader`
+
+- Implemented:
+  - added a dedicated release resolver module
+  - added bundled-data root and manifest path discovery helpers
+  - added release-manifest row parsing and bundled-data error handling
+- Files:
+  - `src/gtdb_genomes/release_resolver.py`
+- Checks run:
+  - `PYTHONPATH=src /opt/homebrew/bin/python3.12 -c "from gtdb_genomes.release_resolver import get_release_manifest_path; print(get_release_manifest_path())"`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none
