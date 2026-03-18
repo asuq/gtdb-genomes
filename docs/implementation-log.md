@@ -109,3 +109,21 @@ This log records what was actually implemented while
   - `uv.lock` landed with the wrapper commit rather than the first scaffold
     commit, because syncing was only needed once the real `uv` execution path
     was being verified
+
+### Commit `904bd28` - `test(cli): cover help, validation, and preflight`
+
+- Implemented:
+  - added Phase 1 parser and validation tests
+  - added a preflight exit-code test
+  - added wrapper contract tests for presence, executability, and command shape
+- Files:
+  - `tests/test_cli.py`
+  - `tests/test_wrapper.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev pytest`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - the wrapper test asserts the wrapper command shape instead of invoking the
+    full wrapper inside pytest, because the command-shape check is stable and
+    avoids coupling the test suite to the caller's ambient `PATH`
