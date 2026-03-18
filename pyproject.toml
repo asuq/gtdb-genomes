@@ -11,7 +11,7 @@ dev = [
 ]
 
 [project.scripts]
-gtdb-genomes = "gtdb_genomes:main"
+gtdb-genomes = "gtdb_genomes.cli:main"
 
 [build-system]
 requires = ["hatchling"]
