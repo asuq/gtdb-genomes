@@ -16,7 +16,8 @@ build:
   # The future Conda package should install the normal Python console
   # entrypoint for gtdb-genomes and must not depend on the repo-local uv
   # wrapper. It should also include the bundled GTDB taxonomy data and local
-  # release manifest needed for offline release resolution.
+  # release manifest needed for offline release resolution. The current build
+  # backend assumption is Hatchling, matching the shipped pyproject.toml.
   script: {{ PYTHON }} -m pip install . --no-deps --ignore-installed -vv
 
 requirements:
@@ -29,10 +30,6 @@ requirements:
   run:
     - python >=3.12
     - polars
-    - pydantic
-    - biopython
-    - gffutils
-    - tqdm
     - unzip
     # Confirm the correct datasets package name and channel before submission.
     # Keep this unresolved until packaging time. If the datasets CLI is not
@@ -43,8 +40,9 @@ requirements:
 test:
   commands:
     - gtdb-genomes --help
-    # Add an installed-package check for bundled GTDB taxonomy files once the
-    # real package layout exists.
+    # Add an installed-package check for bundled GTDB taxonomy files in the
+    # packaged gtdb_genomes/data/gtdb_taxonomy tree once a release artefact
+    # exists for recipe validation.
   imports:
     - gtdb_genomes
 
@@ -57,7 +55,8 @@ about:
     expected package shape, runtime dependencies, and console entrypoint.
     The packaged command should preserve the documented CLI contract described
     in the root README, including bundled GTDB taxonomy data for offline
-    release resolution.
+    release resolution and the standard Python console entrypoint rather than
+    the repo-local uv wrapper.
   license: TBD
   license_file: LICENSE
   doc_url: https://github.com/your-org/gtdb-genomes
