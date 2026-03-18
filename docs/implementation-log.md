@@ -778,3 +778,18 @@ PY`
     The packaging configuration and repo-path resolution were still verified
     locally, and the full test suite passed in the existing project virtual
     environment.
+
+### Commit `d354128` - `chore(package): align package metadata and entrypoints`
+
+- Implemented:
+  - linked the published package metadata to the root `README.md`
+  - made the wheel package root explicit for Hatch builds
+  - revalidated the test suite after the packaging metadata update
+- Files:
+  - `pyproject.toml`
+- Checks run:
+  - `.venv/bin/pytest`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none
