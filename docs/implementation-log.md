@@ -534,3 +534,28 @@ PY`
   - internal working directories are placed under `OUTPUT/.gtdb_genomes_work`
     so later phases can preserve them under `--keep-temp` without depending on
     platform-specific temporary directory discovery
+
+### Commit `8562a8f` - `feat(layout): add final output writer and fixed TSV emitters`
+
+- Implemented:
+  - encoded the fixed TSV column order for all root and per-taxon manifests
+  - added header-safe TSV writers for populated and empty outputs
+  - added stable path helpers for root manifest files and per-taxon accession
+    manifests
+- Files:
+  - `src/gtdb_genomes/layout.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev python - <<'PY'
+from pathlib import Path
+from gtdb_genomes.layout import initialise_run_directories, write_root_manifests, write_taxon_accessions
+
+run_directories = initialise_run_directories(Path('/tmp/gtdb_manifest_check'))
+write_root_manifests(run_directories, [{'run_id': 'run-1', 'exit_code': 0}], [], [], [])
+write_taxon_accessions(run_directories, 'g__Escherichia', [])
+print((run_directories.output_root / 'run_summary.tsv').read_text())
+print((run_directories.taxa_root / 'g__Escherichia' / 'taxon_accessions.tsv').read_text())
+PY`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none
