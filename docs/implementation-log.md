@@ -753,3 +753,28 @@ PY`
   - yes
 - Deviations:
   - none
+
+## Phase 9: Packaging and release readiness
+
+### Commit `0e38a58` - `chore(package): include bundled taxonomy data in builds`
+
+- Implemented:
+  - updated package data discovery so bundled GTDB taxonomy can be found from
+    either the repo checkout or an installed package layout
+  - configured Hatch wheel builds to include `data/gtdb_taxonomy` inside the
+    installed package
+  - configured source distributions to carry the bundled taxonomy payload
+- Files:
+  - `pyproject.toml`
+  - `src/gtdb_genomes/release_resolver.py`
+- Checks run:
+  - `PYTHONPATH=src /opt/homebrew/bin/python3.12 -c "from gtdb_genomes.release_resolver import get_bundled_data_root; print(get_bundled_data_root())"`
+  - `.venv/bin/pytest`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - build verification through `uv build` could not be completed inside the
+    sandbox because build isolation attempted to fetch `hatchling` from PyPI.
+    The packaging configuration and repo-path resolution were still verified
+    locally, and the full test suite passed in the existing project virtual
+    environment.
