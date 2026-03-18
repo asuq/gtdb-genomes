@@ -49,3 +49,16 @@ def test_installed_console_script_help_runs() -> None:
     assert console_script.is_file()
     assert result.returncode == 0
     assert "--release" in result.stdout
+
+
+def test_runtime_docs_mark_uv_as_development_only() -> None:
+    """The runtime docs should not present uv as an end-user requirement."""
+
+    readme_text = Path("README.md").read_text(encoding="utf-8")
+    bioconda_text = Path("packaging/bioconda/meta.yaml").read_text(
+        encoding="utf-8",
+    )
+
+    assert "development tool only" in readme_text
+    assert "uv run gtdb-genomes" in readme_text
+    assert "must not depend on uv at runtime" in bioconda_text

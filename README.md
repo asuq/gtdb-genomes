@@ -1,8 +1,11 @@
 # gtdb-genomes
 
-`gtdb-genomes` is a planned command-line tool for downloading genomes from NCBI based on GTDB taxa and GTDB release taxonomy tables.
+`gtdb-genomes` is a command-line tool for downloading genomes from NCBI based on GTDB taxa and GTDB release taxonomy tables.
 
-This repository is currently in a documentation-first phase. The command is not implemented yet. The documents in this repository lock the intended behaviour before coding starts.
+The project uses a split runtime model:
+
+- packaged and Conda-installed use runs the normal `gtdb-genomes` command
+- source-checkout development uses `uv` for local dependency management and execution
 
 ## What The Tool Will Do
 
@@ -19,23 +22,26 @@ The planned workflow is:
 
 Completeness has priority over strict `GCA` conversion. If a paired `GCA` accession is unavailable, the original accession is retained.
 
-## Planned Prerequisites
+## Prerequisites
 
-The documented design assumes these tools are available:
+Packaged runtime use requires:
 
-- `uv`
 - `datasets`
 - `unzip`
 
-Repo-local execution is planned through `uv`. The intended wrapper command will be `gtdb-genomes`.
+Source-checkout development additionally uses:
 
-## Planned Command Form
+- `uv`
+
+`uv` is a development tool only. End users of a packaged installation should not need `uv` at runtime.
+
+## Command Form
 
 ```bash
 gtdb-genomes --release latest --taxon g__Escherichia --output results
 ```
 
-The planned interface includes:
+The interface includes:
 
 - `--release`
 - repeatable `--taxon`
@@ -55,7 +61,7 @@ The design explicitly does not include:
 - `--domain`
 - `--api-key-env`
 
-## Planned Option Defaults
+## Option Defaults
 
 ### `--release`
 
@@ -321,14 +327,16 @@ This makes partial results usable without hiding incomplete runs.
 - direct download concurrency is intentionally limited to `min(--threads, 5)` to avoid excessive server load
 - package size will grow because all supported GTDB taxonomy releases are bundled locally
 
-## Future Packaging
+## Development And Packaging
 
-The future implementation is planned to support two use cases:
+Use cases supported by the project are:
 
-- repo-local development and execution through `uv`
-- a later Bioconda package that installs a normal Conda-native `gtdb-genomes` command without requiring `uv` at runtime
+- source-checkout development through `uv run gtdb-genomes ...` or `uv run python -m gtdb_genomes ...`
+- packaged installation, including Bioconda, through the normal `gtdb-genomes ...` command
 
-The current Bioconda material in this repository is only a template for future packaging work.
+Bioconda is expected to install a Conda-native `gtdb-genomes` command into the active environment so that activation is sufficient to place it on `PATH`.
+
+The current Bioconda material in this repository remains a template for future packaging work.
 
 ## Additional Documents
 
