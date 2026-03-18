@@ -701,3 +701,22 @@ PY`
     planned.
   - dehydrate mode therefore applies the documented method choice and
     rehydration semantics per accession rather than through one global package.
+
+### Commit `6285ee3` - `fix(run): handle zero-match before auto preview`
+
+- Implemented:
+  - moved the zero-match branch ahead of auto preview and method selection
+  - restored the documented exit code `4` and output-writing path for real
+    zero-match runs
+  - aligned dry-run zero-match handling with the same non-success exit code
+- Files:
+  - `src/gtdb_genomes/workflow.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev pytest`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - dry-run zero-match runs now return exit code `4` without creating an output
+    tree. The frozen plan defined zero-match as a non-success result but did
+    not separately specify the dry-run branch, so this implementation keeps the
+    non-success code while still honouring the no-output dry-run rule.
