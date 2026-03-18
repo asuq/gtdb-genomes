@@ -177,3 +177,19 @@ This log records what was actually implemented while
   - the manifest uses one row per resolved release with comma-separated aliases
     rather than one row per alias, because that keeps the bundled file smaller
     and easier to maintain when GTDB paths change
+
+### Commit `f0b0cbd` - `feat(taxonomy): add bundled taxonomy path resolution and local-data errors`
+
+- Implemented:
+  - added bundled taxonomy file validation helpers
+  - added explicit bundled-data errors for missing and unreadable taxonomy files
+  - added a combined resolve-and-validate entrypoint for later runtime use
+- Files:
+  - `src/gtdb_genomes/release_resolver.py`
+- Checks run:
+  - `PYTHONPATH=src /opt/homebrew/bin/python3.12 -c "from gtdb_genomes.release_resolver import resolve_release; print(resolve_release('95').resolved_release)"`
+  - `PYTHONPATH=src /opt/homebrew/bin/python3.12 -c "from gtdb_genomes.release_resolver import resolve_and_validate_release; resolve_and_validate_release('95')"`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none
