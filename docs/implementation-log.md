@@ -386,3 +386,19 @@ This log records what was actually implemented while
     first metadata commit, because the preference layer needed an executable
     lookup path and keeping both in one reviewable patch was cleaner than
     adding a separate subprocess-only commit with no consumer yet
+
+### Commit `6fe1b37` - `test(metadata): cover paired accessions and fallback statuses`
+
+- Implemented:
+  - added tests for metadata command construction
+  - added stubbed tests for successful and failing `datasets` metadata lookups
+  - added conversion-status coverage for paired `GCA`, unchanged original, and
+    metadata lookup fallback cases
+- Files:
+  - `tests/test_metadata.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev pytest`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none
