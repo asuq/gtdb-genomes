@@ -261,3 +261,26 @@ This log records what was actually implemented while
   - yes
 - Deviations:
   - none
+
+### Commit `de27f8c` - `feat(taxonomy): parse GTDB taxonomy tables with polars`
+
+- Implemented:
+  - added `polars` as a runtime dependency
+  - added GTDB taxonomy loading with Polars for the two-column TSV format
+  - added normalisation from GTDB accessions such as `RS_GCF_*` and
+    `GB_GCA_*` to plain NCBI accessions
+  - added release-level taxonomy loading across bacterial and archaeal files
+- Files:
+  - `pyproject.toml`
+  - `uv.lock`
+  - `src/gtdb_genomes/taxonomy.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv lock --python /opt/homebrew/bin/python3.12`
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv sync --python /opt/homebrew/bin/python3.12 --group dev`
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev python -c "from gtdb_genomes.release_resolver import resolve_and_validate_release; from gtdb_genomes.taxonomy import load_release_taxonomy; frame = load_release_taxonomy(resolve_and_validate_release('95')); print(frame.columns); print(frame.height); print(frame.select('gtdb_accession', 'ncbi_accession').head(3))"`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - accession normalisation was added in the parser commit rather than waiting
+    for metadata mapping, because the real GTDB files include `RS_` and `GB_`
+    prefixes that the later phases must already agree on
