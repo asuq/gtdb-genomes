@@ -364,3 +364,25 @@ This log records what was actually implemented while
   - yes
 - Deviations:
   - none
+
+### Commit `c136a17` - `feat(metadata): add GCF to GCA preference and fallback mapping`
+
+- Implemented:
+  - added executable metadata lookup through `subprocess.run()` for
+    `datasets summary genome accession`
+  - added `GCF` to paired-`GCA` preference resolution with immediate fallback
+    to the original accession when metadata is unavailable
+  - added Polars join-based accession mapping with
+    `final_accession`, `accession_type_original`,
+    `accession_type_final`, and `conversion_status`
+- Files:
+  - `src/gtdb_genomes/metadata.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev python -c "import polars as pl; from gtdb_genomes.metadata import apply_accession_preferences; frame = pl.DataFrame({'ncbi_accession': ['GCF_000001.1', 'GCA_000002.1']}); mapped = apply_accession_preferences(frame, {'GCF_000001.1': {'GCF_000001.1', 'GCA_000001.1'}, 'GCA_000002.1': {'GCA_000002.1'}}); print(mapped)"`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - the metadata command runner landed in this mapping commit instead of the
+    first metadata commit, because the preference layer needed an executable
+    lookup path and keeping both in one reviewable patch was cleaner than
+    adding a separate subprocess-only commit with no consumer yet
