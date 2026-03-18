@@ -18,8 +18,8 @@ The pipeline is designed around four priorities:
 ```mermaid
 flowchart TD
     A["User runs gtdb-genomes"] --> B["Resolve GTDB release"]
-    B --> C["Find taxonomy TSV names for that release"]
-    C --> D["Download and cache taxonomy TSVs in repo"]
+    B --> C["Resolve release from bundled local manifest"]
+    C --> D["Load bundled taxonomy TSVs from repo/package data"]
     D --> E["Parse TSVs and match requested taxa by descendant membership"]
     E --> F["Collect GTDB accessions"]
     F --> G["Query NCBI metadata for paired GCA accessions"]
@@ -38,20 +38,24 @@ flowchart TD
 
 Dry-run note:
 
-- `--dry-run` may resolve releases, fetch/cache taxonomy TSVs, and query accession metadata, but it must not download genome payloads or create the final output tree.
+- `--dry-run` may resolve releases from the bundled local manifest, read bundled taxonomy TSVs, and query accession metadata, but it must not contact GTDB, download genome payloads, or create the final output tree.
 - automatic retries apply only to `datasets download genome accession` and `datasets rehydrate`, using one initial attempt plus up to 3 retries.
 
 ## Step-By-Step Concept
 
 ### 1. GTDB release discovery
 
-The tool must not assume that all GTDB releases use the same file naming scheme.
+The tool must not assume that all GTDB releases use the same file naming scheme, but it also must not depend on GTDB network access at runtime.
 
 The release resolver is expected to:
 
 - accept friendly inputs such as `latest`, `214`, `226`, `220.0`, or `release220/220.0`
-- resolve those into a concrete release path under the GTDB releases index
-- inspect the release directory to discover which taxonomy TSVs actually exist
+- resolve those into a concrete bundled release identifier using a local bundled manifest
+- map the bundled release identifier to local taxonomy TSV file paths
+
+The bundled manifest is expected to live under a path such as `data/gtdb_taxonomy/releases.tsv`.
+
+`latest` must resolve from this local bundled manifest rather than from GTDB over the network.
 
 Historical naming variants that must be supported include:
 
@@ -62,22 +66,21 @@ Historical naming variants that must be supported include:
 - `ar53_taxonomy_r214.tsv`
 - `ar53_taxonomy.tsv`
 
-This discovery-driven approach avoids hardcoding one modern filename pattern and then failing on older GTDB releases.
+This manifest-driven approach avoids hardcoding one modern filename pattern and removes GTDB runtime access as a failure mode.
 
-### 2. Taxonomy TSV download and repo-local caching
+### 2. Bundled taxonomy TSV access
 
-The taxonomy TSVs are small enough to cache in the repository.
+The taxonomy TSVs are planned to be bundled with the software for every supported GTDB release.
 
-Planned cache behaviour:
+Planned bundled-data behaviour:
 
 - store files under `data/gtdb_taxonomy/<resolved_release>/`
-- download only the files needed for the chosen release
-- reuse the cached files on later runs
-- keep the cache separate from user output directories
+- ship a local release manifest that maps accepted release inputs to bundled file paths
+- read only the files needed for the chosen release at runtime
+- keep the bundled data separate from user output directories
+- treat missing bundled files as a local installation or packaging error
 
-This design gives predictable local reuse and makes debugging easier because the exact GTDB input tables remain available after a run.
-
-Dry-run is allowed to populate this cache because taxonomy resolution is part of planning the run rather than retrieving genome payloads.
+This design eliminates GTDB runtime access failures. Dry-run and normal execution both use the same bundled taxonomy data.
 
 ### 3. Taxon descendant matching
 
@@ -137,7 +140,7 @@ When direct download is chosen, the tool is expected to:
 
 The direct-download cap is intentional. It limits server pressure while still allowing practical throughput improvements on large, but not enormous, requests.
 
-Only direct download operations are retried automatically. Metadata lookups, taxonomy fetches, and preview calls are not retried by design.
+Only direct download operations are retried automatically. Metadata lookups and preview calls are not retried by design. GTDB taxonomy fetches do not exist in this model because taxonomy data is bundled locally.
 
 ### 7. Dehydrate and rehydrate flow
 
@@ -194,7 +197,7 @@ The planned implementation should use structured, explicit logging with careful 
 Normal logging should describe:
 
 - release resolution
-- taxonomy file reuse or download
+- bundled taxonomy manifest resolution and file selection
 - number of matched genomes
 - choice of direct vs dehydrate mode
 - duplicate copy operations
@@ -207,13 +210,13 @@ Failure TSVs must contain only redacted error messages.
 - redacted command lines
 - timings for major phases
 - batch sizes
-- cache decisions
+- bundled data selection decisions
 - copy and reorganisation details
 
 The API key must:
 
 - never be written to logs
-- never be written to manifests or cache files
+- never be written to manifests or bundled-data indexes
 - never appear in the debug log
 
 One residual risk remains: a literal key typed on the shell command line may still be exposed through shell history or operating-system process inspection outside the control of this tool.
@@ -228,3 +231,5 @@ This pipeline separates the problem into small, predictable stages:
 - local reorganisation produces the final user-facing layout
 
 That separation keeps the implementation modular, makes testing easier, and allows future extension without changing the overall model.
+
+An additional operational benefit is that supported releases remain available on first run without GTDB network access.

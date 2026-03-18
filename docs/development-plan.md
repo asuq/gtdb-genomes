@@ -30,31 +30,32 @@ Create the minimal project skeleton for a `uv`-managed Python application and es
 - the eventual build backend must work both with repo-local `uv` usage and with Conda packaging
 - the Bioconda package must install a normal entrypoint rather than the repo-local `uv` wrapper
 
-## Phase 2: GTDB release discovery and taxonomy cache
+## Phase 2: Bundled GTDB release discovery and taxonomy data
 
 ### Goal
 
-Implement reliable GTDB release resolution across historical naming variants and cache the taxonomy tables in the repository.
+Implement reliable GTDB release resolution across historical naming variants using bundled taxonomy assets shipped with the repository and future packages.
 
 ### Concrete tasks
 
-- query the GTDB releases index
-- normalise supported `--release` inputs to a concrete release path
-- inspect the target release directory for available bacterial and archaeal taxonomy TSV files
+- define a bundled manifest such as `data/gtdb_taxonomy/releases.tsv`
+- normalise supported `--release` inputs to a concrete bundled release identifier
+- map each bundled release identifier to local bacterial and archaeal taxonomy TSV paths
 - support historical filename variants rather than one fixed pattern
-- download the required TSV files into `data/gtdb_taxonomy/<resolved_release>/`
-- reuse cached files when present
+- read taxonomy TSVs from `data/gtdb_taxonomy/<resolved_release>/`
+- treat missing bundled taxonomy data as a local installation or packaging error
+- resolve `latest` from the bundled local manifest rather than from GTDB over the network
 
 ### Acceptance criteria
 
-- representative older and newer GTDB releases resolve correctly
-- the selected taxonomy TSV files are cached in the repo and reused on subsequent runs
-- `latest` resolves to a concrete release before caching
+- representative older and newer GTDB releases resolve correctly from bundled local data
+- first run succeeds without GTDB network access for supported releases
+- `latest` resolves to a concrete bundled release from the local manifest
 
 ### Notable risks or assumptions
 
-- GTDB directory HTML may change and should therefore be parsed defensively
-- some releases may not present both bacterial and archaeal files in the same way
+- the bundled manifest must be maintained carefully during project release preparation
+- some releases may not present both bacterial and archaeal files in the same way and that must be reflected in the bundled manifest
 
 ## Phase 3: Taxon filtering and accession selection
 
@@ -128,7 +129,7 @@ Select the correct `datasets` workflow and control concurrency safely.
 - cap direct-mode download concurrency at `min(--threads, 5)` jobs
 - map `--threads` to local worker limits and rehydrate worker count
 - support `--include` passthrough and `--api-key` forwarding with redaction
-- allow `--dry-run` to resolve releases, populate the taxonomy cache, and query accession metadata, but prohibit genome downloads and output-tree creation
+- allow `--dry-run` to resolve releases from the bundled manifest, read bundled taxonomy data, and query accession metadata, but prohibit GTDB network access, genome downloads, and output-tree creation
 - retry only `datasets download genome accession` and `datasets rehydrate`
 - use one initial attempt plus up to 3 retries with fixed backoff delays of 5 s, 15 s, and 45 s
 
@@ -192,7 +193,7 @@ Provide clear operational logging and strong secret hygiene.
 
 ### Acceptance criteria
 
-- API keys never appear in normal logs, debug logs, manifests, or cache files
+- API keys never appear in normal logs, debug logs, manifests, or bundled-data indexes
 - `--debug` produces a more detailed redacted log without changing functional behaviour
 - failure messages remain actionable without exposing sensitive values
 
@@ -242,6 +243,7 @@ Prepare the project for future distribution without changing the documented beha
 - align package metadata with the root README
 - finalise the console entrypoint name as `gtdb-genomes`
 - complete the Bioconda recipe with real version, source URL, and checksum
+- include bundled GTDB taxonomy data and the bundled local release manifest in distributed packages
 - verify dependency availability for Conda packaging
 - ensure the Conda package installs a normal entrypoint instead of the repo-local `uv` wrapper
 - review user-facing documentation for release readiness
@@ -250,6 +252,7 @@ Prepare the project for future distribution without changing the documented beha
 
 - packaging metadata is consistent across the Python project and Bioconda recipe
 - the Bioconda recipe can be completed with concrete release metadata
+- packaged installations include the bundled GTDB taxonomy data needed for offline release resolution
 - end-user documentation matches the shipped CLI behaviour
 
 ### Notable risks or assumptions
@@ -350,8 +353,8 @@ These decisions are fixed across all phases:
 - default `--include genome`
 - every allowed `--include` value must contain `genome`
 - `--debug` writes `OUTPUT/debug.log`
-- `--dry-run` may resolve releases, populate taxonomy cache, and query metadata, but must not download genome payloads or create the output tree
-- taxonomy TSVs are cached in the repo
+- `--dry-run` may resolve releases from the bundled manifest, read bundled taxonomy data, and query metadata, but must not contact GTDB, download genome payloads, or create the output tree
+- taxonomy TSVs are bundled with the software under the repo and future packages
 - fail fast when `--output` exists and is non-empty
 - no shared `OUTPUT/genomes/`
 - manifests are written directly under `OUTPUT/` and directly under each taxon directory

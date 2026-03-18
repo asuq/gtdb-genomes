@@ -9,7 +9,7 @@ This repository is currently in a documentation-first phase. The command is not 
 The planned workflow is:
 
 1. Resolve a GTDB release, including historical GTDB release layouts.
-2. Download the relevant GTDB taxonomy TSV files into the repository cache.
+2. Load the relevant bundled GTDB taxonomy TSV files from the local data store.
 3. Select genomes whose GTDB lineage contains one or more requested taxa.
 4. Use the accession recorded in the GTDB TSV as the starting accession set.
 5. Prefer paired `GCA` accessions when NCBI metadata provides a GenBank counterpart.
@@ -60,6 +60,8 @@ The design explicitly does not include:
 ### `--release`
 
 Accepts values such as `latest`, `80`, `95`, `214`, `226`, `220.0`, or `release220/220.0`. The implementation will normalise these into a concrete GTDB release path.
+
+`latest` is planned to resolve from a bundled local release manifest rather than from GTDB over the network.
 
 ### `--taxon`
 
@@ -124,12 +126,13 @@ Debug mode is separate from `--keep-temp`. Temporary files will still be removed
 It may:
 
 - resolve the requested GTDB release
-- download and cache GTDB taxonomy TSV files if they are not already cached
+- read bundled GTDB taxonomy TSV files and the bundled local release manifest
 - perform NCBI metadata lookups needed for accession mapping
 - decide which download method would be used
 
 It must not:
 
+- contact GTDB over the network
 - download genome payloads
 - run dehydrate or rehydrate
 - create the final `OUTPUT/` tree
@@ -202,17 +205,31 @@ The root TSV files are intended to be stable machine-readable outputs:
 
 Fixed column sets are defined in [Step-wise development plan](docs/development-plan.md).
 
-## Taxonomy Cache
+## Bundled GTDB Taxonomy
 
-GTDB taxonomy TSV files are planned to be downloaded and kept in the repository rather than inside each output directory.
+GTDB taxonomy TSV files are planned to ship with the software rather than being downloaded at runtime.
 
-Planned cache location:
+Planned bundled data location:
 
 ```text
 data/gtdb_taxonomy/<resolved_release>/
 ```
 
-This allows repeated runs against the same GTDB release without re-downloading the taxonomy tables every time.
+The design also includes a bundled local release manifest, for example:
+
+```text
+data/gtdb_taxonomy/releases.tsv
+```
+
+This manifest is intended to map:
+
+- accepted release inputs such as `80`, `95`, `214`, `226`, and `220.0`
+- the canonical bundled release identifier
+- the bundled taxonomy file paths for that release
+
+The tool must resolve supported releases from this local manifest. First run is therefore not expected to contact GTDB.
+
+If bundled taxonomy data for a requested release is missing, that is treated as a local installation or packaging error rather than a trigger to fetch data from GTDB.
 
 ## Representative Usage Examples
 
@@ -276,7 +293,7 @@ The planned implementation will accept `--api-key` and pass it to the upstream `
 The tool is intended to:
 
 - never print the API key in logs
-- never save the API key in manifests, cache files, or debug output
+- never save the API key in manifests, bundled-data indexes, or debug output
 - redact the API key from recorded command traces and error messages
 
 Known limitation:
@@ -296,10 +313,11 @@ This makes partial results usable without hiding incomplete runs.
 ## Known Limitations In The Planned Design
 
 - the repository currently contains documents only, not executable code
-- GTDB release discovery must support historical naming changes across releases
+- GTDB release resolution must support historical naming changes across releases using bundled taxonomy metadata
 - `GCA` preference depends on paired accession metadata being available from NCBI
 - very large requests will still depend on upstream `datasets` performance and NCBI service availability
 - direct download concurrency is intentionally limited to `min(--threads, 5)` to avoid excessive server load
+- package size will grow because all supported GTDB taxonomy releases are bundled locally
 
 ## Future Packaging
 

@@ -15,7 +15,8 @@ build:
   noarch: python
   # The future Conda package should install the normal Python console
   # entrypoint for gtdb-genomes and must not depend on the repo-local uv
-  # wrapper.
+  # wrapper. It should also include the bundled GTDB taxonomy data and local
+  # release manifest needed for offline release resolution.
   script: {{ PYTHON }} -m pip install . --no-deps --ignore-installed -vv
 
 requirements:
@@ -42,6 +43,8 @@ requirements:
 test:
   commands:
     - gtdb-genomes --help
+    # Add an installed-package check for bundled GTDB taxonomy files once the
+    # real package layout exists.
   imports:
     - gtdb_genomes
 
@@ -53,7 +56,8 @@ about:
     This recipe is intentionally not release-ready yet. It documents the
     expected package shape, runtime dependencies, and console entrypoint.
     The packaged command should preserve the documented CLI contract described
-    in the root README.
+    in the root README, including bundled GTDB taxonomy data for offline
+    release resolution.
   license: TBD
   license_file: LICENSE
   doc_url: https://github.com/your-org/gtdb-genomes
