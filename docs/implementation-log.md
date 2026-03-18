@@ -632,3 +632,29 @@ PY`
   - yes
 - Deviations:
   - none
+
+### Commit `e47e34f` - `feat(logging): add debug logging and debug.log behaviour`
+
+- Implemented:
+  - added unified logger configuration for console-only and console-plus-file
+    modes
+  - added `OUTPUT/debug.log` creation when debug logging is enabled for a real
+    run
+  - kept `--debug --dry-run` file creation disabled by construction
+- Files:
+  - `src/gtdb_genomes/logging_utils.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev python - <<'PY'
+from pathlib import Path
+from gtdb_genomes.logging_utils import close_logger, configure_logging
+
+logger, debug_log_path = configure_logging(debug=True, dry_run=False, output_root=Path('/tmp/gtdb_logging_check'))
+logger.debug('debug message')
+close_logger(logger)
+print(debug_log_path)
+print(debug_log_path.read_text())
+PY`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none
