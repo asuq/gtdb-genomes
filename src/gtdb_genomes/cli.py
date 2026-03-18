@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from gtdb_genomes.download import validate_include_value
 from gtdb_genomes.preflight import PreflightError, check_required_tools
 
 
@@ -71,15 +72,10 @@ def normalise_taxa(
 def normalise_include(parser: argparse.ArgumentParser, include: str) -> str:
     """Trim and validate the include argument."""
 
-    tokens: list[str] = []
-    for raw_token in include.split(","):
-        token = raw_token.strip()
-        if not token:
-            parser.error("argument --include: values must not be empty")
-        tokens.append(token)
-    if "genome" not in tokens:
-        parser.error("argument --include: value must contain 'genome'")
-    return ",".join(tokens)
+    try:
+        return validate_include_value(include)
+    except ValueError as error:
+        parser.error(str(error))
 
 
 def validate_output_path(parser: argparse.ArgumentParser, output: str) -> Path:
