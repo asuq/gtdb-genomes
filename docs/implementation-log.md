@@ -284,3 +284,18 @@ This log records what was actually implemented while
   - accession normalisation was added in the parser commit rather than waiting
     for metadata mapping, because the real GTDB files include `RS_` and `GB_`
     prefixes that the later phases must already agree on
+
+### Commit `d8a90dd` - `feat(selection): add taxon matching and accession deduplication`
+
+- Implemented:
+  - added lineage-token expansion for descendant matching
+  - added per-taxon selection output with a `requested_taxon` column
+  - added deduplicated accession extraction for downstream planning
+- Files:
+  - `src/gtdb_genomes/selection.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev python -c "from gtdb_genomes.release_resolver import resolve_and_validate_release; from gtdb_genomes.taxonomy import load_release_taxonomy; from gtdb_genomes.selection import select_taxa, get_unique_accessions; frame = load_release_taxonomy(resolve_and_validate_release('95')); selected = select_taxa(frame, ['g__Escherichia', 's__Escherichia coli']); print(selected.select('requested_taxon').head(5)); print(get_unique_accessions(selected).height)"`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none
