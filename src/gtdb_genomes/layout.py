@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import csv
 from dataclasses import dataclass
 from pathlib import Path
 import shutil
@@ -30,6 +31,81 @@ class RunDirectories:
     working_root: Path
     downloads_root: Path
     extracted_root: Path
+
+
+RUN_SUMMARY_COLUMNS = (
+    "run_id",
+    "started_at",
+    "finished_at",
+    "requested_release",
+    "resolved_release",
+    "download_method_requested",
+    "download_method_used",
+    "threads_requested",
+    "download_concurrency_used",
+    "rehydrate_workers_used",
+    "include",
+    "prefer_gca",
+    "debug_enabled",
+    "requested_taxa_count",
+    "matched_rows",
+    "unique_gtdb_accessions",
+    "final_accessions",
+    "successful_accessions",
+    "failed_accessions",
+    "output_dir",
+    "exit_code",
+)
+TAXON_SUMMARY_COLUMNS = (
+    "requested_taxon",
+    "taxon_slug",
+    "matched_rows",
+    "unique_gtdb_accessions",
+    "final_accessions",
+    "successful_accessions",
+    "failed_accessions",
+    "duplicate_copies_written",
+    "output_dir",
+)
+ACCESSION_MAP_COLUMNS = (
+    "requested_taxon",
+    "taxon_slug",
+    "resolved_release",
+    "taxonomy_file",
+    "lineage",
+    "gtdb_accession",
+    "final_accession",
+    "accession_type_original",
+    "accession_type_final",
+    "conversion_status",
+    "download_method_used",
+    "download_batch",
+    "output_relpath",
+    "download_status",
+)
+DOWNLOAD_FAILURE_COLUMNS = (
+    "requested_taxon",
+    "taxon_slug",
+    "gtdb_accession",
+    "final_accession",
+    "stage",
+    "attempt_index",
+    "max_attempts",
+    "error_type",
+    "error_message_redacted",
+    "final_status",
+)
+TAXON_ACCESSION_COLUMNS = (
+    "requested_taxon",
+    "taxon_slug",
+    "lineage",
+    "gtdb_accession",
+    "final_accession",
+    "conversion_status",
+    "output_relpath",
+    "download_status",
+    "duplicate_across_taxa",
+)
 
 
 def initialise_run_directories(output_root: Path) -> RunDirectories:
@@ -97,3 +173,102 @@ def cleanup_working_directories(run_directories: RunDirectories) -> None:
 
     if run_directories.working_root.exists():
         shutil.rmtree(run_directories.working_root)
+
+
+def get_root_manifest_paths(output_root: Path) -> dict[str, Path]:
+    """Return the fixed root TSV paths for one output directory."""
+
+    return {
+        "run_summary": output_root / "run_summary.tsv",
+        "taxon_summary": output_root / "taxon_summary.tsv",
+        "accession_map": output_root / "accession_map.tsv",
+        "download_failures": output_root / "download_failures.tsv",
+    }
+
+
+def get_taxon_directory(run_directories: RunDirectories, taxon_slug: str) -> Path:
+    """Return the directory for one taxon slug, creating it if needed."""
+
+    taxon_directory = run_directories.taxa_root / taxon_slug
+    taxon_directory.mkdir(parents=True, exist_ok=True)
+    return taxon_directory
+
+
+def get_taxon_accession_path(
+    run_directories: RunDirectories,
+    taxon_slug: str,
+) -> Path:
+    """Return the per-taxon accession TSV path."""
+
+    return get_taxon_directory(run_directories, taxon_slug) / "taxon_accessions.tsv"
+
+
+def write_tsv_rows(
+    path: Path,
+    columns: tuple[str, ...],
+    rows: list[dict[str, object]],
+) -> None:
+    """Write rows to a TSV file, always emitting the header."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=list(columns),
+            delimiter="\t",
+            extrasaction="ignore",
+        )
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(
+                {
+                    column: "" if row.get(column) is None else row.get(column)
+                    for column in columns
+                },
+            )
+
+
+def write_root_manifests(
+    run_directories: RunDirectories,
+    run_summary_rows: list[dict[str, object]],
+    taxon_summary_rows: list[dict[str, object]],
+    accession_rows: list[dict[str, object]],
+    failure_rows: list[dict[str, object]],
+) -> None:
+    """Write the fixed root TSV manifests for one run."""
+
+    manifest_paths = get_root_manifest_paths(run_directories.output_root)
+    write_tsv_rows(
+        manifest_paths["run_summary"],
+        RUN_SUMMARY_COLUMNS,
+        run_summary_rows,
+    )
+    write_tsv_rows(
+        manifest_paths["taxon_summary"],
+        TAXON_SUMMARY_COLUMNS,
+        taxon_summary_rows,
+    )
+    write_tsv_rows(
+        manifest_paths["accession_map"],
+        ACCESSION_MAP_COLUMNS,
+        accession_rows,
+    )
+    write_tsv_rows(
+        manifest_paths["download_failures"],
+        DOWNLOAD_FAILURE_COLUMNS,
+        failure_rows,
+    )
+
+
+def write_taxon_accessions(
+    run_directories: RunDirectories,
+    taxon_slug: str,
+    rows: list[dict[str, object]],
+) -> None:
+    """Write one per-taxon accession TSV file."""
+
+    write_tsv_rows(
+        get_taxon_accession_path(run_directories, taxon_slug),
+        TAXON_ACCESSION_COLUMNS,
+        rows,
+    )
