@@ -161,3 +161,44 @@ def resolve_release(
             entry.archaeal_taxonomy,
         ),
     )
+
+
+def validate_taxonomy_file(path: Path | None) -> None:
+    """Validate a bundled taxonomy file path when one is configured."""
+
+    if path is None:
+        return
+    if not path.exists():
+        raise BundledDataError(f"Bundled taxonomy file is missing: {path}")
+    if not path.is_file():
+        raise BundledDataError(f"Bundled taxonomy path is not a file: {path}")
+    try:
+        with path.open("r", encoding="ascii", errors="ignore"):
+            pass
+    except OSError as error:
+        raise BundledDataError(
+            f"Bundled taxonomy file could not be read: {path}",
+        ) from error
+
+
+def validate_release_resolution(resolution: ReleaseResolution) -> ReleaseResolution:
+    """Validate the taxonomy file paths in a release resolution."""
+
+    if resolution.bacterial_taxonomy is None and resolution.archaeal_taxonomy is None:
+        raise BundledDataError(
+            f"Bundled release has no taxonomy files configured: {resolution.resolved_release}",
+        )
+    validate_taxonomy_file(resolution.bacterial_taxonomy)
+    validate_taxonomy_file(resolution.archaeal_taxonomy)
+    return resolution
+
+
+def resolve_and_validate_release(
+    requested_release: str,
+    data_root: Path | None = None,
+) -> ReleaseResolution:
+    """Resolve a release alias and validate the bundled taxonomy files."""
+
+    return validate_release_resolution(
+        resolve_release(requested_release, data_root=data_root),
+    )
