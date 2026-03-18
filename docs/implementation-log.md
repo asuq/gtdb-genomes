@@ -440,3 +440,18 @@ This log records what was actually implemented while
     output rather than keying off one exact label, because the upstream
     preview text format is not stable enough to trust a single hard-coded
     prompt phrase
+
+### Commit `cf1d453` - `feat(download): add direct batching and concurrency cap`
+
+- Implemented:
+  - added direct-download concurrency capping at `min(threads, 5)`
+  - added rehydrate worker capping at `min(threads, 30)`
+  - added deterministic batch splitting for direct download jobs
+- Files:
+  - `src/gtdb_genomes/download.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev python -c "from gtdb_genomes.download import get_direct_download_concurrency, get_rehydrate_workers, split_direct_download_batches; print(get_direct_download_concurrency(8, 12)); print(get_rehydrate_workers(64)); print(split_direct_download_batches([f'GCA_{index}' for index in range(12)], 8))"`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none
