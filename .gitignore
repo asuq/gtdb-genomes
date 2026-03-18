@@ -75,7 +75,9 @@ temp/
 Thumbs.db
 
 # Data
-data/
+data/*
+!data/gtdb_taxonomy/
+!data/gtdb_taxonomy/**
 results/
 outputs/
 
