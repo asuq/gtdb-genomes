@@ -515,3 +515,22 @@ PY`
   - yes
 - Deviations:
   - none
+
+## Phase 6: Output layout and TSV writing
+
+### Commit `a643049` - `feat(layout): add archive extraction and working-directory handling`
+
+- Implemented:
+  - added a layout module for output roots and internal working directories
+  - added unzip command construction and archive extraction helpers
+  - added working-directory cleanup for completed runs
+- Files:
+  - `src/gtdb_genomes/layout.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev python -c "from pathlib import Path; from gtdb_genomes.layout import build_unzip_command, initialise_run_directories; directories = initialise_run_directories(Path('/tmp/gtdb_layout_check')); print(directories); print(build_unzip_command(Path('/tmp/a.zip'), Path('/tmp/out')) )"`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - internal working directories are placed under `OUTPUT/.gtdb_genomes_work`
+    so later phases can preserve them under `--keep-temp` without depending on
+    platform-specific temporary directory discovery
