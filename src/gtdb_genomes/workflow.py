@@ -489,63 +489,27 @@ def run_workflow(args: CliArgs) -> int:
         summary_map,
         prefer_gca=args.prefer_gca,
     )
-    accession_plans = build_accession_plans(mapped_frame)
-    preview_text: str | None = None
-    if args.download_method == "auto" and accession_plans:
-        preview_command = build_preview_command(
-            [plan.preferred_accession for plan in accession_plans],
-            args.include,
-            api_key=args.api_key,
-            debug=args.debug,
-        )
-        logger.debug("Running %s", redact_command(preview_command, secrets))
-        try:
-            preview_text = run_preview_command(
-                [plan.preferred_accession for plan in accession_plans],
-                args.include,
-                api_key=args.api_key,
-                debug=args.debug,
-            )
-        except PreviewError as error:
-            logger.error("%s", redact_text(str(error), secrets))
-            close_logger(logger)
-            return 5
-    try:
-        decision = select_download_method(
-            args.download_method,
-            len(accession_plans),
-            preview_text=preview_text,
-        )
-    except PreviewError as error:
-        logger.error("%s", redact_text(str(error), secrets))
-        close_logger(logger)
-        return 5
-
-    if args.dry_run:
-        if selected_frame.is_empty():
+    if selected_frame.is_empty():
+        if args.dry_run:
             logger.warning("No genomes matched the requested taxa")
             close_logger(logger)
             return 4
+
+        run_directories = initialise_run_directories(args.output)
         close_logger(logger)
-        return 0
-
-    run_directories = initialise_run_directories(args.output)
-    close_logger(logger)
-    logger, _ = configure_logging(
-        debug=args.debug,
-        dry_run=False,
-        output_root=run_directories.output_root,
-    )
-
-    taxon_slug_map = build_taxon_slug_map(args.taxa)
-    if selected_frame.is_empty():
+        logger, _ = configure_logging(
+            debug=args.debug,
+            dry_run=False,
+            output_root=run_directories.output_root,
+        )
+        taxon_slug_map = build_taxon_slug_map(args.taxa)
         exit_code = 4
         run_summary_rows = [
             build_run_summary_row(
                 args,
                 args.release,
                 resolution.resolved_release,
-                decision.method_used,
+                args.download_method,
                 0,
                 [],
                 run_directories.output_root,
@@ -582,6 +546,50 @@ def run_workflow(args: CliArgs) -> int:
         if not args.keep_temp:
             cleanup_working_directories(run_directories)
         return exit_code
+
+    accession_plans = build_accession_plans(mapped_frame)
+    preview_text: str | None = None
+    if args.download_method == "auto" and accession_plans:
+        preview_command = build_preview_command(
+            [plan.preferred_accession for plan in accession_plans],
+            args.include,
+            api_key=args.api_key,
+            debug=args.debug,
+        )
+        logger.debug("Running %s", redact_command(preview_command, secrets))
+        try:
+            preview_text = run_preview_command(
+                [plan.preferred_accession for plan in accession_plans],
+                args.include,
+                api_key=args.api_key,
+                debug=args.debug,
+            )
+        except PreviewError as error:
+            logger.error("%s", redact_text(str(error), secrets))
+            close_logger(logger)
+            return 5
+    try:
+        decision = select_download_method(
+            args.download_method,
+            len(accession_plans),
+            preview_text=preview_text,
+        )
+    except PreviewError as error:
+        logger.error("%s", redact_text(str(error), secrets))
+        close_logger(logger)
+        return 5
+
+    if args.dry_run:
+        close_logger(logger)
+        return 0
+
+    run_directories = initialise_run_directories(args.output)
+    close_logger(logger)
+    logger, _ = configure_logging(
+        debug=args.debug,
+        dry_run=False,
+        output_root=run_directories.output_root,
+    )
 
     executions = execute_accession_plans(
         accession_plans,
