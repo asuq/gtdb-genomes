@@ -40,9 +40,17 @@ class ReleaseResolution:
 
 
 def get_bundled_data_root() -> Path:
-    """Return the repository path for bundled GTDB taxonomy data."""
+    """Return the bundled GTDB taxonomy root for repo or installed use."""
 
-    return Path(__file__).resolve().parents[2] / "data" / "gtdb_taxonomy"
+    package_root = Path(__file__).resolve().parent
+    candidate_paths = (
+        package_root.parents[1] / "data" / "gtdb_taxonomy",
+        package_root / "data" / "gtdb_taxonomy",
+    )
+    for candidate_path in candidate_paths:
+        if candidate_path.exists():
+            return candidate_path
+    return candidate_paths[0]
 
 
 def get_release_manifest_path(data_root: Path | None = None) -> Path:
