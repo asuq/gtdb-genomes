@@ -615,3 +615,20 @@ PY`
   - yes
 - Deviations:
   - none
+
+## Phase 7: Logging and redaction
+
+### Commit `d71c618` - `feat(logging): add redaction helpers and normal logging`
+
+- Implemented:
+  - added secret normalisation and text redaction helpers
+  - added shell-safe command formatting with secret redaction
+  - added baseline console logger configuration for the package logger
+- Files:
+  - `src/gtdb_genomes/logging_utils.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev python -c "from gtdb_genomes.logging_utils import redact_command; print(redact_command(['datasets', '--api-key', 'secret'], ['secret']))"`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none
