@@ -331,3 +331,18 @@ This log records what was actually implemented while
   - yes
 - Deviations:
   - none
+
+### Commit `1bbce8a` - `test(selection): cover matching, deduplication, and slugs`
+
+- Implemented:
+  - added synthetic tests for taxon matching
+  - added tests for accession deduplication
+  - added tests for deterministic slugging and collision suffixes
+- Files:
+  - `tests/test_selection.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev pytest`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none
