@@ -299,3 +299,21 @@ This log records what was actually implemented while
   - yes
 - Deviations:
   - none
+
+### Commit `02fc4ae` - `feat(selection): add taxon slug generation and collision handling`
+
+- Implemented:
+  - added deterministic filesystem-safe taxon slug generation
+  - added collision handling with an 8-character SHA-1 suffix
+  - added slug attachment for selected taxon rows
+- Files:
+  - `src/gtdb_genomes/selection.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --python /opt/homebrew/bin/python3.12 --group dev python -c "from gtdb_genomes.selection import build_taxon_slug_map; print(build_taxon_slug_map(['g__Escherichia', 's__Escherichia coli', 's__Escherichia/coli']))"`
+- Match to frozen plan:
+  - partial
+- Deviations:
+  - the implementation preserves GTDB double-underscore rank markers such as
+    `s__` and only collapses runs of 3 or more underscores, because the frozen
+    plan's blanket underscore-collapsing rule conflicts with the README output
+    example and would otherwise damage the standard GTDB token shape
