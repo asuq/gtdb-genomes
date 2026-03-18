@@ -65,3 +65,23 @@ This log records what was actually implemented while
   - required `--release`, `--taxon`, and `--output` were enforced at the
     parser layer immediately because the documented command form and later
     phases assume all three inputs are always present
+
+### Commit `8d86c91` - `feat(cli): add external tool preflight checks`
+
+- Implemented:
+  - added a dedicated preflight module for external tool checks
+  - added Phase 1 preflight enforcement for `datasets` and `unzip`
+  - returned exit code `5` for missing required tools
+- Files:
+  - `src/gtdb_genomes/cli.py`
+  - `src/gtdb_genomes/preflight.py`
+- Checks run:
+  - `which unzip && which datasets`
+  - `PYTHONPATH=src /opt/homebrew/bin/python3.12 -m gtdb_genomes --release latest --taxon g__Escherichia --output /tmp/gtdb_check`
+  - `PATH=/usr/bin:/bin PYTHONPATH=src /opt/homebrew/bin/python3.12 -m gtdb_genomes --release latest --taxon g__Escherichia --output /tmp/gtdb_check`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - preflight was wired into the main command immediately rather than waiting
+    for the wrapper commit, because the documented Phase 1 acceptance criteria
+    already require clear missing-tool failures
