@@ -1,7 +1,12 @@
 # gtdb-genomes
 
+[![Python >=3.12](https://img.shields.io/badge/python-%3E%3D3.12-3776AB.svg)](https://www.python.org/downloads/)
+[![GitHub release](https://img.shields.io/github/v/release/asuq/gtdb-genome)](https://github.com/asuq/gtdb-genome/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 `gtdb-genomes` downloads NCBI genomes from GTDB taxon selections using bundled
-GTDB taxonomy tables and the NCBI `datasets` CLI.
+GTDB taxonomy tables for local taxon resolution and the NCBI `datasets` CLI for
+all NCBI metadata and genome download operations.
 
 The runtime model is split deliberately:
 
@@ -31,7 +36,7 @@ Completeness has priority over GenBank preference. If a paired GenBank
 accession is unavailable or metadata lookup exhausts its retry budget, the
 original accession is kept.
 
-> Caution
+> [!CAUTION]
 >
 > Some legacy GTDB releases include genome accessions starting with `UBA`.
 > These legacy accessions are not supported by NCBI and are not supported by
@@ -52,6 +57,28 @@ Source-checkout development additionally uses:
 
 Any installation path that runs the real downloader, including `pip install .`
 or a local wheel install, still requires `datasets` and `unzip` on `PATH`.
+
+## NCBI datasets CLI
+
+`gtdb-genomes` does not download genomes directly from Python code. It delegates
+NCBI-facing work to the NCBI `datasets` CLI. Upstream project:
+[ncbi/datasets](https://github.com/ncbi/datasets).
+
+The tool uses `datasets` for:
+
+- `datasets summary genome accession` during metadata lookup
+- `datasets download genome accession --preview` when `--download-method auto`
+  needs a size estimate
+- direct `datasets download genome accession` jobs for smaller requests
+- batch dehydrated `datasets download genome accession --inputfile ...` runs for
+  larger requests
+- `datasets rehydrate` after a dehydrated batch download
+
+GTDB release resolution and GTDB taxonomy loading remain local. Runtime release
+selection does not contact GTDB over the network.
+
+`unzip` is required because `datasets` produces zip archives that
+`gtdb-genomes` extracts before reorganising the final output tree.
 
 ## Command Form
 

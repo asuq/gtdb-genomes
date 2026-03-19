@@ -69,7 +69,10 @@ def test_runtime_docs_mark_uv_as_development_only() -> None:
     assert "one row per accession attempt" not in readme_text
     assert "Fixed TSV columns:" in readme_text
     assert "attempted_accession" in readme_text
-    assert "> Caution" in readme_text
+    assert "img.shields.io/badge/python-" in readme_text
+    assert "img.shields.io/github/v/release/asuq/gtdb-genome" in readme_text
+    assert "img.shields.io/badge/license-MIT" in readme_text
+    assert "> [!CAUTION]" in readme_text
     assert "PRJNA417962" in readme_text
     assert "unsupported_input" in readme_text
     assert "Real-data validation guide" in readme_text
@@ -86,6 +89,11 @@ def test_runtime_docs_mark_uv_as_development_only() -> None:
     assert "expects an NCBI API key" in readme_text
     assert "passes it only to the" in readme_text
     assert "`datasets` command" in readme_text
+    assert "ncbi/datasets" in readme_text
+    assert "does not download genomes directly from Python code" in readme_text
+    assert "GTDB release resolution and GTDB taxonomy loading remain local" in (
+        readme_text
+    )
 
 
 def test_real_data_validation_guide_describes_local_requirements() -> None:
