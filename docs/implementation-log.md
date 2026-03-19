@@ -915,3 +915,30 @@ PY`
   - metadata lookup now has its own explicit retry wrapper rather than relying
     on the download retry helper, because JSON parsing failures need to be
     retried after a successful subprocess exit code
+
+### Commit `b858981` - `feat(download): add batch dehydrate fallback and failure attribution`
+
+- Implemented:
+  - replaced the per-accession pseudo-dehydrate path with a true batch
+    dehydrated workflow using `datasets ... --inputfile ... --dehydrated`
+  - added fallback from failed batch dehydrate or rehydrate stages to
+    per-accession direct downloads
+  - extended command failure records with attempted accession tracking
+  - changed root failure manifest generation so failures are collapsed per
+    accession across taxa instead of being duplicated once per taxon row
+  - recorded actual download concurrency and rehydrate worker usage in the
+    run summary rather than writing the configured cap unconditionally
+- Files:
+  - `src/gtdb_genomes/download.py`
+  - `src/gtdb_genomes/layout.py`
+  - `src/gtdb_genomes/workflow.py`
+  - `tests/test_download.py`
+  - `tests/test_edge_contract.py`
+- Checks run:
+  - `.venv/bin/pytest -q tests/test_download.py tests/test_layout.py tests/test_edge_contract.py tests/test_cli.py tests/test_cli_integration.py tests/test_metadata.py tests/test_release_resolver.py`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - `download_method_used` can now emit `dehydrate_fallback_direct` so the
+    manifest records the real executed path after a failed batch dehydrate
+    attempt
