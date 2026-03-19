@@ -17,7 +17,7 @@ def test_help_includes_documented_flags() -> None:
     assert "--release" in help_text
     assert "--taxon" in help_text
     assert "--output" in help_text
-    assert "--prefer-gca" in help_text
+    assert "--prefer-genbank" in help_text
     assert "--download-method" in help_text
     assert "--threads" in help_text
     assert "--api-key" in help_text
@@ -161,9 +161,10 @@ def test_main_returns_preflight_error_code(
 ) -> None:
     """Missing external tools should return exit code 5."""
 
-    def raise_preflight_error() -> None:
+    def raise_preflight_error(required_tools: tuple[str, ...]) -> None:
         """Raise a preflight error for the test."""
 
+        assert required_tools == ("datasets", "unzip")
         raise PreflightError("Missing required external tools: datasets")
 
     monkeypatch.setattr("gtdb_genomes.cli.check_required_tools", raise_preflight_error)

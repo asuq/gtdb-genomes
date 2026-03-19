@@ -31,7 +31,10 @@ def test_zero_match_run_writes_header_only_outputs(
 ) -> None:
     """Zero matches should create the documented output tree and exit 4."""
 
-    monkeypatch.setattr("gtdb_genomes.cli.check_required_tools", lambda: None)
+    monkeypatch.setattr(
+        "gtdb_genomes.cli.check_required_tools",
+        lambda required_tools: None,
+    )
     monkeypatch.setattr(
         "gtdb_genomes.workflow.load_release_taxonomy",
         lambda resolution: build_taxonomy_frame("d__Bacteria;p__Firmicutes;g__Bacillus"),
@@ -65,7 +68,10 @@ def test_auto_preview_failure_returns_exit_code_five_without_output_tree(
 ) -> None:
     """Preview failures in auto mode should stop before output creation."""
 
-    monkeypatch.setattr("gtdb_genomes.cli.check_required_tools", lambda: None)
+    monkeypatch.setattr(
+        "gtdb_genomes.cli.check_required_tools",
+        lambda required_tools: None,
+    )
     monkeypatch.setattr(
         "gtdb_genomes.workflow.load_release_taxonomy",
         lambda resolution: build_taxonomy_frame(
@@ -102,7 +108,10 @@ def test_total_runtime_failure_leaves_final_accession_blank(
 ) -> None:
     """Total failure should blank `final_accession` and exit 7."""
 
-    monkeypatch.setattr("gtdb_genomes.cli.check_required_tools", lambda: None)
+    monkeypatch.setattr(
+        "gtdb_genomes.cli.check_required_tools",
+        lambda required_tools: None,
+    )
     monkeypatch.setattr(
         "gtdb_genomes.workflow.load_release_taxonomy",
         lambda resolution: build_taxonomy_frame(

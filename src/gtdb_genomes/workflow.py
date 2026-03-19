@@ -385,7 +385,7 @@ def build_run_summary_row(
         "download_concurrency_used": min(args.threads, 5),
         "rehydrate_workers_used": get_rehydrate_workers(args.threads),
         "include": args.include,
-        "prefer_gca": str(args.prefer_gca).lower(),
+        "prefer_genbank": str(args.prefer_genbank).lower(),
         "debug_enabled": str(args.debug).lower(),
         "requested_taxa_count": len(args.taxa),
         "matched_rows": matched_rows,
@@ -466,7 +466,7 @@ def run_workflow(args: CliArgs) -> int:
     )
 
     summary_map: dict[str, set[str]] = {}
-    if not selected_frame.is_empty() and args.prefer_gca:
+    if not selected_frame.is_empty() and args.prefer_genbank:
         metadata_command = build_summary_command(
             selected_frame.get_column("ncbi_accession").unique().to_list(),
             api_key=args.api_key,
@@ -487,7 +487,7 @@ def run_workflow(args: CliArgs) -> int:
     mapped_frame = apply_accession_preferences(
         selected_frame,
         summary_map,
-        prefer_gca=args.prefer_gca,
+        prefer_genbank=args.prefer_genbank,
     )
     if selected_frame.is_empty():
         if args.dry_run:

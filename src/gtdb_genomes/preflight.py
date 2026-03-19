@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 
@@ -17,12 +18,27 @@ class PreflightError(Exception):
         return self.message
 
 
-def check_required_tools() -> None:
+def get_required_tools(
+    download_method: str,
+    dry_run: bool,
+    prefer_genbank: bool,
+) -> tuple[str, ...]:
+    """Return the external tools required for the requested execution path."""
+
+    if dry_run:
+        required_tools: list[str] = []
+        if prefer_genbank or download_method == "auto":
+            required_tools.append("datasets")
+        return tuple(required_tools)
+    return ("datasets", "unzip")
+
+
+def check_required_tools(required_tools: Sequence[str]) -> None:
     """Ensure that the required external tools are available."""
 
     missing_tools = [
         tool_name
-        for tool_name in ("datasets", "unzip")
+        for tool_name in required_tools
         if shutil.which(tool_name) is None
     ]
     if missing_tools:

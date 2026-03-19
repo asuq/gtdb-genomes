@@ -175,7 +175,7 @@ def test_apply_accession_preferences_honours_disabled_gca_preference() -> None:
     mapped = apply_accession_preferences(
         selection_frame,
         {"GCF_000001.1": {"GCF_000001.1", "GCA_000001.1"}},
-        prefer_gca=False,
+        prefer_genbank=False,
     )
 
     assert mapped.select("final_accession", "conversion_status").rows(

@@ -10,7 +10,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from gtdb_genomes.download import validate_include_value
-from gtdb_genomes.preflight import PreflightError, check_required_tools
+from gtdb_genomes.preflight import (
+    PreflightError,
+    check_required_tools,
+    get_required_tools,
+)
 from gtdb_genomes.workflow import run_workflow
 
 
@@ -21,7 +25,7 @@ class CliArgs:
     release: str
     taxa: tuple[str, ...]
     output: Path
-    prefer_gca: bool
+    prefer_genbank: bool
     download_method: str
     threads: int
     api_key: str | None
@@ -108,7 +112,7 @@ def parse_args(
         release=normalise_release(parser, namespace.release),
         taxa=normalise_taxa(parser, namespace.taxon),
         output=validate_output_path(parser, namespace.output),
-        prefer_gca=namespace.prefer_gca,
+        prefer_genbank=namespace.prefer_genbank,
         download_method=namespace.download_method,
         threads=namespace.threads,
         api_key=namespace.api_key,
@@ -142,10 +146,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Output directory for the run.",
     )
     parser.add_argument(
-        "--prefer-gca",
+        "--prefer-genbank",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Prefer paired GCA accessions when available.",
+        help="Prefer paired GenBank accessions when available.",
     )
     parser.add_argument(
         "--download-method",
@@ -191,7 +195,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parse_args(parser, argv)
     try:
-        check_required_tools()
+        check_required_tools(
+            get_required_tools(
+                download_method=args.download_method,
+                dry_run=args.dry_run,
+                prefer_genbank=args.prefer_genbank,
+            ),
+        )
     except PreflightError as error:
         print(f"gtdb-genomes: error: {error}", file=sys.stderr)
         return 5

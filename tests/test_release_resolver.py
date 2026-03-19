@@ -45,13 +45,31 @@ def test_load_release_manifest_reads_real_bundled_manifest() -> None:
 
 
 def test_resolve_release_supports_latest_alias() -> None:
-    """The latest alias should resolve from bundled data."""
+    """The latest alias should resolve from the manifest latest marker."""
 
     resolution = resolve_release("latest")
 
     assert resolution.resolved_release == "226.0"
     assert resolution.bacterial_taxonomy is not None
     assert resolution.archaeal_taxonomy is not None
+
+
+def test_resolve_release_requires_one_latest_marker(tmp_path: Path) -> None:
+    """The manifest should define exactly one latest release."""
+
+    data_root = tmp_path / "gtdb_taxonomy"
+    write_manifest(
+        get_release_manifest_path(data_root),
+        "\n".join(
+            [
+                "95.0\t95,95.0\tbac.tsv\tar.tsv\ttrue",
+                "214.0\t214,214.0\tbac214.tsv\tar214.tsv\ttrue",
+            ],
+        ),
+    )
+
+    with pytest.raises(BundledDataError, match="exactly one latest"):
+        resolve_release("latest", data_root=data_root)
 
 
 def test_resolve_and_validate_release_uses_bundled_taxonomy_files() -> None:

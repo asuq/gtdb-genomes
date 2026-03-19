@@ -15,7 +15,10 @@ def test_main_passes_normalised_arguments_into_workflow(
 
     captured_args: list[CliArgs] = []
 
-    monkeypatch.setattr("gtdb_genomes.cli.check_required_tools", lambda: None)
+    monkeypatch.setattr(
+        "gtdb_genomes.cli.check_required_tools",
+        lambda required_tools: None,
+    )
 
     def fake_run_workflow(args: CliArgs) -> int:
         """Capture the parsed arguments and return a stubbed exit code."""
@@ -52,7 +55,7 @@ def test_main_passes_normalised_arguments_into_workflow(
             release="latest",
             taxa=("g__Escherichia",),
             output=tmp_path / "output",
-            prefer_gca=True,
+            prefer_genbank=True,
             download_method="direct",
             threads=3,
             api_key=None,

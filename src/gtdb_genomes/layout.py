@@ -45,7 +45,7 @@ RUN_SUMMARY_COLUMNS = (
     "download_concurrency_used",
     "rehydrate_workers_used",
     "include",
-    "prefer_gca",
+    "prefer_genbank",
     "debug_enabled",
     "requested_taxa_count",
     "matched_rows",

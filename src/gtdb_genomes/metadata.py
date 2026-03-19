@@ -115,11 +115,11 @@ def parse_summary_json_lines(
 def choose_preferred_accession(
     requested_accession: str,
     discovered_accessions: set[str] | None,
-    prefer_gca: bool = True,
+    prefer_genbank: bool = True,
 ) -> tuple[str, str]:
     """Choose the final accession and conversion status for one request."""
 
-    if not prefer_gca:
+    if not prefer_genbank:
         return requested_accession, "unchanged_original"
     if discovered_accessions is None:
         return requested_accession, "metadata_lookup_failed_fallback_original"
@@ -148,7 +148,7 @@ def get_accession_type(accession: str) -> str:
 def build_accession_preference_table(
     accessions: Iterable[str],
     summary_map: dict[str, set[str]],
-    prefer_gca: bool = True,
+    prefer_genbank: bool = True,
 ) -> pl.DataFrame:
     """Build a Polars table describing the chosen accession for each request."""
 
@@ -157,7 +157,7 @@ def build_accession_preference_table(
         final_accession, conversion_status = choose_preferred_accession(
             requested_accession,
             summary_map.get(requested_accession),
-            prefer_gca=prefer_gca,
+            prefer_genbank=prefer_genbank,
         )
         rows.append(
             {
@@ -185,7 +185,7 @@ def build_accession_preference_table(
 def apply_accession_preferences(
     selection_frame: pl.DataFrame,
     summary_map: dict[str, set[str]],
-    prefer_gca: bool = True,
+    prefer_genbank: bool = True,
 ) -> pl.DataFrame:
     """Attach preferred-accession metadata to a selected taxonomy frame."""
 
@@ -199,7 +199,7 @@ def apply_accession_preferences(
     preference_frame = build_accession_preference_table(
         selection_frame.get_column("ncbi_accession").to_list(),
         summary_map,
-        prefer_gca=prefer_gca,
+        prefer_genbank=prefer_genbank,
     )
     return selection_frame.join(
         preference_frame,

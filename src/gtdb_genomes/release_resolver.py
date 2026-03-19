@@ -128,6 +128,13 @@ def find_manifest_entry(
     release = requested_release.strip()
     if not release:
         raise BundledDataError("Requested release must not be empty")
+    if release == "latest":
+        latest_entries = [entry for entry in entries if entry.is_latest]
+        if len(latest_entries) != 1:
+            raise BundledDataError(
+                "Bundled release manifest must mark exactly one latest release",
+            )
+        return latest_entries[0]
     for entry in entries:
         if release in entry.aliases:
             return entry
