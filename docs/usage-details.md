@@ -94,8 +94,13 @@ gtdb-genomes \
 
   - resolve the bundled GTDB release
   - read bundled GTDB taxonomy TSVs and the local release manifest
-  - perform NCBI metadata lookup when `--prefer-genbank` is enabled
-  - run `datasets --preview` when `--download-method auto` is used
+  - perform NCBI metadata lookup when `--prefer-genbank` is enabled and the
+    selected rows include supported non-`UBA*` accessions
+  - run `datasets --preview` when `--download-method auto` is used and the
+    selected rows include supported non-`UBA*` accessions
+
+  Zero-match runs and unsupported-`UBA*`-only runs do not require `datasets`
+  or `unzip`, because the workflow exits before any NCBI or archive step.
 
 ## API Key Handling
 
@@ -196,6 +201,10 @@ selection does not contact GTDB over the network.
 `unzip` is required because `datasets` produces zip archives that
 `gtdb-genomes` extracts before reorganising the final output tree.
 
+Tool requirements are resolved after GTDB release loading and taxonomy
+selection. Missing external tools therefore affect only the supported execution
+paths that actually need them.
+
 ## Retry Policy
 
 Every internet-facing `datasets` step gets one initial attempt plus up to three
@@ -241,6 +250,7 @@ Status values:
   - `preview`
   - `preferred_download`
   - `fallback_download`
+  - `layout`
   - `rehydrate`
 - `download_failures.tsv.final_status`
   - `retry_scheduled`

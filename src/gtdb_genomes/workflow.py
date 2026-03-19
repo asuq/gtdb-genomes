@@ -87,6 +87,7 @@ class AccessionExecution:
     final_accession: str | None
     conversion_status: str
     download_status: str
+    download_batch: str
     payload_directory: Path | None
     failures: tuple[CommandFailureRecord, ...]
 
@@ -196,6 +197,7 @@ def build_unsupported_executions(
             final_accession=None,
             conversion_status="failed_no_usable_accession",
             download_status="failed",
+            download_batch=accession,
             payload_directory=None,
             failures=(
                 CommandFailureRecord(
@@ -325,7 +327,7 @@ def build_layout_failure(
     """Build a synthetic failure record for a local layout error."""
 
     return CommandFailureRecord(
-        stage="preflight",
+        stage="layout",
         attempt_index=1,
         max_attempts=1,
         error_type=type(error).__name__,
@@ -360,6 +362,7 @@ def extract_download_payload(
 def build_failed_execution(
     original_accession: str,
     failures: tuple[CommandFailureRecord, ...],
+    download_batch: str,
 ) -> AccessionExecution:
     """Build a failed execution for one original accession."""
 
@@ -368,6 +371,7 @@ def build_failed_execution(
         final_accession=None,
         conversion_status="failed_no_usable_accession",
         download_status="failed",
+        download_batch=download_batch,
         payload_directory=None,
         failures=failures,
     )
@@ -377,6 +381,7 @@ def build_successful_execution(
     plan: AccessionPlan,
     final_accession: str,
     download_status: str,
+    download_batch: str,
     payload_directory: Path,
     failures: tuple[CommandFailureRecord, ...],
 ) -> AccessionExecution:
@@ -390,6 +395,7 @@ def build_successful_execution(
         final_accession=final_accession,
         conversion_status=conversion_status,
         download_status=download_status,
+        download_batch=download_batch,
         payload_directory=payload_directory,
         failures=failures,
     )
@@ -411,6 +417,7 @@ def execute_direct_group_fallbacks(
             executions[plan.original_accession] = build_failed_execution(
                 plan.original_accession,
                 preferred_failures,
+                preferred_accession,
             )
             continue
 
@@ -439,6 +446,7 @@ def execute_direct_group_fallbacks(
             executions[plan.original_accession] = build_failed_execution(
                 plan.original_accession,
                 combined_failures,
+                plan.original_accession,
             )
             continue
 
@@ -459,6 +467,7 @@ def execute_direct_group_fallbacks(
             plan,
             plan.original_accession,
             "downloaded_after_fallback",
+            plan.original_accession,
             payload_directory,
             combined_failures,
         )
@@ -508,6 +517,7 @@ def execute_direct_accession_group(
             plan.original_accession: build_failed_execution(
                 plan.original_accession,
                 combined_failures,
+                preferred_accession,
             )
             for plan in grouped_plans
         }
@@ -517,6 +527,7 @@ def execute_direct_accession_group(
             plan,
             preferred_accession,
             "downloaded",
+            preferred_accession,
             payload_directory,
             preferred_result.failures,
         )
@@ -696,6 +707,7 @@ def execute_batch_dehydrate_plans(
                 final_accession=plan.preferred_accession,
                 conversion_status=plan.conversion_status,
                 download_status="downloaded",
+                download_batch="dehydrated_batch",
                 payload_directory=payload_directories[plan.preferred_accession],
                 failures=(),
             )
@@ -1252,13 +1264,7 @@ def run_workflow(args: CliArgs) -> int:
                 ),
                 "conversion_status": execution.conversion_status,
                 "download_method_used": execution_result.method_used,
-                "download_batch": (
-                    row["ncbi_accession"]
-                    if unsupported_accession
-                    else "dehydrated_batch"
-                    if execution_result.method_used == "dehydrate"
-                    else row["ncbi_accession"]
-                ),
+                "download_batch": execution.download_batch,
                 "output_relpath": "",
                 "download_status": execution.download_status,
                 "duplicate_across_taxa": False,

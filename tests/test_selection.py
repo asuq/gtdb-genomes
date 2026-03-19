@@ -67,6 +67,11 @@ def test_select_taxa_matches_lineage_tokens() -> None:
         "g__Escherichia",
         "s__Escherichia coli",
     ]
+    assert selected["gtdb_accession"].to_list() == [
+        "RS_GCF_000001.1",
+        "GB_GCA_000002.1",
+        "RS_GCF_000001.1",
+    ]
 
 def test_build_taxon_slug_map_handles_collisions() -> None:
     """Colliding taxon slugs should receive deterministic hash suffixes."""

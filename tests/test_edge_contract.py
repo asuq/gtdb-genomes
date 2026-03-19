@@ -15,7 +15,7 @@ from gtdb_genomes.download import (
     PreviewError,
     RetryableCommandResult,
 )
-from gtdb_genomes.layout import initialise_run_directories
+from gtdb_genomes.layout import LayoutError, initialise_run_directories
 from gtdb_genomes.metadata import SummaryLookupResult
 from gtdb_genomes.preflight import PreflightError
 from gtdb_genomes.release_resolver import resolve_release
@@ -28,6 +28,7 @@ from gtdb_genomes.workflow import (
     build_failure_rows,
     execute_batch_dehydrate_plans,
     execute_direct_accession_plans,
+    extract_download_payload,
 )
 
 
@@ -94,6 +95,19 @@ def build_uba_only_taxonomy_frame(lineage: str) -> pl.DataFrame:
             "lineage": [lineage],
             "ncbi_accession": ["UBA11131"],
             "taxonomy_file": ["bac120_taxonomy_r80.tsv"],
+        },
+    )
+
+
+def build_shared_preferred_taxonomy_frame(lineage: str) -> pl.DataFrame:
+    """Build a taxonomy frame whose rows share one preferred accession."""
+
+    return pl.DataFrame(
+        {
+            "gtdb_accession": ["RS_GCF_001881595.2", "GB_GCA_001881595.3"],
+            "lineage": [lineage, lineage],
+            "ncbi_accession": ["GCF_001881595.2", "GCA_001881595.3"],
+            "taxonomy_file": ["bac120_taxonomy_r80.tsv", "bac120_taxonomy_r80.tsv"],
         },
     )
 
@@ -421,6 +435,31 @@ def test_build_unsupported_uba_warning_mentions_examples_and_bioproject() -> Non
     assert "g__Escherichia;s__Escherichia coli" in warning_text
     assert "UBA11131, UBA22222" in warning_text
     assert "PRJNA417962" in warning_text
+
+
+def test_extract_download_payload_reports_layout_stage_for_archive_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Archive extraction failures should be labelled as layout failures."""
+
+    run_directories = initialise_run_directories(tmp_path / "layout-error")
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.extract_archive",
+        lambda archive_path, extraction_root: (_ for _ in ()).throw(
+            LayoutError("archive extraction failed"),
+        ),
+    )
+
+    payload_directory, failures = extract_download_payload(
+        "GCF_000001.1",
+        tmp_path / "archive.zip",
+        run_directories,
+    )
+
+    assert payload_directory is None
+    assert len(failures) == 1
+    assert failures[0].stage == "layout"
 
 
 def test_release_80_contains_the_real_shared_preferred_accession_pair() -> None:
@@ -838,6 +877,7 @@ def test_total_runtime_failure_leaves_final_accession_blank(
                     final_accession=None,
                     conversion_status="failed_no_usable_accession",
                     download_status="failed",
+                    download_batch="GCF_000001.1",
                     payload_directory=None,
                     failures=(
                         CommandFailureRecord(
@@ -933,6 +973,7 @@ def test_mixed_uba_real_run_records_failed_unsupported_rows(
                     final_accession="GCF_000001.1",
                     conversion_status="unchanged_original",
                     download_status="downloaded",
+                    download_batch="GCF_000001.1",
                     payload_directory=payload_directory,
                     failures=(),
                 ),
@@ -1059,6 +1100,190 @@ def test_uba_only_real_run_writes_failed_manifests_and_exits_seven(
     assert run_summary["download_concurrency_used"] == "0"
 
 
+def test_shared_preferred_direct_manifest_uses_preferred_download_batch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Shared preferred direct success should record the preferred download batch."""
+
+    payload_directory = tmp_path / "shared-preferred-payload"
+    payload_directory.mkdir()
+    (payload_directory / "genome.fna").write_text(">seq\nACGT\n", encoding="ascii")
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.check_required_tools",
+        lambda required_tools: None,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.load_release_taxonomy",
+        lambda resolution: build_shared_preferred_taxonomy_frame(
+            "d__Bacteria;p__Firmicutes;g__Bacillus",
+        ),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.run_summary_lookup_with_retries",
+        lambda *args, **kwargs: SummaryLookupResult(summary_map={}, failures=()),
+    )
+
+    def fake_execute_accession_plans(
+        *args,
+        **kwargs,
+    ) -> DownloadExecutionResult:
+        """Return one shared preferred direct-success result."""
+
+        return DownloadExecutionResult(
+            executions={
+                "GCF_001881595.2": AccessionExecution(
+                    original_accession="GCF_001881595.2",
+                    final_accession="GCA_001881595.3",
+                    conversion_status="paired_to_gca",
+                    download_status="downloaded",
+                    download_batch="GCA_001881595.3",
+                    payload_directory=payload_directory,
+                    failures=(),
+                ),
+                "GCA_001881595.3": AccessionExecution(
+                    original_accession="GCA_001881595.3",
+                    final_accession="GCA_001881595.3",
+                    conversion_status="unchanged_original",
+                    download_status="downloaded",
+                    download_batch="GCA_001881595.3",
+                    payload_directory=payload_directory,
+                    failures=(),
+                ),
+            },
+            method_used="direct",
+            download_concurrency_used=1,
+            rehydrate_workers_used=0,
+        )
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.execute_accession_plans",
+        fake_execute_accession_plans,
+    )
+
+    output_dir = tmp_path / "shared-preferred-manifest"
+    exit_code = main(
+        [
+            "--gtdb-release",
+            "80",
+            "--gtdb-taxon",
+            "g__Bacillus",
+            "--outdir",
+            str(output_dir),
+            "--download-method",
+            "direct",
+        ],
+    )
+
+    assert exit_code == 0
+    accession_header, accession_rows = parse_tsv(output_dir / "accession_map.tsv")
+    accession_maps = [
+        dict(zip(accession_header, row, strict=True))
+        for row in accession_rows
+    ]
+    assert {row["download_batch"] for row in accession_maps} == {"GCA_001881595.3"}
+
+
+def test_direct_fallback_manifest_uses_actual_fallback_download_batch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Fallback rows should record the final per-accession direct batch."""
+
+    payload_directory = tmp_path / "fallback-payload"
+    payload_directory.mkdir()
+    (payload_directory / "genome.fna").write_text(">seq\nACGT\n", encoding="ascii")
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.check_required_tools",
+        lambda required_tools: None,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.load_release_taxonomy",
+        lambda resolution: build_shared_preferred_taxonomy_frame(
+            "d__Bacteria;p__Firmicutes;g__Bacillus",
+        ),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.run_summary_lookup_with_retries",
+        lambda *args, **kwargs: SummaryLookupResult(summary_map={}, failures=()),
+    )
+
+    def fake_execute_accession_plans(
+        *args,
+        **kwargs,
+    ) -> DownloadExecutionResult:
+        """Return one fallback success and one preferred-group failure."""
+
+        return DownloadExecutionResult(
+            executions={
+                "GCF_001881595.2": AccessionExecution(
+                    original_accession="GCF_001881595.2",
+                    final_accession="GCF_001881595.2",
+                    conversion_status="paired_to_gca_fallback_original_on_download_failure",
+                    download_status="downloaded_after_fallback",
+                    download_batch="GCF_001881595.2",
+                    payload_directory=payload_directory,
+                    failures=(),
+                ),
+                "GCA_001881595.3": AccessionExecution(
+                    original_accession="GCA_001881595.3",
+                    final_accession=None,
+                    conversion_status="failed_no_usable_accession",
+                    download_status="failed",
+                    download_batch="GCA_001881595.3",
+                    payload_directory=None,
+                    failures=(
+                        CommandFailureRecord(
+                            stage="preferred_download",
+                            attempt_index=4,
+                            max_attempts=4,
+                            error_type="subprocess",
+                            error_message="preferred failed",
+                            final_status="retry_exhausted",
+                            attempted_accession="GCA_001881595.3",
+                        ),
+                    ),
+                ),
+            },
+            method_used="direct",
+            download_concurrency_used=1,
+            rehydrate_workers_used=0,
+        )
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.execute_accession_plans",
+        fake_execute_accession_plans,
+    )
+
+    output_dir = tmp_path / "shared-fallback-manifest"
+    exit_code = main(
+        [
+            "--gtdb-release",
+            "80",
+            "--gtdb-taxon",
+            "g__Bacillus",
+            "--outdir",
+            str(output_dir),
+            "--download-method",
+            "direct",
+        ],
+    )
+
+    assert exit_code == 6
+    accession_header, accession_rows = parse_tsv(output_dir / "accession_map.tsv")
+    accession_maps = {
+        row["gtdb_accession"]: row
+        for row in (
+            dict(zip(accession_header, values, strict=True))
+            for values in accession_rows
+        )
+    }
+    assert accession_maps["RS_GCF_001881595.2"]["download_batch"] == "GCF_001881595.2"
+    assert accession_maps["GB_GCA_001881595.3"]["download_batch"] == "GCA_001881595.3"
+
+
 def test_failure_manifest_collapses_shared_accession_taxa(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -1093,6 +1318,7 @@ def test_failure_manifest_collapses_shared_accession_taxa(
                     final_accession=None,
                     conversion_status="failed_no_usable_accession",
                     download_status="failed",
+                    download_batch="GCF_000001.1",
                     payload_directory=None,
                     failures=(
                         CommandFailureRecord(
@@ -1166,6 +1392,7 @@ def test_failure_manifest_collapses_shared_metadata_attempts() -> None:
             final_accession="GCF_000001.1",
             conversion_status="unchanged_original",
             download_status="downloaded",
+            download_batch="GCF_000001.1",
             payload_directory=None,
             failures=(),
         ),
@@ -1174,6 +1401,7 @@ def test_failure_manifest_collapses_shared_metadata_attempts() -> None:
             final_accession="GCF_000002.1",
             conversion_status="unchanged_original",
             download_status="downloaded",
+            download_batch="GCF_000002.1",
             payload_directory=None,
             failures=(),
         ),
@@ -1284,6 +1512,7 @@ def test_batch_dehydrate_failure_falls_back_to_direct(
                     final_accession=plan.original_accession,
                     conversion_status="paired_to_gca_fallback_original_on_download_failure",
                     download_status="downloaded_after_fallback",
+                    download_batch=plan.original_accession,
                     payload_directory=tmp_path,
                     failures=(),
                 )

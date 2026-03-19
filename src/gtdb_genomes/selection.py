@@ -13,18 +13,10 @@ UNSAFE_TAXON_CHARACTER_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
 EXCESS_UNDERSCORE_PATTERN = re.compile(r"_{3,}")
 
 
-def add_lineage_tokens(frame: pl.DataFrame) -> pl.DataFrame:
-    """Add a split-token lineage column for descendant membership checks."""
-
-    return frame.with_columns(
-        pl.col("lineage").str.split(";").alias("lineage_tokens"),
-    )
-
-
 def empty_selection_frame(frame: pl.DataFrame) -> pl.DataFrame:
     """Return an empty selection frame with the selection columns attached."""
 
-    return frame.head(0).drop("lineage_tokens").with_columns(
+    return frame.head(0).with_columns(
         pl.lit("").alias("requested_taxon"),
     )
 
@@ -35,18 +27,31 @@ def select_taxa(
 ) -> pl.DataFrame:
     """Select taxonomy rows whose lineage contains any requested taxon."""
 
-    tokenised = add_lineage_tokens(frame)
-    selections: list[pl.DataFrame] = []
-    for requested_taxon in requested_taxa:
-        selected = tokenised.filter(
-            pl.col("lineage_tokens").list.contains(requested_taxon),
-        ).with_columns(
-            pl.lit(requested_taxon).alias("requested_taxon"),
+    if not requested_taxa:
+        return empty_selection_frame(frame)
+
+    requested_taxa_frame = pl.DataFrame(
+        {
+            "requested_taxon": list(requested_taxa),
+            "_requested_order": list(range(len(requested_taxa))),
+        },
+    )
+    selected = (
+        frame.with_row_index("_row_order")
+        .with_columns(pl.col("lineage").str.split(";").alias("requested_taxon"))
+        .explode("requested_taxon")
+        .join(requested_taxa_frame, on="requested_taxon", how="inner")
+        .unique(
+            subset=["_row_order", "requested_taxon"],
+            keep="first",
+            maintain_order=True,
         )
-        selections.append(selected.drop("lineage_tokens"))
-    if not selections:
-        return empty_selection_frame(tokenised)
-    return pl.concat(selections, how="vertical")
+        .sort(["_requested_order", "_row_order"])
+        .drop("_requested_order", "_row_order")
+    )
+    if selected.is_empty():
+        return empty_selection_frame(frame)
+    return selected.select([*frame.columns, "requested_taxon"])
 
 
 def build_base_taxon_slug(requested_taxon: str) -> str:

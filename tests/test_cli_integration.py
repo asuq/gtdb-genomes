@@ -15,11 +15,6 @@ def test_main_passes_normalised_arguments_into_workflow(
 
     captured_args: list[CliArgs] = []
 
-    monkeypatch.setattr(
-        "gtdb_genomes.cli.check_required_tools",
-        lambda required_tools: None,
-    )
-
     def fake_run_workflow(args: CliArgs) -> int:
         """Capture the parsed arguments and return a stubbed exit code."""
 
