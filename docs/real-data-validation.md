@@ -158,10 +158,15 @@ Acceptance:
 
 Acceptance highlights:
 
-- `B1`, `B2`, `B3`, `B6`: exit `0`
+- `B1`, `B3`, `B6`: exit `0`
+- `B2`: exit `6`, because release `86 / g__Methanobrevibacter` includes one
+  legacy `UBA*` accession alongside supported genomes
 - `B4`: exit `6` and `unsupported_input` in `download_failures.tsv`
 - `B5`: exit `7`, manifests present, no payload directories
 - `B3`: duplicate rows show `duplicate_across_taxa=true`
+- successful direct cases may still record retry-history rows in
+  `download_failures.tsv`; treat `failed_accessions=0` in `run_summary.tsv` as
+  the success gate instead of requiring a header-only failure TSV
 
 ### Remote packaged-runtime runs
 
@@ -181,6 +186,9 @@ Acceptance highlights:
   `dehydrate_fallback_direct`
 - `C6`: exit `0`, no output tree
 - `C7`: run only with large free disk and a long window
+- successful direct cases may still retain retry-history rows in
+  `download_failures.tsv`; prioritise the shell exit code and
+  `run_summary.tsv.failed_accessions`
 
 ## Evidence Layout
 
