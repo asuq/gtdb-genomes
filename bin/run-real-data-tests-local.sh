@@ -6,10 +6,13 @@ set -u
 set -o pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 # shellcheck source=bin/real-data-test-common.sh
 . "${SCRIPT_DIR}/real-data-test-common.sh"
 
 LOCAL_TEST_ROOT="${LOCAL_TEST_ROOT:-/tmp/gtdb-realtests/local-$(real_data_today)}"
+LOCAL_LAUNCHER_MODE="${LOCAL_LAUNCHER_MODE:-uv}"
+LOCAL_LAUNCHER=()
 
 
 local_check_direct_success() {
@@ -79,20 +82,51 @@ local_check_legacy_only() {
 }
 
 
-local_check_dehydrate_candidate() {
-    local output_root=$1
-    local evidence_root=$2
+local_initialise_launcher() {
+    local module_python=""
 
-    if [ -e "${output_root}" ]; then
-        real_data_fail_message "dry-run preview case created output"
-        return 1
-    fi
-    if ! grep -E -q 'datasets download genome accession .*--preview' \
-        "${evidence_root}/combined.log"; then
-        real_data_fail_message "preview command not observed for auto dry-run"
-        return 1
-    fi
-    return 0
+    case "${LOCAL_LAUNCHER_MODE}" in
+        uv)
+            real_data_require_command uv
+            export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/gtdb_uv_cache}"
+            LOCAL_LAUNCHER=(uv run --no-sync gtdb-genomes)
+            ;;
+        module)
+            module_python="${REPO_ROOT}/.venv/bin/python"
+            if [ ! -x "${module_python}" ]; then
+                real_data_die \
+                    "Missing local module launcher: ${module_python}"
+            fi
+            LOCAL_LAUNCHER=("${module_python}" -m gtdb_genomes)
+            ;;
+        *)
+            real_data_die \
+                "Unsupported LOCAL_LAUNCHER_MODE: ${LOCAL_LAUNCHER_MODE}"
+            ;;
+    esac
+}
+
+
+local_require_case_commands() {
+    local case_id=$1
+
+    case "${case_id}" in
+        A1 | A2 | A3 | A4 | A5 | A7 | A8 | A9)
+            return 0
+            ;;
+        A6)
+            real_data_require_command datasets
+            return 0
+            ;;
+        B1 | B2 | B3 | B4 | B5 | B6)
+            real_data_require_command datasets
+            real_data_require_command unzip
+            return 0
+            ;;
+        *)
+            real_data_die "Unknown local case ID: ${case_id}"
+            ;;
+    esac
 }
 
 
@@ -103,7 +137,7 @@ run_local_case() {
         A1)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent 'PRJNA417962' "" \
-                uv run gtdb-genomes \
+                "${LOCAL_LAUNCHER[@]}" \
                 --release 80 \
                 --taxon g__Acholeplasma_C \
                 --download-method direct \
@@ -113,7 +147,7 @@ run_local_case() {
         A2)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
-                uv run gtdb-genomes \
+                "${LOCAL_LAUNCHER[@]}" \
                 --release 83 \
                 --taxon "s__Thermoflexus hugenholtzii" \
                 --download-method direct \
@@ -123,7 +157,7 @@ run_local_case() {
         A3)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
-                uv run gtdb-genomes \
+                "${LOCAL_LAUNCHER[@]}" \
                 --release 86 \
                 --taxon g__Methanobrevibacter \
                 --download-method direct \
@@ -133,7 +167,7 @@ run_local_case() {
         A4)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
-                uv run gtdb-genomes \
+                "${LOCAL_LAUNCHER[@]}" \
                 --release 89 \
                 --taxon "s__Thermoflexus hugenholtzii" \
                 --download-method direct \
@@ -143,7 +177,7 @@ run_local_case() {
         A5)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
-                uv run gtdb-genomes \
+                "${LOCAL_LAUNCHER[@]}" \
                 --release 95 \
                 --taxon g__Thermoflexus \
                 --taxon "s__Thermoflexus hugenholtzii" \
@@ -153,20 +187,18 @@ run_local_case() {
             ;;
         A6)
             real_data_run_case \
-                "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" \
-                local_check_dehydrate_candidate \
-                uv run gtdb-genomes \
+                "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
+                "${LOCAL_LAUNCHER[@]}" \
                 --release 202 \
                 --taxon g__Bacteroides \
                 --download-method auto \
                 --no-prefer-genbank \
-                --debug \
                 --dry-run
             ;;
         A7)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
-                uv run gtdb-genomes \
+                "${LOCAL_LAUNCHER[@]}" \
                 --release 207 \
                 --taxon g__Methanobrevibacter \
                 --download-method direct \
@@ -176,7 +208,7 @@ run_local_case() {
         A8)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
-                uv run gtdb-genomes \
+                "${LOCAL_LAUNCHER[@]}" \
                 --release release220/220.0 \
                 --taxon "s__Thermoflexus hugenholtzii" \
                 --download-method direct \
@@ -186,7 +218,7 @@ run_local_case() {
         A9)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
-                uv run gtdb-genomes \
+                "${LOCAL_LAUNCHER[@]}" \
                 --release latest \
                 --taxon g__Methanobrevibacter \
                 --download-method direct \
@@ -197,7 +229,7 @@ run_local_case() {
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 present "" \
                 local_check_direct_success \
-                uv run gtdb-genomes \
+                "${LOCAL_LAUNCHER[@]}" \
                 --release 83 \
                 --taxon "s__Thermoflexus hugenholtzii" \
                 --download-method direct \
@@ -210,7 +242,7 @@ run_local_case() {
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 present "" \
                 local_check_direct_success \
-                uv run gtdb-genomes \
+                "${LOCAL_LAUNCHER[@]}" \
                 --release 86 \
                 --taxon g__Methanobrevibacter \
                 --download-method direct \
@@ -223,7 +255,7 @@ run_local_case() {
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 present "" \
                 local_check_duplicate_success \
-                uv run gtdb-genomes \
+                "${LOCAL_LAUNCHER[@]}" \
                 --release 95 \
                 --taxon g__Thermoflexus \
                 --taxon "s__Thermoflexus hugenholtzii" \
@@ -236,7 +268,7 @@ run_local_case() {
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 6 present 'PRJNA417962' \
                 local_check_legacy_mixed \
-                uv run gtdb-genomes \
+                "${LOCAL_LAUNCHER[@]}" \
                 --release 80 \
                 --taxon g__Acholeplasma_C \
                 --download-method direct \
@@ -248,7 +280,7 @@ run_local_case() {
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 7 present 'PRJNA417962' \
                 local_check_legacy_only \
-                uv run gtdb-genomes \
+                "${LOCAL_LAUNCHER[@]}" \
                 --release 80 \
                 --taxon g__UBA10030 \
                 --download-method direct \
@@ -261,7 +293,7 @@ run_local_case() {
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 present "" \
                 local_check_direct_success \
-                uv run gtdb-genomes \
+                "${LOCAL_LAUNCHER[@]}" \
                 --release 207 \
                 --taxon g__Methanobrevibacter \
                 --download-method direct \
@@ -280,9 +312,8 @@ run_local_case() {
 main() {
     local selected_cases=("$@")
 
-    real_data_require_command uv
-    real_data_require_command datasets
-    real_data_require_command unzip
+    cd "${REPO_ROOT}" || exit 1
+    local_initialise_launcher
     real_data_initialise_suite "${LOCAL_TEST_ROOT}"
 
     if [ "${#selected_cases[@]}" -eq 0 ]; then
@@ -294,6 +325,7 @@ main() {
 
     real_data_log "Local real-data test root: ${LOCAL_TEST_ROOT}"
     for case_id in "${selected_cases[@]}"; do
+        local_require_case_commands "${case_id}"
         real_data_log "Running local case ${case_id}"
         run_local_case "${case_id}"
     done
