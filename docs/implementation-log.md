@@ -1835,3 +1835,26 @@ PY`
   - no, by design
 - Deviations:
   - none
+
+### Commit `1faa747` - `refactor(workflow): reuse shared ordered accession helper`
+
+- Implemented:
+  - removed the local `get_ordered_unique_values()` helper from `workflow.py`
+    and reused the shared `get_ordered_unique_accessions()` helper from
+    `download.py`
+  - kept the unsupported-`UBA*` warning text and ordering semantics unchanged
+    while reducing duplicate ordered-deduplication logic in the runtime path
+- Why:
+  - the ordering rule for accession lists was duplicated in two places after
+    the earlier preview and metadata refactors
+  - centralising it in one shared helper makes future changes to deterministic
+    accession ordering less error-prone and keeps the workflow module smaller
+- Files:
+  - `src/gtdb_genomes/workflow.py`
+- Checks run:
+  - `.venv/bin/python -m pytest -q`
+  - `python3 -m compileall src`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - none
