@@ -24,7 +24,7 @@ def add_lineage_tokens(frame: pl.DataFrame) -> pl.DataFrame:
 def empty_selection_frame(frame: pl.DataFrame) -> pl.DataFrame:
     """Return an empty selection frame with the selection columns attached."""
 
-    return frame.head(0).with_columns(
+    return frame.head(0).drop("lineage_tokens").with_columns(
         pl.lit("").alias("requested_taxon"),
     )
 
@@ -43,7 +43,7 @@ def select_taxa(
         ).with_columns(
             pl.lit(requested_taxon).alias("requested_taxon"),
         )
-        selections.append(selected)
+        selections.append(selected.drop("lineage_tokens"))
     if not selections:
         return empty_selection_frame(tokenised)
     return pl.concat(selections, how="vertical")

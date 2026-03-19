@@ -12,14 +12,6 @@ from gtdb_genomes.release_resolver import ReleaseResolution
 TAXONOMY_COLUMNS = ["gtdb_accession", "lineage"]
 
 
-def normalise_gtdb_accession(gtdb_accession: str) -> str:
-    """Convert a GTDB accession token into the underlying NCBI accession."""
-
-    if gtdb_accession.startswith("RS_") or gtdb_accession.startswith("GB_"):
-        return gtdb_accession[3:]
-    return gtdb_accession
-
-
 def get_logical_taxonomy_filename(path: Path) -> str:
     """Return a stable taxonomy filename for manifests and output tables."""
 
@@ -37,10 +29,15 @@ def load_taxonomy_table(path: Path) -> pl.DataFrame:
         has_header=False,
         new_columns=TAXONOMY_COLUMNS,
     )
+    accession_column = pl.col("gtdb_accession")
     return frame.with_columns(
-        pl.col("gtdb_accession").map_elements(
-            normalise_gtdb_accession,
-            return_dtype=pl.String,
+        pl.when(
+            accession_column.str.starts_with("RS_")
+            | accession_column.str.starts_with("GB_"),
+        ).then(
+            accession_column.str.slice(3),
+        ).otherwise(
+            accession_column,
         ).alias("ncbi_accession"),
         pl.lit(get_logical_taxonomy_filename(path)).alias("taxonomy_file"),
     )

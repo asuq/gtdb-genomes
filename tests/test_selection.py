@@ -61,6 +61,7 @@ def test_select_taxa_matches_lineage_tokens() -> None:
     )
 
     assert selected.height == 3
+    assert "lineage_tokens" not in selected.columns
     assert selected["requested_taxon"].to_list() == [
         "g__Escherichia",
         "g__Escherichia",
