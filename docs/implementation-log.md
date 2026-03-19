@@ -1323,3 +1323,66 @@ PY`
     prerequisites, but live debugging showed that this overstated the real
     requirements and hid the difference between valid offline dry-runs and
     genuinely networked local cases
+
+### Commit `674e1f0` - `fix(download): use input files for auto previews`
+
+- Implemented:
+  - changed the auto-preview command path to use
+    `datasets download genome accession --inputfile ... --preview` instead of
+    expanding every accession directly into argv
+  - kept the preview temp file outside the final output tree by writing it to
+    a temporary directory under `/tmp`, while preserving the existing exit `5`
+    and no-output-tree behaviour when preview fails
+  - added a workflow-level regression test proving that auto preview now uses
+    a temporary accession input file, deduplicates repeated accessions in
+    deterministic order, and cleans up the temp file after the preview call
+  - extended preview-size parsing to accept the JSON output returned by modern
+    `datasets --preview`, including `estimated_file_size_mb` and nested
+    `included_data_files.*.size_mb` values
+  - updated the preview command unit expectations so the input-file preview
+    shape is now part of the locked test contract
+- Files:
+  - `src/gtdb_genomes/download.py`
+  - `src/gtdb_genomes/workflow.py`
+  - `tests/test_download.py`
+  - `tests/test_edge_contract.py`
+- Checks run:
+  - `.venv/bin/pytest -q tests/test_download.py tests/test_edge_contract.py`
+  - `.venv/bin/pytest -q tests/test_download.py tests/test_edge_contract.py tests/test_entrypoints.py`
+  - `python3 -m compileall src`
+  - `PATH=/Users/asuq/miniforge3/envs/gtdb-genome-netcheck/bin:/usr/bin:/bin LOCAL_TEST_ROOT=/tmp/gtdb-realtests/local-a6-netcheck-20260319-fix2 bin/run-real-data-tests-local.sh A6`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - fixing the `431` issue exposed a second live bug immediately afterwards:
+    large input-file previews now succeeded, but the tool still exited `5`
+    because it only knew how to parse text previews with units like `GB`; the
+    real `datasets` response for the large `A6` request was JSON, so the fix
+    had to cover both the command shape and the preview parser in the same
+    implementation pass
+
+### Commit `3efb568` - `fix(bin): harden local validation helpers`
+
+- Implemented:
+  - replaced the `awk` loop variable name `index` in the shared real-data test
+    helper with a BSD-awk-safe identifier so the runner can validate TSV
+    column lookups on macOS
+  - relaxed the duplicate-across-taxa manifest matcher to accept line endings
+    with an optional trailing carriage return, which made the `B3` validation
+    case robust against the emitted TSV newline format
+- Files:
+  - `bin/real-data-test-common.sh`
+  - `bin/run-real-data-tests-local.sh`
+- Checks run:
+  - `bash -n bin/real-data-test-common.sh bin/run-real-data-tests-local.sh`
+  - `PATH=/Users/asuq/miniforge3/envs/gtdb-genome-netcheck/bin:/usr/bin:/bin LOCAL_TEST_ROOT=/tmp/gtdb-realtests/local-b4-netcheck-20260319-fix bin/run-real-data-tests-local.sh B4`
+  - `PATH=/Users/asuq/miniforge3/envs/gtdb-genome-netcheck/bin:/usr/bin:/bin LOCAL_TEST_ROOT=/tmp/gtdb-realtests/local-b3-netcheck-20260319-fix bin/run-real-data-tests-local.sh B3`
+  - `PATH=/Users/asuq/miniforge3/envs/gtdb-genome-netcheck/bin:/usr/bin:/bin LOCAL_TEST_ROOT=/tmp/gtdb-realtests/local-b1-b3-netcheck-20260319 bin/run-real-data-tests-local.sh B1 B3`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the original implementation plan was focused on the `A6` preview path, but
+    once that was fixed the live local runner exposed two macOS-specific
+    validation issues in the bash helper layer; these were fixed in a follow-on
+    commit so the planned `B4`, `B1`, and `B3` validation sequence could
+    complete without manual TSV inspection
