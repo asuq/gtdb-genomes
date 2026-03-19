@@ -97,6 +97,13 @@ local_initialise_launcher() {
             real_data_require_command uv
             export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/gtdb_uv_cache}"
             LOCAL_LAUNCHER=(uv run --no-sync gtdb-genomes)
+            if command -v python >/dev/null 2>&1; then
+                REAL_DATA_PYTHON_VERSION_BIN=$(command -v python)
+            elif command -v python3 >/dev/null 2>&1; then
+                REAL_DATA_PYTHON_VERSION_BIN=$(command -v python3)
+            else
+                REAL_DATA_PYTHON_VERSION_BIN=""
+            fi
             ;;
         module)
             module_python="${REPO_ROOT}/.venv/bin/python"
@@ -105,6 +112,7 @@ local_initialise_launcher() {
                     "Missing local module launcher: ${module_python}"
             fi
             LOCAL_LAUNCHER=("${module_python}" -m gtdb_genomes)
+            REAL_DATA_PYTHON_VERSION_BIN="${module_python}"
             ;;
         *)
             real_data_die \
@@ -322,6 +330,9 @@ main() {
     cd "${REPO_ROOT}" || exit 1
     local_initialise_launcher
     real_data_initialise_suite "${LOCAL_TEST_ROOT}"
+    real_data_record_tool_versions \
+        "${LOCAL_TEST_ROOT}" \
+        "${REAL_DATA_PYTHON_VERSION_BIN}"
 
     if [ "${#selected_cases[@]}" -eq 0 ]; then
         selected_cases=(

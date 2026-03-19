@@ -170,7 +170,11 @@ main() {
     real_data_require_command python
     real_data_require_command datasets
     real_data_require_command unzip
+    REAL_DATA_PYTHON_VERSION_BIN=$(command -v python)
     real_data_initialise_suite "${REMOTE_TEST_ROOT}"
+    real_data_record_tool_versions \
+        "${REMOTE_TEST_ROOT}" \
+        "${REAL_DATA_PYTHON_VERSION_BIN}"
 
     real_data_run_command_check \
         "${REMOTE_TEST_ROOT}" \

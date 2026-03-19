@@ -7,6 +7,7 @@ set -o pipefail
 
 REAL_DATA_OVERALL_STATUS=0
 REAL_DATA_CASE_RESULTS_FILE=""
+REAL_DATA_PYTHON_VERSION_BIN="${REAL_DATA_PYTHON_VERSION_BIN:-}"
 
 
 real_data_today() {
@@ -57,13 +58,89 @@ real_data_initialise_suite() {
 }
 
 
+real_data_redact_value() {
+    local value=$1
+
+    if [ -n "${NCBI_API_KEY:-}" ]; then
+        printf '%s' "${value//${NCBI_API_KEY}/[REDACTED]}"
+        return 0
+    fi
+    printf '%s' "${value}"
+}
+
+
 real_data_write_command_file() {
     local command_file=$1
+    local redact_next=0
+    local argument=""
 
     shift
     : > "${command_file}"
-    printf '%q ' "$@" >> "${command_file}"
+    for argument in "$@"; do
+        if [ "${redact_next}" -eq 1 ]; then
+            printf '%q ' "[REDACTED]" >> "${command_file}"
+            redact_next=0
+            continue
+        fi
+        if [[ "${argument}" == --ncbi-api-key=* ]]; then
+            printf '%q ' "--ncbi-api-key=[REDACTED]" >> "${command_file}"
+            continue
+        fi
+        printf '%q ' "${argument}" >> "${command_file}"
+        if [ "${argument}" = "--ncbi-api-key" ]; then
+            redact_next=1
+        fi
+    done
     printf '\n' >> "${command_file}"
+}
+
+
+real_data_redact_file() {
+    local source_path=$1
+    local destination_path=$2
+    local line=""
+
+    : > "${destination_path}"
+    while IFS= read -r line || [ -n "${line}" ]; do
+        real_data_redact_value "${line}" >> "${destination_path}"
+        printf '\n' >> "${destination_path}"
+    done < "${source_path}"
+}
+
+
+real_data_record_tool_versions() {
+    local test_root=$1
+    local python_bin=${2:-}
+    local evidence_root="${test_root}/_evidence"
+    local version_file="${evidence_root}/tool-versions.txt"
+    local detected_python=""
+
+    mkdir -p "${evidence_root}"
+    if [ -n "${python_bin}" ] && [ -x "${python_bin}" ]; then
+        detected_python="${python_bin}"
+    elif command -v python >/dev/null 2>&1; then
+        detected_python=$(command -v python)
+    elif command -v python3 >/dev/null 2>&1; then
+        detected_python=$(command -v python3)
+    fi
+
+    {
+        if [ -n "${detected_python}" ]; then
+            printf 'python_bin=%s\n' "${detected_python}"
+            printf 'python_version=%s\n' "$("${detected_python}" --version 2>&1)"
+        else
+            printf 'python_bin=unavailable\n'
+            printf 'python_version=unavailable\n'
+        fi
+
+        if command -v datasets >/dev/null 2>&1; then
+            printf 'datasets_bin=%s\n' "$(command -v datasets)"
+            printf 'datasets_version=%s\n' "$(datasets version 2>&1)"
+        else
+            printf 'datasets_bin=unavailable\n'
+            printf 'datasets_version=unavailable\n'
+        fi
+    } > "${version_file}"
 }
 
 
@@ -266,16 +343,23 @@ real_data_run_command_check() {
     local status="PASS"
     local start_epoch=0
     local end_epoch=0
+    local raw_stdout_file=""
+    local raw_stderr_file=""
 
     shift 3
     mkdir -p "${evidence_root}"
     real_data_write_command_file "${command_file}" "$@"
+    raw_stdout_file=$(mktemp "${TMPDIR:-/tmp}/gtdb_real_stdout.XXXXXX")
+    raw_stderr_file=$(mktemp "${TMPDIR:-/tmp}/gtdb_real_stderr.XXXXXX")
 
     start_epoch=$(date +%s)
-    "$@" > "${stdout_file}" 2> "${stderr_file}"
+    "$@" > "${raw_stdout_file}" 2> "${raw_stderr_file}"
     actual_exit=$?
     end_epoch=$(date +%s)
+    real_data_redact_file "${raw_stdout_file}" "${stdout_file}"
+    real_data_redact_file "${raw_stderr_file}" "${stderr_file}"
     cat "${stdout_file}" "${stderr_file}" > "${combined_file}"
+    rm -f "${raw_stdout_file}" "${raw_stderr_file}"
 
     if [ "${actual_exit}" -ne "${expected_exit}" ]; then
         status="FAIL"
@@ -310,6 +394,8 @@ real_data_run_case() {
     local status="PASS"
     local start_epoch=0
     local end_epoch=0
+    local raw_stdout_file=""
+    local raw_stderr_file=""
 
     shift 6
 
@@ -322,12 +408,17 @@ real_data_run_case() {
 
     mkdir -p "${evidence_root}"
     real_data_write_command_file "${command_file}" "$@" --output "${output_root}"
+    raw_stdout_file=$(mktemp "${TMPDIR:-/tmp}/gtdb_real_stdout.XXXXXX")
+    raw_stderr_file=$(mktemp "${TMPDIR:-/tmp}/gtdb_real_stderr.XXXXXX")
 
     start_epoch=$(date +%s)
-    "$@" --output "${output_root}" > "${stdout_file}" 2> "${stderr_file}"
+    "$@" --output "${output_root}" > "${raw_stdout_file}" 2> "${raw_stderr_file}"
     actual_exit=$?
     end_epoch=$(date +%s)
+    real_data_redact_file "${raw_stdout_file}" "${stdout_file}"
+    real_data_redact_file "${raw_stderr_file}" "${stderr_file}"
     cat "${stdout_file}" "${stderr_file}" > "${combined_file}"
+    rm -f "${raw_stdout_file}" "${raw_stderr_file}"
 
     if [ "${actual_exit}" -ne "${expected_exit}" ]; then
         status="FAIL"
