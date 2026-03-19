@@ -1148,3 +1148,37 @@ PY`
   - yes
 - Deviations:
   - none
+
+### Commit `f09bffe` - `feat(workflow): skip unsupported legacy UBA accessions`
+
+- Implemented:
+  - split selected taxonomy rows into supported accessions and legacy `UBA*`
+    accessions before any NCBI metadata or download calls
+  - added one run-level warning message builder for unsupported `UBA*`
+    accessions, including the requested taxa summary and BioProject
+    `PRJNA417962`
+  - prevented unsupported `UBA*` accessions from reaching metadata lookup,
+    preview, or download planning
+  - synthesised failed execution records for unsupported `UBA*` rows so real
+    runs keep them auditable in the root and per-taxon manifests
+  - updated failure-row building so shared metadata and shared batch failures
+    only collapse over supported rows, while unsupported `UBA*` rows stay
+    accession-specific
+  - added regression coverage for mixed dry-runs, UBA-only dry-runs, mixed
+    real runs, UBA-only real runs, legacy bundled-release `UBA*` detection,
+    and the `g__UBA509` false-positive case
+- Files:
+  - `src/gtdb_genomes/workflow.py`
+  - `tests/test_edge_contract.py`
+  - `tests/test_release_resolver.py`
+  - `tests/test_selection.py`
+- Checks run:
+  - `.venv/bin/pytest -q tests/test_edge_contract.py tests/test_selection.py tests/test_release_resolver.py tests/test_entrypoints.py`
+  - `python3 -m compileall src`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - this runtime change extends the shipped manifest semantics with the new
+    `unsupported_input` failure outcome for legacy `UBA*` accessions; the
+    frozen development plan stays untouched, and the runtime-facing
+    documentation is updated in a separate follow-up commit
