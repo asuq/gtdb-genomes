@@ -52,7 +52,11 @@ from gtdb_genomes.logging_utils import (
 from gtdb_genomes.metadata import (
     MetadataLookupError,
     apply_accession_preferences,
+    build_download_request_accession,
     build_summary_command,
+    get_assembly_accession_stem,
+    parse_assembly_accession,
+    parse_assembly_accession_stem,
     run_summary_lookup_with_retries,
 )
 from gtdb_genomes.preflight import check_required_tools, get_required_tools
@@ -76,7 +80,8 @@ class AccessionPlan:
     """One unique accession to resolve and download for the run."""
 
     original_accession: str
-    preferred_accession: str
+    selected_accession: str
+    download_request_accession: str
     conversion_status: str
 
 
@@ -102,6 +107,14 @@ class DownloadExecutionResult:
     download_concurrency_used: int
     rehydrate_workers_used: int
     shared_failures: tuple[CommandFailureRecord, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedPayloadDirectory:
+    """The extracted payload directory and its realised accession."""
+
+    final_accession: str
+    directory: Path
 
 
 UNSUPPORTED_UBA_PREFIX = "UBA"
@@ -215,7 +228,12 @@ def build_unsupported_executions(
     return executions
 
 
-def build_accession_plans(mapped_frame: pl.DataFrame) -> tuple[AccessionPlan, ...]:
+def build_accession_plans(
+    mapped_frame: pl.DataFrame,
+    *,
+    prefer_genbank: bool,
+    version_fixed: bool,
+) -> tuple[AccessionPlan, ...]:
     """Build one unique download plan per original NCBI accession."""
 
     if mapped_frame.is_empty():
@@ -228,24 +246,29 @@ def build_accession_plans(mapped_frame: pl.DataFrame) -> tuple[AccessionPlan, ..
     return tuple(
         AccessionPlan(
             original_accession=row["ncbi_accession"],
-            preferred_accession=row["final_accession"],
+            selected_accession=row["final_accession"],
+            download_request_accession=build_download_request_accession(
+                row["final_accession"],
+                prefer_genbank=prefer_genbank,
+                version_fixed=version_fixed,
+            ),
             conversion_status=row["conversion_status"],
         )
         for row in unique_rows
     )
 
 
-def group_plans_by_preferred_accession(
+def group_plans_by_download_request_accession(
     plans: tuple[AccessionPlan, ...],
 ) -> tuple[tuple[str, tuple[AccessionPlan, ...]], ...]:
-    """Group accession plans by preferred accession in first-seen order."""
+    """Group accession plans by request accession in first-seen order."""
 
     grouped_plans: dict[str, list[AccessionPlan]] = {}
     for plan in plans:
-        grouped_plans.setdefault(plan.preferred_accession, []).append(plan)
+        grouped_plans.setdefault(plan.download_request_accession, []).append(plan)
     return tuple(
-        (preferred_accession, tuple(group))
-        for preferred_accession, group in grouped_plans.items()
+        (download_request_accession, tuple(group))
+        for download_request_accession, group in grouped_plans.items()
     )
 
 
@@ -268,57 +291,95 @@ def attach_attempted_accession(
     )
 
 
+def collect_payload_directories(
+    extraction_root: Path,
+) -> tuple[ResolvedPayloadDirectory, ...]:
+    """Collect realised payload directories from one extracted archive."""
+
+    data_root = extraction_root / "ncbi_dataset" / "data"
+    if not data_root.is_dir():
+        raise LayoutError("Could not locate extracted datasets data directory")
+    return tuple(
+        ResolvedPayloadDirectory(
+            final_accession=parsed_accession.accession,
+            directory=candidate,
+        )
+        for candidate in data_root.rglob("*")
+        if candidate.is_dir()
+        and (parsed_accession := parse_assembly_accession(candidate.name)) is not None
+    )
+
+
 def locate_accession_payload_directory(
     extraction_root: Path,
-    accession: str,
-) -> Path:
-    """Locate the extracted datasets payload directory for one accession."""
+    requested_accession: str,
+) -> ResolvedPayloadDirectory:
+    """Locate the extracted payload directory for one requested accession."""
 
-    direct_candidate = extraction_root / "ncbi_dataset" / "data" / accession
-    if direct_candidate.is_dir():
-        return direct_candidate
-    for candidate in extraction_root.rglob(accession):
-        if candidate.is_dir():
-            return candidate
-    raise LayoutError(
-        f"Could not locate extracted payload directory for accession {accession}",
+    payload_directories = locate_batch_payload_directories(
+        extraction_root,
+        (requested_accession,),
     )
+    return payload_directories[requested_accession]
 
 
 def locate_batch_payload_directories(
     extraction_root: Path,
-    accessions: tuple[str, ...],
-) -> dict[str, Path]:
-    """Locate extracted payload directories for a batch of accessions."""
+    requested_accessions: tuple[str, ...],
+) -> dict[str, ResolvedPayloadDirectory]:
+    """Locate extracted payload directories for one request batch."""
 
-    payload_directories: dict[str, Path] = {}
-    data_root = extraction_root / "ncbi_dataset" / "data"
-    missing_accessions: set[str] = set()
-    for accession in accessions:
-        direct_candidate = data_root / accession
-        if direct_candidate.is_dir():
-            payload_directories[accession] = direct_candidate
+    payload_records = collect_payload_directories(extraction_root)
+    payloads_by_accession = {
+        payload.final_accession: payload for payload in payload_records
+    }
+    payloads_by_stem: dict[str, list[ResolvedPayloadDirectory]] = defaultdict(list)
+    for payload in payload_records:
+        payloads_by_stem[get_assembly_accession_stem(payload.final_accession)].append(
+            payload,
+        )
+
+    located_payloads: dict[str, ResolvedPayloadDirectory] = {}
+    missing_accessions: list[str] = []
+    ambiguous_accessions: dict[str, tuple[str, ...]] = {}
+    for requested_accession in requested_accessions:
+        exact_match = payloads_by_accession.get(requested_accession)
+        if exact_match is not None:
+            located_payloads[requested_accession] = exact_match
             continue
-        missing_accessions.add(accession)
 
-    if not missing_accessions:
-        return payload_directories
-
-    for candidate in extraction_root.rglob("*"):
-        if not candidate.is_dir():
+        request_stem = parse_assembly_accession_stem(requested_accession)
+        if request_stem is None:
+            missing_accessions.append(requested_accession)
             continue
-        candidate_name = candidate.name
-        if candidate_name in missing_accessions:
-            payload_directories[candidate_name] = candidate
-            missing_accessions.remove(candidate_name)
-            if not missing_accessions:
-                return payload_directories
 
-    missing_text = ", ".join(sorted(missing_accessions))
-    raise LayoutError(
-        "Could not locate extracted payload directories for accessions: "
-        f"{missing_text}",
-    )
+        stem_matches = tuple(payloads_by_stem.get(request_stem.accession, ()))
+        if len(stem_matches) == 1:
+            located_payloads[requested_accession] = stem_matches[0]
+            continue
+        if len(stem_matches) > 1:
+            ambiguous_accessions[requested_accession] = tuple(
+                payload.final_accession for payload in stem_matches
+            )
+            continue
+        missing_accessions.append(requested_accession)
+
+    if ambiguous_accessions:
+        ambiguous_text = "; ".join(
+            f"{request}: {', '.join(matches)}"
+            for request, matches in sorted(ambiguous_accessions.items())
+        )
+        raise LayoutError(
+            "Resolved multiple extracted payload directories for requested accessions: "
+            f"{ambiguous_text}",
+        )
+    if missing_accessions:
+        missing_text = ", ".join(sorted(missing_accessions))
+        raise LayoutError(
+            "Could not locate extracted payload directories for requested accessions: "
+            f"{missing_text}",
+        )
+    return located_payloads
 
 
 def build_layout_failure(
@@ -338,13 +399,17 @@ def build_layout_failure(
 
 
 def extract_download_payload(
-    accession: str,
+    requested_accession: str,
     archive_path: Path,
     run_directories: RunDirectories,
-) -> tuple[Path | None, tuple[CommandFailureRecord, ...]]:
+    *,
+    extraction_key: str | None = None,
+) -> tuple[ResolvedPayloadDirectory | None, tuple[CommandFailureRecord, ...]]:
     """Extract one downloaded archive and locate its payload directory."""
 
-    extraction_root = run_directories.extracted_root / accession
+    extraction_root = run_directories.extracted_root / (
+        requested_accession if extraction_key is None else extraction_key
+    )
     try:
         extract_archive(archive_path, extraction_root)
     except LayoutError as error:
@@ -353,7 +418,7 @@ def extract_download_payload(
     try:
         payload_directory = locate_accession_payload_directory(
             extraction_root,
-            accession,
+            requested_accession,
         )
     except LayoutError as error:
         return None, (build_layout_failure(error),)
@@ -403,36 +468,39 @@ def build_successful_execution(
 
 
 def execute_direct_group_fallbacks(
-    preferred_accession: str,
+    download_request_accession: str,
     grouped_plans: tuple[AccessionPlan, ...],
     preferred_failures: tuple[CommandFailureRecord, ...],
     args: CliArgs,
     run_directories: RunDirectories,
     logger: logging.Logger,
 ) -> dict[str, AccessionExecution]:
-    """Run original-accession fallbacks for a failed preferred download group."""
+    """Run original-accession fallbacks for a failed request group."""
 
     executions: dict[str, AccessionExecution] = {}
     for plan in grouped_plans:
-        if plan.original_accession == preferred_accession:
+        fallback_request_accession = build_download_request_accession(
+            plan.original_accession,
+            prefer_genbank=args.prefer_genbank,
+            version_fixed=args.version_fixed,
+        )
+        if fallback_request_accession == download_request_accession:
             executions[plan.original_accession] = build_failed_execution(
                 plan.original_accession,
                 preferred_failures,
-                preferred_accession,
+                download_request_accession,
             )
             continue
 
-        archive_path = (
-            run_directories.downloads_root / f"{plan.original_accession}.zip"
-        )
+        archive_path = run_directories.downloads_root / f"{plan.original_accession}.zip"
         logger.debug(
-            "Preferred accession %s failed; falling back to original accession %s",
-            preferred_accession,
-            plan.original_accession,
+            "Download request %s failed; falling back to original accession %s",
+            download_request_accession,
+            fallback_request_accession,
         )
         fallback_result = run_retryable_command(
             build_download_command(
-                [plan.original_accession],
+                [fallback_request_accession],
                 archive_path,
                 args.include,
                 ncbi_api_key=args.ncbi_api_key,
@@ -440,67 +508,68 @@ def execute_direct_group_fallbacks(
             ),
             stage="fallback_download",
             final_failure_status="fallback_exhausted",
-            attempted_accession=plan.original_accession,
+            attempted_accession=fallback_request_accession,
         )
         combined_failures = preferred_failures + fallback_result.failures
         if not fallback_result.succeeded:
             executions[plan.original_accession] = build_failed_execution(
                 plan.original_accession,
                 combined_failures,
-                plan.original_accession,
+                fallback_request_accession,
             )
             continue
 
-        payload_directory, extraction_failures = extract_download_payload(
-            plan.original_accession,
+        payload, extraction_failures = extract_download_payload(
+            fallback_request_accession,
             archive_path,
             run_directories,
+            extraction_key=plan.original_accession,
         )
         combined_failures += extraction_failures
-        if payload_directory is None:
+        if payload is None:
             executions[plan.original_accession] = build_failed_execution(
                 plan.original_accession,
                 combined_failures,
-                plan.original_accession,
+                fallback_request_accession,
             )
             continue
 
         executions[plan.original_accession] = build_successful_execution(
             plan,
-            plan.original_accession,
+            payload.final_accession,
             "downloaded_after_fallback",
-            plan.original_accession,
-            payload_directory,
+            fallback_request_accession,
+            payload.directory,
             combined_failures,
         )
     return executions
 
 
 def execute_direct_accession_group(
-    preferred_accession: str,
+    download_request_accession: str,
     grouped_plans: tuple[AccessionPlan, ...],
     args: CliArgs,
     run_directories: RunDirectories,
     logger: logging.Logger,
 ) -> dict[str, AccessionExecution]:
-    """Download one preferred accession once and materialise grouped executions."""
+    """Download one request accession once and materialise grouped executions."""
 
-    archive_path = run_directories.downloads_root / f"{preferred_accession}.zip"
-    logger.debug("Downloading preferred accession %s", preferred_accession)
+    archive_path = run_directories.downloads_root / f"{download_request_accession}.zip"
+    logger.debug("Downloading request accession %s", download_request_accession)
     preferred_result = run_retryable_command(
         build_download_command(
-            [preferred_accession],
+            [download_request_accession],
             archive_path,
             args.include,
             ncbi_api_key=args.ncbi_api_key,
             debug=args.debug,
         ),
         stage="preferred_download",
-        attempted_accession=preferred_accession,
+        attempted_accession=download_request_accession,
     )
     if not preferred_result.succeeded:
         return execute_direct_group_fallbacks(
-            preferred_accession,
+            download_request_accession,
             grouped_plans,
             preferred_result.failures,
             args,
@@ -508,18 +577,18 @@ def execute_direct_accession_group(
             logger,
         )
 
-    payload_directory, extraction_failures = extract_download_payload(
-        preferred_accession,
+    payload, extraction_failures = extract_download_payload(
+        download_request_accession,
         archive_path,
         run_directories,
     )
     combined_failures = preferred_result.failures + extraction_failures
-    if payload_directory is None:
+    if payload is None:
         return {
             plan.original_accession: build_failed_execution(
                 plan.original_accession,
                 combined_failures,
-                preferred_accession,
+                download_request_accession,
             )
             for plan in grouped_plans
         }
@@ -527,11 +596,11 @@ def execute_direct_accession_group(
     return {
         plan.original_accession: build_successful_execution(
             plan,
-            preferred_accession,
+            payload.final_accession,
             "downloaded",
-            preferred_accession,
-            payload_directory,
-            preferred_result.failures,
+            download_request_accession,
+            payload.directory,
+            combined_failures,
         )
         for plan in grouped_plans
     }
@@ -553,7 +622,7 @@ def execute_direct_accession_plans(
             rehydrate_workers_used=0,
             shared_failures=(),
         )
-    plan_groups = group_plans_by_preferred_accession(plans)
+    plan_groups = group_plans_by_download_request_accession(plans)
     max_workers = max(
         1,
         get_direct_download_concurrency(args.threads, len(plan_groups)),
@@ -563,13 +632,13 @@ def execute_direct_accession_plans(
         future_map = {
             executor.submit(
                 execute_direct_accession_group,
-                preferred_accession,
+                download_request_accession,
                 grouped_plans,
                 args,
                 run_directories,
                 logger,
-            ): preferred_accession
-            for preferred_accession, grouped_plans in plan_groups
+            ): download_request_accession
+            for download_request_accession, grouped_plans in plan_groups
         }
         for future in future_map:
             executions.update(future.result())
@@ -617,12 +686,12 @@ def execute_batch_dehydrate_plans(
 
     batch_attempted_accessions = ";".join(
         get_ordered_unique_accessions(
-            plan.preferred_accession for plan in plans
+            plan.download_request_accession for plan in plans
         ),
     )
     accession_file = write_accession_input_file(
         run_directories.working_root / "dehydrate_accessions.txt",
-        (plan.preferred_accession for plan in plans),
+        (plan.download_request_accession for plan in plans),
     )
     archive_path = build_batch_archive_path(run_directories)
     download_command = build_batch_dehydrate_command(
@@ -701,16 +770,17 @@ def execute_batch_dehydrate_plans(
     try:
         payload_directories = locate_batch_payload_directories(
             extraction_root,
-            tuple(plan.preferred_accession for plan in plans),
+            tuple(plan.download_request_accession for plan in plans),
         )
         for plan in plans:
+            payload = payload_directories[plan.download_request_accession]
             executions[plan.original_accession] = AccessionExecution(
                 original_accession=plan.original_accession,
-                final_accession=plan.preferred_accession,
+                final_accession=payload.final_accession,
                 conversion_status=plan.conversion_status,
                 download_status="downloaded",
                 download_batch="dehydrated_batch",
-                payload_directory=payload_directories[plan.preferred_accession],
+                payload_directory=payload.directory,
                 failures=(),
             )
     except LayoutError as error:
@@ -1101,14 +1171,18 @@ def plan_supported_downloads(
 ) -> tuple[tuple[AccessionPlan, ...], str]:
     """Build supported-accession plans and resolve the effective method."""
 
-    accession_plans = build_accession_plans(supported_mapped_frame)
+    accession_plans = build_accession_plans(
+        supported_mapped_frame,
+        prefer_genbank=args.prefer_genbank,
+        version_fixed=args.version_fixed,
+    )
     if not accession_plans:
         return (), args.download_method
 
     preview_text: str | None = None
     if args.download_method == "auto":
         preview_accessions = get_ordered_unique_accessions(
-            plan.preferred_accession for plan in accession_plans
+            plan.download_request_accession for plan in accession_plans
         )
         with create_staging_directory("gtdb_genomes_preview_") as preview_directory:
             preview_accession_file = write_accession_input_file(

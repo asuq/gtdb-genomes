@@ -43,6 +43,7 @@ gtdb-genomes --gtdb-release latest --gtdb-taxon g__Escherichia --outdir results
 
 ### Optional options
 - `--prefer-genbank`
+- `--version-fixed`
 - `--download-method {auto,direct,dehydrate}`
 - `--threads`
 - `--ncbi-api-key`
@@ -50,6 +51,12 @@ gtdb-genomes --gtdb-release latest --gtdb-taxon g__Escherichia --outdir results
 - `--debug`
 - `--keep-temp`
 - `--dry-run`
+
+`--prefer-genbank` selects the preferred accession family from NCBI metadata
+and, by default, asks `datasets` for the latest available revision in that
+family. The downloaded version may differ from the RefSeq version.
+Use `--version-fixed` with `--prefer-genbank` to keep the exact selected
+version.
 
 Check `gtdb-genomes --help` for details and [usage-details](docs/usage-details.md) on optional options.
 
@@ -66,6 +73,10 @@ gtdb-genomes \
 
 Prefer paired GenBank accessions and request extra annotation:
 
+By default, `--prefer-genbank` asks `datasets` for the latest available
+revision in the chosen accession family, which may not match the RefSeq version
+number.
+
 ```bash
 gtdb-genomes \
   --gtdb-release latest \
@@ -74,6 +85,18 @@ gtdb-genomes \
   --include genome,gff3 \
   --ncbi-api-key "${NCBI_API_KEY}" \
   --outdir results/methanobrevibacter
+```
+
+Pin the exact selected GenBank version instead of requesting the latest
+revision:
+
+```bash
+gtdb-genomes \
+  --gtdb-release latest \
+  --gtdb-taxon "s__Methanobrevibacter smithii" \
+  --prefer-genbank \
+  --version-fixed \
+  --outdir results/methanobrevibacter-fixed
 ```
 
 Bundled-data-only dry-run:

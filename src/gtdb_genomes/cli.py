@@ -22,6 +22,7 @@ class CliArgs:
     gtdb_taxa: tuple[str, ...]
     outdir: Path
     prefer_genbank: bool
+    version_fixed: bool
     download_method: str
     threads: int
     ncbi_api_key: str | None
@@ -104,11 +105,14 @@ def parse_args(
     namespace = parser.parse_args(argv)
     if namespace.threads <= 0:
         parser.error("argument --threads: value must be a positive integer")
+    if namespace.version_fixed and not namespace.prefer_genbank:
+        parser.error("argument --version-fixed: requires --prefer-genbank")
     return CliArgs(
         gtdb_release=normalise_release(parser, namespace.gtdb_release),
         gtdb_taxa=normalise_taxa(parser, namespace.gtdb_taxon),
         outdir=validate_output_path(parser, namespace.outdir),
         prefer_genbank=namespace.prefer_genbank,
+        version_fixed=namespace.version_fixed,
         download_method=namespace.download_method,
         threads=namespace.threads,
         ncbi_api_key=namespace.ncbi_api_key,
@@ -144,7 +148,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--prefer-genbank",
         action="store_true",
-        help="Prefer paired GenBank accessions when available.",
+        help=(
+            "Prefer paired GenBank accessions and, by default, request the latest "
+            "available revision in the chosen family, which may differ from the "
+            "RefSeq version."
+        ),
+    )
+    parser.add_argument(
+        "--version-fixed",
+        action="store_true",
+        help="Pin the exact selected version; requires --prefer-genbank.",
     )
     parser.add_argument(
         "--download-method",

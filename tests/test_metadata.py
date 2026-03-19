@@ -11,8 +11,10 @@ import pytest
 from gtdb_genomes.metadata import (
     MetadataLookupError,
     apply_accession_preferences,
+    build_download_request_accession,
     build_summary_command,
     choose_preferred_accession,
+    get_assembly_accession_stem,
     parse_summary_json_lines,
     run_summary_lookup_with_retries,
 )
@@ -118,6 +120,38 @@ def test_choose_preferred_accession_keeps_native_genbank_on_metadata_failure() -
         "GCA_000002.1",
         "unchanged_original",
     )
+
+
+def test_build_download_request_accession_uses_stems_for_latest_mode() -> None:
+    """Latest-mode requests should drop the version suffix."""
+
+    assert build_download_request_accession(
+        "GCA_000002.7",
+        prefer_genbank=True,
+        version_fixed=False,
+    ) == "GCA_000002"
+    assert build_download_request_accession(
+        "GCF_000003.4",
+        prefer_genbank=True,
+        version_fixed=False,
+    ) == "GCF_000003"
+    assert build_download_request_accession(
+        "GCA_000002.7",
+        prefer_genbank=True,
+        version_fixed=True,
+    ) == "GCA_000002.7"
+    assert build_download_request_accession(
+        "GCF_000003.4",
+        prefer_genbank=False,
+        version_fixed=False,
+    ) == "GCF_000003.4"
+
+
+def test_get_assembly_accession_stem_rejects_invalid_values() -> None:
+    """Stem parsing should reject non-assembly accessions."""
+
+    with pytest.raises(ValueError, match="Invalid assembly accession"):
+        get_assembly_accession_stem("not-an-accession")
 
 
 def test_apply_accession_preferences_emits_fixed_status_values() -> None:

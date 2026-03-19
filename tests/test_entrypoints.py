@@ -35,6 +35,7 @@ def test_module_entrypoint_help_runs() -> None:
     assert "--gtdb-release" in result.stdout
     assert "--gtdb-taxon" in result.stdout
     assert "--outdir" in result.stdout
+    assert "--version-fixed" in result.stdout
     assert "gtdb-genomes" in result.stdout
 
 
@@ -51,6 +52,7 @@ def test_source_checkout_cli_module_help_runs() -> None:
 
     assert result.returncode == 0
     assert "--gtdb-release" in result.stdout
+    assert "--version-fixed" in result.stdout
     assert "gtdb-genomes" in result.stdout
 
 
@@ -75,6 +77,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     assert "--output" not in readme_text
     assert "--no-prefer-genbank" not in readme_text
     assert "--prefer-genbank" in readme_text
+    assert "--version-fixed" in readme_text
     assert "uv run gtdb-genomes" in readme_text
     assert "development tool only" in readme_text
     assert "Runtime Contract" not in readme_text
@@ -97,6 +100,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     assert "--taxon" not in usage_details_text
     assert "--output" not in usage_details_text
     assert "--no-prefer-genbank" not in usage_details_text
+    assert "--version-fixed" in usage_details_text
     assert "must not depend on uv at runtime" in bioconda_text
     assert "Fixed TSV columns:" in usage_details_text
     assert "attempted_accession" in usage_details_text
@@ -124,6 +128,8 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     assert "`datasets` command" in usage_details_text
     assert "ncbi/datasets" in usage_details_text
     assert "does not download genomes directly from Python code" in usage_details_text
+    assert "may differ from the RefSeq version" in readme_text
+    assert "may differ from the RefSeq version" in usage_details_text
     assert "GTDB release resolution and GTDB taxonomy loading remain local" in (
         usage_details_text
     )

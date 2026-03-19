@@ -51,6 +51,7 @@ def test_main_passes_normalised_arguments_into_workflow(
             gtdb_taxa=("g__Escherichia",),
             outdir=tmp_path / "output",
             prefer_genbank=False,
+            version_fixed=False,
             download_method="direct",
             threads=3,
             ncbi_api_key=None,

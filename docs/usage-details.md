@@ -35,7 +35,14 @@ gtdb-genomes \
 - `--prefer-genbank`: Disabled by default. When enabled, a requested `GCF_*`
   accession triggers NCBI metadata lookup and prefers a `GCA_*` accession only
   when it shares the same numeric assembly identifier. If several matching
-  `GCA_*` versions exist, the highest version is chosen.
+  `GCA_*` versions exist, the highest version is selected. Unless
+  `--version-fixed` is also set, the download request then drops the version
+  suffix and asks `datasets` for the latest available revision in the chosen
+  family, which may differ from the RefSeq version.
+
+- `--version-fixed`: Disabled by default. Requires `--prefer-genbank`. Keeps
+  the exact selected versioned accession instead of requesting the latest
+  available revision in that family.
 
 - `--download-method`: Defaults to `auto`.
 

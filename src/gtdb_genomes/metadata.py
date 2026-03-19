@@ -8,11 +8,10 @@ import subprocess
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from json import JSONDecodeError
+from pathlib import Path
 import time
 
 import polars as pl
-
-from pathlib import Path
 
 from gtdb_genomes.download import (
     CommandFailureRecord,
@@ -21,6 +20,7 @@ from gtdb_genomes.download import (
 
 
 ACCESSION_PATTERN = re.compile(r"(?P<prefix>GC[AF])_(?P<numeric>\d+)\.(?P<version>\d+)")
+ACCESSION_STEM_PATTERN = re.compile(r"(?P<prefix>GC[AF])_(?P<numeric>\d+)")
 CAMEL_CASE_BOUNDARY_PATTERN = re.compile(r"([a-z0-9])([A-Z])")
 NON_ALPHANUMERIC_PATTERN = re.compile(r"[^a-z0-9]+")
 EXPLICIT_ACCESSION_FIELD_NAMES = frozenset({"accession", "paired"})
@@ -47,6 +47,15 @@ class AssemblyAccession:
     prefix: str
     numeric_identifier: str
     version: int
+
+
+@dataclass(frozen=True, slots=True)
+class AssemblyAccessionStem:
+    """Parsed assembly accession stem components."""
+
+    accession: str
+    prefix: str
+    numeric_identifier: str
 
 
 @dataclass(slots=True)
@@ -90,6 +99,41 @@ def parse_assembly_accession(accession: str) -> AssemblyAccession | None:
         numeric_identifier=match.group("numeric"),
         version=int(match.group("version")),
     )
+
+
+def parse_assembly_accession_stem(accession: str) -> AssemblyAccessionStem | None:
+    """Parse one assembly accession stem into comparable components."""
+
+    match = ACCESSION_STEM_PATTERN.fullmatch(accession)
+    if match is None:
+        return None
+    return AssemblyAccessionStem(
+        accession=accession,
+        prefix=match.group("prefix"),
+        numeric_identifier=match.group("numeric"),
+    )
+
+
+def get_assembly_accession_stem(accession: str) -> str:
+    """Return the accession stem without the version suffix."""
+
+    parsed_accession = parse_assembly_accession(accession)
+    if parsed_accession is None:
+        raise ValueError(f"Invalid assembly accession: {accession}")
+    return f"{parsed_accession.prefix}_{parsed_accession.numeric_identifier}"
+
+
+def build_download_request_accession(
+    selected_accession: str,
+    *,
+    prefer_genbank: bool,
+    version_fixed: bool,
+) -> str:
+    """Return the accession token that should be passed to `datasets`."""
+
+    if not prefer_genbank or version_fixed:
+        return selected_accession
+    return get_assembly_accession_stem(selected_accession)
 
 
 def normalise_field_name(field_name: str) -> str:

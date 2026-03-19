@@ -18,6 +18,7 @@ def test_help_includes_documented_flags() -> None:
     assert "--gtdb-taxon" in help_text
     assert "--outdir" in help_text
     assert "--prefer-genbank" in help_text
+    assert "--version-fixed" in help_text
     assert "--no-prefer-genbank" not in help_text
     assert "--download-method" in help_text
     assert "--threads" in help_text
@@ -52,6 +53,7 @@ def test_parse_args_normalises_and_deduplicates_taxa(tmp_path: Path) -> None:
     assert args.gtdb_release == "latest"
     assert args.gtdb_taxa == ("g__Escherichia", "s__Escherichia coli")
     assert args.prefer_genbank is False
+    assert args.version_fixed is False
 
 
 def test_parse_args_rejects_blank_release(tmp_path: Path) -> None:
@@ -108,6 +110,28 @@ def test_parse_args_rejects_non_positive_threads(tmp_path: Path) -> None:
                 str(tmp_path),
                 "--threads",
                 "0",
+            ],
+        )
+    assert error.value.code == 2
+
+
+def test_parse_args_rejects_version_fixed_without_prefer_genbank(
+    tmp_path: Path,
+) -> None:
+    """Version pinning should require the GenBank preference mode."""
+
+    parser = build_parser()
+    with pytest.raises(SystemExit) as error:
+        parse_args(
+            parser,
+            [
+                "--gtdb-release",
+                "latest",
+                "--gtdb-taxon",
+                "g__Escherichia",
+                "--outdir",
+                str(tmp_path),
+                "--version-fixed",
             ],
         )
     assert error.value.code == 2
@@ -176,6 +200,30 @@ def test_parse_args_accepts_ncbi_api_key_flag(tmp_path: Path) -> None:
     )
 
     assert args.ncbi_api_key == "secret"
+
+
+def test_parse_args_accepts_version_fixed_with_prefer_genbank(
+    tmp_path: Path,
+) -> None:
+    """Version pinning should parse when GenBank preference is enabled."""
+
+    parser = build_parser()
+    args = parse_args(
+        parser,
+        [
+            "--gtdb-release",
+            "latest",
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--outdir",
+            str(tmp_path),
+            "--prefer-genbank",
+            "--version-fixed",
+        ],
+    )
+
+    assert args.prefer_genbank is True
+    assert args.version_fixed is True
 
 
 def test_parse_args_rejects_legacy_api_key_flag(tmp_path: Path) -> None:
