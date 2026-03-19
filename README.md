@@ -31,6 +31,14 @@ Completeness has priority over GenBank preference. If a paired GenBank
 accession is unavailable or metadata lookup exhausts its retry budget, the
 original accession is kept.
 
+> Caution
+>
+> Some legacy GTDB releases include genome accessions starting with `UBA`.
+> These legacy accessions are not supported by NCBI and are not supported by
+> `gtdb-genomes`. When selected, the tool warns and skips them. Check
+> BioProject `PRJNA417962`, since most `UBA` genomes are assigned through that
+> bioproject.
+
 ## Prerequisites
 
 Packaged runtime use requires:
@@ -285,6 +293,7 @@ Status values:
   - `retry_scheduled`
   - `retry_exhausted`
   - `fallback_exhausted`
+  - `unsupported_input`
 
 Fixed TSV columns:
 
@@ -415,7 +424,9 @@ Known limitation:
 
 The tool keeps successfully retrieved genomes and summary files even when some
 requested genomes fail. It records unsuccessful attempts in
-`download_failures.tsv` and exits non-zero for incomplete runs.
+`download_failures.tsv` and exits non-zero for incomplete runs. Legacy `UBA*`
+accessions are warned about, skipped, and recorded as failed in manifests for
+non-dry runs.
 
 ## Known Limitations
 
