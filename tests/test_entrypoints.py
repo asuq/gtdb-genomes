@@ -1,4 +1,4 @@
-"""Tests for the installed command entrypoints."""
+"""Tests for the CLI entrypoints and user-facing docs."""
 
 from __future__ import annotations
 
@@ -38,20 +38,20 @@ def test_module_entrypoint_help_runs() -> None:
     assert "gtdb-genomes" in result.stdout
 
 
-def test_installed_console_script_help_runs() -> None:
-    """The environment-installed command should run without the repo wrapper."""
+def test_source_checkout_cli_module_help_runs() -> None:
+    """The CLI module should run against the checkout under test."""
 
-    console_script = Path(sys.executable).with_name("gtdb-genomes")
     result = subprocess.run(
-        [str(console_script), "--help"],
+        [sys.executable, "-m", "gtdb_genomes.cli", "--help"],
         capture_output=True,
         text=True,
         check=False,
+        env={"PYTHONPATH": "src"},
     )
 
-    assert console_script.is_file()
     assert result.returncode == 0
     assert "--gtdb-release" in result.stdout
+    assert "gtdb-genomes" in result.stdout
 
 
 def test_runtime_docs_match_current_readme_and_usage_details() -> None:
@@ -66,6 +66,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
 
     assert "Usage details" in readme_text
     assert "docs/usage-details.md" in readme_text
+    assert "uv sync --group dev" in readme_text
     assert "--gtdb-release" in readme_text
     assert "--gtdb-taxon" in readme_text
     assert "--outdir" in readme_text
@@ -107,6 +108,8 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     assert "unsupported_input" in usage_details_text
     assert "Real-data validation guide" in readme_text
     assert "The planned workflow is:" not in readme_text
+    assert "Bioconda recipe template" in readme_text
+    assert "conda install -c bioconda" not in readme_text
     assert "- ncbi-datasets-cli" in bioconda_text
     assert "get_release_manifest_path" in bioconda_text
     assert ".tsv.gz" in usage_details_text
@@ -133,7 +136,7 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
         encoding="utf-8",
     )
 
-    assert "uv run --no-sync gtdb-genomes" in guide_text
+    assert "uv run gtdb-genomes" in guide_text
     assert "LOCAL_LAUNCHER_MODE=module" in guide_text
     assert "A1`, `A2`, `A3`, `A4`, `A5`, `A7`, `A8`, `A9`: `uv` only" in (
         guide_text
@@ -143,6 +146,7 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
     assert "offline bundled-data dry-runs remain valid without NCBI access" in (
         guide_text
     )
+    assert "unique path such as" in guide_text
     assert "debug output can print the raw API-key header" in (
         guide_text
     )

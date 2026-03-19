@@ -10,11 +10,13 @@ all NCBI metadata and genome download operations.
 
 ## Installation
 
-`gtdb-genomes` is available on PyPI and can be installed with conda
-(`bioconda`):
+The checked-in Bioconda recipe at
+[packaging/bioconda/meta.yaml](packaging/bioconda/meta.yaml) is a template for
+future packaging and is not a release-ready install path.
 
 ```bash
-conda install -c bioconda -c conda-forge gtdb-genomes
+uv sync --group dev
+uv run gtdb-genomes --help
 ```
 
 ## Command
@@ -152,8 +154,8 @@ Supported workflows:
 
 - source-checkout development through `uv run gtdb-genomes ...` or
   `uv run python -m gtdb_genomes ...`
-- packaged installation, including future Bioconda packaging, through the
-  normal `gtdb-genomes ...` command
+- the checked-in Bioconda recipe is a template for future packaging, not a
+  published install path from this repository snapshot
 
 `uv` is a development tool only. Packaged runtime use should not depend on it.
 

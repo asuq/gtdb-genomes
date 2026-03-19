@@ -10,7 +10,7 @@ REPO_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 # shellcheck source=bin/real-data-test-common.sh
 . "${SCRIPT_DIR}/real-data-test-common.sh"
 
-LOCAL_TEST_ROOT="${LOCAL_TEST_ROOT:-/tmp/gtdb-realtests/local-$(real_data_today)}"
+LOCAL_TEST_ROOT="${LOCAL_TEST_ROOT:-$(real_data_default_suite_root local)}"
 LOCAL_LAUNCHER_MODE="${LOCAL_LAUNCHER_MODE:-uv}"
 LOCAL_LAUNCHER=()
 
@@ -96,7 +96,7 @@ local_initialise_launcher() {
         uv)
             real_data_require_command uv
             export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/gtdb_uv_cache}"
-            LOCAL_LAUNCHER=(uv run --no-sync gtdb-genomes)
+            LOCAL_LAUNCHER=(uv run gtdb-genomes)
             if command -v python >/dev/null 2>&1; then
                 REAL_DATA_PYTHON_VERSION_BIN=$(command -v python)
             elif command -v python3 >/dev/null 2>&1; then

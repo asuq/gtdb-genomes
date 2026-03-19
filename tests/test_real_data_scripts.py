@@ -50,6 +50,33 @@ def test_real_data_write_command_file_redacts_ncbi_api_key(
     assert secret not in command_text
 
 
+def test_real_data_default_suite_root_creates_unique_directories(
+    tmp_path: Path,
+) -> None:
+    """The default suite root helper should return unique per-run directories."""
+
+    script = (
+        f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        f"export TMPDIR={shlex.quote(str(tmp_path))}\n"
+        "root_one=$(real_data_default_suite_root local)\n"
+        "root_two=$(real_data_default_suite_root local)\n"
+        "printf '%s\\n%s\\n' \"$root_one\" \"$root_two\"\n"
+        "[ \"$root_one\" != \"$root_two\" ]\n"
+        "[ -d \"$root_one\" ]\n"
+        "[ -d \"$root_two\" ]\n"
+        "rm -rf \"$root_one\" \"$root_two\"\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0
+    roots = result.stdout.splitlines()
+    assert len(roots) == 2
+    assert roots[0] != roots[1]
+    assert roots[0].startswith(str(tmp_path))
+    assert roots[1].startswith(str(tmp_path))
+
+
 def test_real_data_run_command_check_redacts_logs_and_records_versions(
     tmp_path: Path,
 ) -> None:
@@ -95,3 +122,27 @@ def test_real_data_run_command_check_redacts_logs_and_records_versions(
     assert "[REDACTED]" in combined_text
     assert "python_version=" in version_text
     assert "datasets_version=" in version_text
+
+
+def test_real_data_run_command_check_removes_raw_temp_directory(
+    tmp_path: Path,
+) -> None:
+    """Command evidence collection should clean up its raw temp workspace."""
+
+    test_root = tmp_path / "suite"
+    temp_dir = tmp_path / "tmp"
+    temp_dir.mkdir()
+    script = (
+        f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        f"export TMPDIR={shlex.quote(str(temp_dir))}\n"
+        f"real_data_initialise_suite {shlex.quote(str(test_root))}\n"
+        "real_data_run_command_check "
+        f"{shlex.quote(str(test_root))} "
+        "check1 0 "
+        f"{shlex.quote(sys.executable)} -c 'print(\"ok\")'\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0
+    assert not list(temp_dir.glob("gtdb_real_command.*"))

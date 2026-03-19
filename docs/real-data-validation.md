@@ -59,13 +59,13 @@ bin/run-real-data-tests-remote.sh C1 C4 C5
 
 ## Local Prerequisites
 
-Local validation assumes source-checkout execution through a prepared local
-project environment.
+Local validation assumes source-checkout execution through a prepared and
+synced local project environment.
 
 The local runner defaults to:
 
 - `UV_CACHE_DIR=/tmp/gtdb_uv_cache`
-- `uv run --no-sync gtdb-genomes ...`
+- `uv run gtdb-genomes ...`
 
 Optional local launcher fallback:
 
@@ -87,7 +87,8 @@ cases that need NCBI metadata or download access.
 
 The local runner uses:
 
-- `LOCAL_TEST_ROOT`, default `/tmp/gtdb-realtests/local-YYYYMMDD`
+- `LOCAL_TEST_ROOT`, default a unique path such as
+  `/tmp/gtdb-realtests/local-YYYYMMDD-XXXXXX`
 
 Local environment notes:
 
