@@ -326,7 +326,8 @@ Fixed TSV columns:
 
 ## Bundled GTDB Taxonomy
 
-GTDB taxonomy TSVs ship with the software and are loaded from bundled data,
+GTDB taxonomy tables ship with the software as compressed `.tsv.gz` files and
+are decompressed transparently at read time. They are loaded from bundled data,
 not fetched at runtime.
 
 Bundled data layout:
@@ -336,8 +337,15 @@ data/gtdb_taxonomy/<resolved_release>/
 data/gtdb_taxonomy/releases.tsv
 ```
 
+`releases.tsv` remains plain text by design so the bundled manifest stays easy
+to inspect and validate.
+
 First run does not contact GTDB. Missing bundled taxonomy for a requested
 release is treated as a local installation or packaging error.
+
+The project code and packaging are distributed under the MIT licence. Bundled
+GTDB taxonomy data remains subject to the applicable upstream terms and
+attribution requirements. See `NOTICE` for the bundled-data note.
 
 ## Representative Usage Examples
 

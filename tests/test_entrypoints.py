@@ -17,6 +17,7 @@ def test_pyproject_exposes_console_script() -> None:
     assert pyproject["project"]["scripts"]["gtdb-genomes"] == (
         "gtdb_genomes.cli:main"
     )
+    assert pyproject["project"]["license"] == "MIT"
 
 
 def test_module_entrypoint_help_runs() -> None:
@@ -58,6 +59,7 @@ def test_runtime_docs_mark_uv_as_development_only() -> None:
     bioconda_text = Path("packaging/bioconda/meta.yaml").read_text(
         encoding="utf-8",
     )
+    notice_text = Path("NOTICE").read_text(encoding="utf-8")
 
     assert "development tool only" in readme_text
     assert "uv run gtdb-genomes" in readme_text
@@ -74,6 +76,11 @@ def test_runtime_docs_mark_uv_as_development_only() -> None:
     assert "The planned workflow is:" not in readme_text
     assert "- ncbi-datasets-cli" in bioconda_text
     assert "get_release_manifest_path" in bioconda_text
+    assert ".tsv.gz" in readme_text
+    assert "remains plain text by design" in readme_text
+    assert "The MIT licence in this repository applies to the code" in notice_text
+    assert "GTDB taxonomy data" in notice_text
+    assert "license: MIT" in bioconda_text
 
 
 def test_real_data_validation_guide_describes_local_requirements() -> None:
