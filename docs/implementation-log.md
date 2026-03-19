@@ -1182,3 +1182,26 @@ PY`
     `unsupported_input` failure outcome for legacy `UBA*` accessions; the
     frozen development plan stays untouched, and the runtime-facing
     documentation is updated in a separate follow-up commit
+
+### Commit `1ca6719` - `docs(readme): warn about legacy UBA accessions`
+
+- Implemented:
+  - added a visible README caution block explaining that legacy GTDB
+    accessions starting with `UBA` are not supported by NCBI or by this tool
+  - documented BioProject `PRJNA417962` as the informational follow-up for
+    most skipped `UBA` genomes
+  - extended the runtime-contract section to include the
+    `download_failures.tsv.final_status` value `unsupported_input`
+  - updated the runtime documentation test so the shipped README must continue
+    to expose the new caution and contract value
+- Files:
+  - `README.md`
+  - `tests/test_entrypoints.py`
+- Checks run:
+  - `.venv/bin/pytest -q`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the frozen development plan was left untouched, so the README now carries
+    the user-facing explanation for the added unsupported-UBA runtime
+    behaviour
