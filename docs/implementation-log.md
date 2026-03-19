@@ -890,3 +890,28 @@ PY`
   - the runtime column name in `run_summary.tsv` now uses
     `prefer_genbank` instead of the earlier `prefer_gca` wording so the
     shipped output matches the renamed CLI flag
+
+### Commit `f97b094` - `feat(metadata): add retry-safe GenBank pairing`
+
+- Implemented:
+  - replaced the loose GCA selection logic with assembly-aware pairing based
+    on the shared numeric identifier in `GC[AF]_<digits>.<version>`
+  - made GenBank preference choose the highest matching `GCA` version for the
+    requested `GCF` identifier and ignore unrelated `GCA` accessions in the
+    same payload
+  - added a dedicated metadata retry path with the fixed 3-retry budget and
+    the shared backoff schedule of 5 s, 15 s, and 45 s
+  - treated malformed JSON-lines output as a retryable metadata failure
+- Files:
+  - `src/gtdb_genomes/metadata.py`
+  - `src/gtdb_genomes/workflow.py`
+  - `tests/test_metadata.py`
+  - `tests/test_edge_contract.py`
+- Checks run:
+  - `.venv/bin/pytest -q tests/test_metadata.py tests/test_edge_contract.py`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - metadata lookup now has its own explicit retry wrapper rather than relying
+    on the download retry helper, because JSON parsing failures need to be
+    retried after a successful subprocess exit code
