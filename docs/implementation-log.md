@@ -1727,3 +1727,111 @@ PY`
   - `mamba-org/setup-micromamba@v2` was left unchanged because the warning the
     user reported only covered the four updated actions, and this pass was
     scoped to clearing those concrete deprecation notices first
+
+### Commit `25937f7` - `fix(metadata): use input files for summary lookups`
+
+- Implemented:
+  - converted metadata lookup from positional `datasets summary genome accession
+    <many accessions>` calls to the scale-safe `--inputfile` form
+  - moved workflow metadata planning onto one shared deterministic ordered
+    accession list, so the summary input file is written once and reused for
+    the actual lookup call
+  - reused the same ordered-accession helper for preview input-file writing and
+    direct download command construction, reducing duplicate de-duplication
+    logic across the hot path
+  - added regression coverage for the new summary command shape and for the
+    temporary metadata input file lifecycle in dry-run workflow execution
+- Files:
+  - `src/gtdb_genomes/download.py`
+  - `src/gtdb_genomes/metadata.py`
+  - `src/gtdb_genomes/workflow.py`
+  - `tests/test_metadata.py`
+  - `tests/test_edge_contract.py`
+- Checks run:
+  - `.venv/bin/pytest -q tests/test_metadata.py tests/test_edge_contract.py`
+  - `python3 -m compileall src`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the temporary metadata accession file is created in workflow under `/tmp`
+    rather than inside the metadata module, because workflow already owns the
+    surrounding dry-run planning lifecycle and cleanup behaviour
+
+### Commit `ff690ab` - `fix(download): deduplicate shared direct accession fetches`
+
+- Implemented:
+  - replaced the per-plan direct download loop with a preferred-accession group
+    executor, so direct mode downloads one shared preferred accession once even
+    when multiple original accessions converge onto it
+  - preserved per-original manifest semantics by materialising one execution
+    row per original accession after the shared preferred download succeeds
+  - preserved per-original fallback semantics by running fallback downloads only
+    for grouped originals whose original accession differs from the failed
+    preferred accession
+  - added regression tests for the real release `80.0` duplicate pair
+    `GCF_001881595.2` and `GCA_001881595.3`, covering both the shared-success
+    path and the split fallback path
+- Files:
+  - `src/gtdb_genomes/workflow.py`
+  - `tests/test_edge_contract.py`
+- Checks run:
+  - `.venv/bin/pytest -q tests/test_edge_contract.py tests/test_metadata.py`
+  - `python3 -m compileall src`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - direct-mode retry-history rows remain attached to the per-original
+    executions that consumed the shared preferred or fallback result, instead
+    of being lifted into a new shared-failure schema
+
+### Commit `9c0eee0` - `fix(testing): redact runner evidence secrets`
+
+- Implemented:
+  - redacted `--ncbi-api-key` values in the runner-generated `command.sh`
+    evidence files
+  - changed the runner helpers to capture raw stdout and stderr into temporary
+    files outside the evidence tree, redact the NCBI API key before writing the
+    final evidence logs, and only then build the combined log
+  - added lightweight `python` and `datasets` version capture to
+    `_evidence/tool-versions.txt` for both local and remote validation suites
+  - added focused bash-helper tests for command redaction, log redaction, and
+    version-file capture
+- Files:
+  - `bin/real-data-test-common.sh`
+  - `bin/run-real-data-tests-local.sh`
+  - `bin/run-real-data-tests-remote.sh`
+  - `tests/test_real_data_scripts.py`
+- Checks run:
+  - `bash -n bin/real-data-test-common.sh bin/run-real-data-tests-local.sh bin/run-real-data-tests-remote.sh`
+  - `.venv/bin/pytest -q tests/test_real_data_scripts.py tests/test_entrypoints.py`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - redaction is intentionally limited to the configured `NCBI_API_KEY` value
+    rather than attempting generic header-pattern scrubbing, so the helper
+    remains portable across GNU and BSD userlands without depending on extra
+    tooling
+
+### Commit `b87afaa` - `refactor(data): streamline taxonomy selection hot paths`
+
+- Implemented:
+  - dropped the transient `lineage_tokens` column before selection results
+    leave `selection.py`, so downstream workflow stages no longer carry an
+    unused list column
+  - replaced the Python callback-based GTDB accession normalisation in
+    `taxonomy.py` with vectorised Polars string expressions for `RS_` and
+    `GB_` prefix stripping
+  - added a small regression assertion that selected frames no longer expose
+    `lineage_tokens`
+- Files:
+  - `src/gtdb_genomes/selection.py`
+  - `src/gtdb_genomes/taxonomy.py`
+  - `tests/test_selection.py`
+- Checks run:
+  - `.venv/bin/pytest -q`
+  - `bash -n bin/real-data-test-common.sh bin/run-real-data-tests-local.sh bin/run-real-data-tests-remote.sh`
+  - `python3 -m compileall src`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - none
