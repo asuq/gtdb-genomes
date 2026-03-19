@@ -942,3 +942,26 @@ PY`
   - `download_method_used` can now emit `dehydrate_fallback_direct` so the
     manifest records the real executed path after a failed batch dehydrate
     attempt
+
+### Commit `d509cc0` - `refactor(core): prune unused selection and workflow code`
+
+- Implemented:
+  - removed the unused selection helper that was no longer part of the
+    production workflow
+  - removed redundant workflow-side download command construction that only
+    existed to duplicate logging strings
+  - extended metadata lookup errors to carry retry records so the workflow can
+    surface exhausted metadata failures consistently
+- Files:
+  - `src/gtdb_genomes/metadata.py`
+  - `src/gtdb_genomes/selection.py`
+  - `src/gtdb_genomes/workflow.py`
+  - `tests/test_selection.py`
+- Checks run:
+  - `.venv/bin/pytest -q`
+  - `python3 -m compileall src`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - none beyond the intended cleanup of code paths that no longer matched the
+    shipped runtime behaviour
