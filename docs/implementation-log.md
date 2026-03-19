@@ -1205,3 +1205,28 @@ PY`
   - the frozen development plan was left untouched, so the README now carries
     the user-facing explanation for the added unsupported-UBA runtime
     behaviour
+
+### Commit `7d0a130` - `docs(testing): add release-variant validation guide`
+
+- Implemented:
+  - added a dedicated real-data validation guide covering the local dry-run
+    sweep, local real runs, and remote packaged-runtime checks across the
+    bundled release families
+  - documented the confirmed real-data anchors for legacy releases,
+    modern `ar122` releases, and `ar53` releases so the matrix uses real
+    bundled taxonomy content rather than guessed taxa
+  - added the new validation guide to the README document index
+  - extended the entrypoint documentation test so the README must continue to
+    expose the real-data validation guide link
+- Files:
+  - `docs/real-data-validation.md`
+  - `README.md`
+  - `tests/test_entrypoints.py`
+- Checks run:
+  - `.venv/bin/pytest -q tests/test_entrypoints.py`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - case outputs still live at `/tmp/gtdb-realtests/.../<case-id>` as planned,
+    but captured evidence is written under a sibling `_evidence/` tree so the
+    case output directories remain valid empty targets before each run
