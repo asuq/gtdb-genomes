@@ -73,6 +73,28 @@ def test_select_taxa_matches_lineage_tokens() -> None:
         "RS_GCF_000001.1",
     ]
 
+
+def test_select_taxa_trims_lineage_tokens_before_matching() -> None:
+    """Lineage-token matching should ignore incidental surrounding spaces."""
+
+    frame = pl.DataFrame(
+        {
+            "gtdb_accession": ["RS_GCF_000001.1"],
+            "lineage": [
+                "d__Bacteria; g__Escherichia ; s__Escherichia coli ",
+            ],
+            "ncbi_accession": ["GCF_000001.1"],
+            "taxonomy_file": ["bac120_taxonomy_r95.tsv"],
+        },
+    )
+
+    selected = select_taxa(frame, ["g__Escherichia", "s__Escherichia coli"])
+
+    assert selected["requested_taxon"].to_list() == [
+        "g__Escherichia",
+        "s__Escherichia coli",
+    ]
+
 def test_build_taxon_slug_map_handles_collisions() -> None:
     """Colliding taxon slugs should receive deterministic hash suffixes."""
 

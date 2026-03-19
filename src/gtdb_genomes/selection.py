@@ -30,28 +30,36 @@ def select_taxa(
     if not requested_taxa:
         return empty_selection_frame(frame)
 
-    requested_taxa_frame = pl.DataFrame(
-        {
-            "requested_taxon": list(requested_taxa),
-            "_requested_order": list(range(len(requested_taxa))),
-        },
+    tokenised_frame = frame.with_row_index("_row_order").with_columns(
+        pl.col("lineage")
+        .str.split(";")
+        .list.eval(pl.element().str.strip_chars())
+        .alias("_lineage_tokens"),
     )
-    selected = (
-        frame.with_row_index("_row_order")
-        .with_columns(pl.col("lineage").str.split(";").alias("requested_taxon"))
-        .explode("requested_taxon")
-        .join(requested_taxa_frame, on="requested_taxon", how="inner")
-        .unique(
-            subset=["_row_order", "requested_taxon"],
-            keep="first",
-            maintain_order=True,
+
+    matched_frames: list[pl.DataFrame] = []
+    for requested_order, requested_taxon in enumerate(requested_taxa):
+        matched_rows = tokenised_frame.filter(
+            pl.col("_lineage_tokens").list.contains(requested_taxon),
         )
-        .sort(["_requested_order", "_row_order"])
-        .drop("_requested_order", "_row_order")
-    )
-    if selected.is_empty():
+        if matched_rows.is_empty():
+            continue
+        matched_frames.append(
+            matched_rows.with_columns(
+                pl.lit(requested_taxon).alias("requested_taxon"),
+                pl.lit(requested_order).alias("_requested_order"),
+            ),
+        )
+
+    if not matched_frames:
         return empty_selection_frame(frame)
-    return selected.select([*frame.columns, "requested_taxon"])
+
+    return (
+        pl.concat(matched_frames, how="vertical")
+        .sort(["_requested_order", "_row_order"])
+        .drop("_requested_order", "_row_order", "_lineage_tokens")
+        .select([*frame.columns, "requested_taxon"])
+    )
 
 
 def build_base_taxon_slug(requested_taxon: str) -> str:
