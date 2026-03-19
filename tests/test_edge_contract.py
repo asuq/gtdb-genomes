@@ -17,6 +17,8 @@ from gtdb_genomes.download import (
 )
 from gtdb_genomes.layout import initialise_run_directories
 from gtdb_genomes.metadata import SummaryLookupResult
+from gtdb_genomes.release_resolver import resolve_release
+from gtdb_genomes.taxonomy import load_release_taxonomy
 from gtdb_genomes.workflow import (
     AccessionExecution,
     AccessionPlan,
@@ -24,6 +26,7 @@ from gtdb_genomes.workflow import (
     build_unsupported_uba_warning,
     build_failure_rows,
     execute_batch_dehydrate_plans,
+    execute_direct_accession_plans,
 )
 
 
@@ -143,6 +146,24 @@ def parse_tsv(path: Path) -> tuple[list[str], list[list[str]]]:
     header = lines[0].split("\t")
     rows = [line.split("\t") for line in lines[1:]]
     return header, rows
+
+
+def build_cli_args(output_dir: Path) -> CliArgs:
+    """Build a minimal CLI argument object for workflow unit tests."""
+
+    return CliArgs(
+        release="80",
+        taxa=("s__Escherichia coli",),
+        output=output_dir,
+        prefer_genbank=True,
+        download_method="direct",
+        threads=4,
+        ncbi_api_key=None,
+        include="genome",
+        debug=False,
+        keep_temp=False,
+        dry_run=False,
+    )
 
 
 def test_zero_match_run_writes_header_only_outputs(
@@ -309,6 +330,211 @@ def test_build_unsupported_uba_warning_mentions_examples_and_bioproject() -> Non
     assert "g__Escherichia;s__Escherichia coli" in warning_text
     assert "UBA11131, UBA22222" in warning_text
     assert "PRJNA417962" in warning_text
+
+
+def test_release_80_contains_the_real_shared_preferred_accession_pair() -> None:
+    """Release 80 should retain the known GCF/GCA duplicate pair."""
+
+    taxonomy_frame = load_release_taxonomy(resolve_release("80"))
+    selected = taxonomy_frame.filter(
+        pl.col("ncbi_accession").is_in(
+            ["GCF_001881595.2", "GCA_001881595.3"],
+        ),
+    )
+
+    assert selected.select("ncbi_accession").rows() == [
+        ("GCF_001881595.2",),
+        ("GCA_001881595.3",),
+    ]
+
+
+def test_direct_mode_downloads_shared_preferred_accession_once(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Two originals that share one preferred accession should download once."""
+
+    payload_directory = tmp_path / "payload"
+    payload_directory.mkdir()
+    download_calls: list[tuple[str, str]] = []
+    extraction_calls: list[tuple[str, Path]] = []
+
+    def fake_run_retryable_command(
+        command: list[str],
+        stage: str,
+        final_failure_status: str = "retry_exhausted",
+        attempted_accession: str | None = None,
+        sleep_func=None,
+        runner=None,
+    ) -> RetryableCommandResult:
+        """Return one successful preferred download for the shared group."""
+
+        del command, final_failure_status, sleep_func, runner
+        download_calls.append((stage, attempted_accession or ""))
+        return RetryableCommandResult(
+            succeeded=True,
+            stdout="",
+            stderr="",
+            failures=(),
+        )
+
+    def fake_extract_download_payload(
+        accession: str,
+        archive_path: Path,
+        run_directories,
+    ) -> tuple[Path | None, tuple[CommandFailureRecord, ...]]:
+        """Return one shared payload directory for the preferred accession."""
+
+        del run_directories
+        extraction_calls.append((accession, archive_path))
+        return payload_directory, ()
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.run_retryable_command",
+        fake_run_retryable_command,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.extract_download_payload",
+        fake_extract_download_payload,
+    )
+
+    run_directories = initialise_run_directories(tmp_path / "direct-shared-success")
+    result = execute_direct_accession_plans(
+        (
+            AccessionPlan(
+                original_accession="GCF_001881595.2",
+                preferred_accession="GCA_001881595.3",
+                conversion_status="paired_to_gca",
+            ),
+            AccessionPlan(
+                original_accession="GCA_001881595.3",
+                preferred_accession="GCA_001881595.3",
+                conversion_status="unchanged_original",
+            ),
+        ),
+        build_cli_args(tmp_path / "out"),
+        run_directories,
+        logging.getLogger("test-direct-shared-success"),
+    )
+
+    assert result.download_concurrency_used == 1
+    assert download_calls == [("preferred_download", "GCA_001881595.3")]
+    assert extraction_calls == [
+        (
+            "GCA_001881595.3",
+            run_directories.downloads_root / "GCA_001881595.3.zip",
+        ),
+    ]
+    assert result.executions["GCF_001881595.2"].final_accession == "GCA_001881595.3"
+    assert result.executions["GCF_001881595.2"].download_status == "downloaded"
+    assert result.executions["GCA_001881595.3"].final_accession == "GCA_001881595.3"
+    assert result.executions["GCA_001881595.3"].download_status == "downloaded"
+
+
+def test_direct_mode_falls_back_per_original_after_shared_preferred_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A shared preferred failure should trigger fallback only where needed."""
+
+    payload_directory = tmp_path / "fallback-payload"
+    payload_directory.mkdir()
+    download_calls: list[tuple[str, str]] = []
+    extraction_calls: list[tuple[str, Path]] = []
+
+    def fake_run_retryable_command(
+        command: list[str],
+        stage: str,
+        final_failure_status: str = "retry_exhausted",
+        attempted_accession: str | None = None,
+        sleep_func=None,
+        runner=None,
+    ) -> RetryableCommandResult:
+        """Return a failed shared preferred download and one fallback success."""
+
+        del command, sleep_func, runner
+        download_calls.append((stage, attempted_accession or ""))
+        if stage == "preferred_download":
+            return RetryableCommandResult(
+                succeeded=False,
+                stdout="",
+                stderr="preferred failed",
+                failures=(
+                    CommandFailureRecord(
+                        stage="preferred_download",
+                        attempt_index=4,
+                        max_attempts=4,
+                        error_type="subprocess",
+                        error_message="preferred failed",
+                        final_status=final_failure_status,
+                        attempted_accession=attempted_accession,
+                    ),
+                ),
+            )
+        return RetryableCommandResult(
+            succeeded=True,
+            stdout="",
+            stderr="",
+            failures=(),
+        )
+
+    def fake_extract_download_payload(
+        accession: str,
+        archive_path: Path,
+        run_directories,
+    ) -> tuple[Path | None, tuple[CommandFailureRecord, ...]]:
+        """Return a payload only for the original-accession fallback download."""
+
+        del run_directories
+        extraction_calls.append((accession, archive_path))
+        return payload_directory, ()
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.run_retryable_command",
+        fake_run_retryable_command,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.extract_download_payload",
+        fake_extract_download_payload,
+    )
+
+    run_directories = initialise_run_directories(tmp_path / "direct-shared-fallback")
+    result = execute_direct_accession_plans(
+        (
+            AccessionPlan(
+                original_accession="GCF_001881595.2",
+                preferred_accession="GCA_001881595.3",
+                conversion_status="paired_to_gca",
+            ),
+            AccessionPlan(
+                original_accession="GCA_001881595.3",
+                preferred_accession="GCA_001881595.3",
+                conversion_status="unchanged_original",
+            ),
+        ),
+        build_cli_args(tmp_path / "out"),
+        run_directories,
+        logging.getLogger("test-direct-shared-fallback"),
+    )
+
+    assert result.download_concurrency_used == 1
+    assert download_calls == [
+        ("preferred_download", "GCA_001881595.3"),
+        ("fallback_download", "GCF_001881595.2"),
+    ]
+    assert extraction_calls == [
+        (
+            "GCF_001881595.2",
+            run_directories.downloads_root / "GCF_001881595.2.zip",
+        ),
+    ]
+    assert result.executions["GCF_001881595.2"].final_accession == "GCF_001881595.2"
+    assert (
+        result.executions["GCF_001881595.2"].download_status
+        == "downloaded_after_fallback"
+    )
+    assert result.executions["GCA_001881595.3"].final_accession is None
+    assert result.executions["GCA_001881595.3"].download_status == "failed"
 
 
 def test_auto_preview_failure_returns_exit_code_five_without_output_tree(

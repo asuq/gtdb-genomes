@@ -15,13 +15,12 @@ import uuid
 import polars as pl
 
 from gtdb_genomes.download import (
-    AccessionDownloadResult,
     CommandFailureRecord,
     PreviewError,
     build_batch_dehydrate_command,
+    build_download_command,
     build_preview_command,
     build_rehydrate_command,
-    download_with_accession_fallback,
     get_direct_download_concurrency,
     get_ordered_unique_accessions,
     get_rehydrate_workers,
@@ -238,6 +237,20 @@ def build_accession_plans(mapped_frame: pl.DataFrame) -> tuple[AccessionPlan, ..
     )
 
 
+def group_plans_by_preferred_accession(
+    plans: tuple[AccessionPlan, ...],
+) -> tuple[tuple[str, tuple[AccessionPlan, ...]], ...]:
+    """Group accession plans by preferred accession in first-seen order."""
+
+    grouped_plans: dict[str, list[AccessionPlan]] = {}
+    for plan in plans:
+        grouped_plans.setdefault(plan.preferred_accession, []).append(plan)
+    return tuple(
+        (preferred_accession, tuple(group))
+        for preferred_accession, group in grouped_plans.items()
+    )
+
+
 def attach_attempted_accession(
     failures: tuple[CommandFailureRecord, ...],
     attempted_accession: str,
@@ -349,69 +362,171 @@ def extract_download_payload(
     return payload_directory, ()
 
 
-def execute_direct_accession_plan(
-    plan: AccessionPlan,
-    args: CliArgs,
-    run_directories: RunDirectories,
-    logger: logging.Logger,
+def build_failed_execution(
+    original_accession: str,
+    failures: tuple[CommandFailureRecord, ...],
 ) -> AccessionExecution:
-    """Download and extract one accession plan through direct mode."""
+    """Build a failed execution for one original accession."""
 
-    archive_path = run_directories.downloads_root / f"{plan.original_accession}.zip"
-    fallback_accession = None
-    if plan.preferred_accession != plan.original_accession:
-        fallback_accession = plan.original_accession
-
-    logger.debug("Downloading preferred accession %s", plan.preferred_accession)
-    if fallback_accession is not None:
-        logger.debug("Prepared fallback accession %s", fallback_accession)
-
-    download_result: AccessionDownloadResult = download_with_accession_fallback(
-        preferred_accession=plan.preferred_accession,
-        fallback_accession=fallback_accession,
-        archive_path=archive_path,
-        include=args.include,
-        ncbi_api_key=args.ncbi_api_key,
-        debug=args.debug,
+    return AccessionExecution(
+        original_accession=original_accession,
+        final_accession=None,
+        conversion_status="failed_no_usable_accession",
+        download_status="failed",
+        payload_directory=None,
+        failures=failures,
     )
-    if not download_result.succeeded or download_result.used_accession is None:
-        return AccessionExecution(
-            original_accession=plan.original_accession,
-            final_accession=None,
-            conversion_status="failed_no_usable_accession",
-            download_status="failed",
-            payload_directory=None,
-            failures=download_result.failures,
-        )
 
-    payload_directory, extraction_failures = extract_download_payload(
-        download_result.used_accession,
-        archive_path,
-        run_directories,
-    )
-    if payload_directory is None:
-        return AccessionExecution(
-            original_accession=plan.original_accession,
-            final_accession=None,
-            conversion_status="failed_no_usable_accession",
-            download_status="failed",
-            payload_directory=None,
-            failures=download_result.failures + extraction_failures,
-        )
+
+def build_successful_execution(
+    plan: AccessionPlan,
+    final_accession: str,
+    download_status: str,
+    payload_directory: Path,
+    failures: tuple[CommandFailureRecord, ...],
+) -> AccessionExecution:
+    """Build a successful execution for one accession plan."""
 
     conversion_status = plan.conversion_status
-    download_status = "downloaded"
-    if download_result.used_fallback and fallback_accession is not None:
+    if download_status == "downloaded_after_fallback":
         conversion_status = "paired_to_gca_fallback_original_on_download_failure"
-        download_status = "downloaded_after_fallback"
     return AccessionExecution(
         original_accession=plan.original_accession,
-        final_accession=download_result.used_accession,
+        final_accession=final_accession,
         conversion_status=conversion_status,
         download_status=download_status,
         payload_directory=payload_directory,
-        failures=download_result.failures + extraction_failures,
+        failures=failures,
     )
+
+
+def execute_direct_group_fallbacks(
+    preferred_accession: str,
+    grouped_plans: tuple[AccessionPlan, ...],
+    preferred_failures: tuple[CommandFailureRecord, ...],
+    args: CliArgs,
+    run_directories: RunDirectories,
+    logger: logging.Logger,
+) -> dict[str, AccessionExecution]:
+    """Run original-accession fallbacks for a failed preferred download group."""
+
+    executions: dict[str, AccessionExecution] = {}
+    for plan in grouped_plans:
+        if plan.original_accession == preferred_accession:
+            executions[plan.original_accession] = build_failed_execution(
+                plan.original_accession,
+                preferred_failures,
+            )
+            continue
+
+        archive_path = (
+            run_directories.downloads_root / f"{plan.original_accession}.zip"
+        )
+        logger.debug(
+            "Preferred accession %s failed; falling back to original accession %s",
+            preferred_accession,
+            plan.original_accession,
+        )
+        fallback_result = run_retryable_command(
+            build_download_command(
+                [plan.original_accession],
+                archive_path,
+                args.include,
+                ncbi_api_key=args.ncbi_api_key,
+                debug=args.debug,
+            ),
+            stage="fallback_download",
+            final_failure_status="fallback_exhausted",
+            attempted_accession=plan.original_accession,
+        )
+        combined_failures = preferred_failures + fallback_result.failures
+        if not fallback_result.succeeded:
+            executions[plan.original_accession] = build_failed_execution(
+                plan.original_accession,
+                combined_failures,
+            )
+            continue
+
+        payload_directory, extraction_failures = extract_download_payload(
+            plan.original_accession,
+            archive_path,
+            run_directories,
+        )
+        combined_failures += extraction_failures
+        if payload_directory is None:
+            executions[plan.original_accession] = build_failed_execution(
+                plan.original_accession,
+                combined_failures,
+            )
+            continue
+
+        executions[plan.original_accession] = build_successful_execution(
+            plan,
+            plan.original_accession,
+            "downloaded_after_fallback",
+            payload_directory,
+            combined_failures,
+        )
+    return executions
+
+
+def execute_direct_accession_group(
+    preferred_accession: str,
+    grouped_plans: tuple[AccessionPlan, ...],
+    args: CliArgs,
+    run_directories: RunDirectories,
+    logger: logging.Logger,
+) -> dict[str, AccessionExecution]:
+    """Download one preferred accession once and materialise grouped executions."""
+
+    archive_path = run_directories.downloads_root / f"{preferred_accession}.zip"
+    logger.debug("Downloading preferred accession %s", preferred_accession)
+    preferred_result = run_retryable_command(
+        build_download_command(
+            [preferred_accession],
+            archive_path,
+            args.include,
+            ncbi_api_key=args.ncbi_api_key,
+            debug=args.debug,
+        ),
+        stage="preferred_download",
+        attempted_accession=preferred_accession,
+    )
+    if not preferred_result.succeeded:
+        return execute_direct_group_fallbacks(
+            preferred_accession,
+            grouped_plans,
+            preferred_result.failures,
+            args,
+            run_directories,
+            logger,
+        )
+
+    payload_directory, extraction_failures = extract_download_payload(
+        preferred_accession,
+        archive_path,
+        run_directories,
+    )
+    combined_failures = preferred_result.failures + extraction_failures
+    if payload_directory is None:
+        return {
+            plan.original_accession: build_failed_execution(
+                plan.original_accession,
+                combined_failures,
+            )
+            for plan in grouped_plans
+        }
+
+    return {
+        plan.original_accession: build_successful_execution(
+            plan,
+            preferred_accession,
+            "downloaded",
+            payload_directory,
+            preferred_result.failures,
+        )
+        for plan in grouped_plans
+    }
 
 
 def execute_direct_accession_plans(
@@ -430,21 +545,26 @@ def execute_direct_accession_plans(
             rehydrate_workers_used=0,
             shared_failures=(),
         )
-    max_workers = max(1, get_direct_download_concurrency(args.threads, len(plans)))
+    plan_groups = group_plans_by_preferred_accession(plans)
+    max_workers = max(
+        1,
+        get_direct_download_concurrency(args.threads, len(plan_groups)),
+    )
     executions: dict[str, AccessionExecution] = {}
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_map = {
             executor.submit(
-                execute_direct_accession_plan,
-                plan,
+                execute_direct_accession_group,
+                preferred_accession,
+                grouped_plans,
                 args,
                 run_directories,
                 logger,
-            ): plan.original_accession
-            for plan in plans
+            ): preferred_accession
+            for preferred_accession, grouped_plans in plan_groups
         }
-        for future, original_accession in future_map.items():
-            executions[original_accession] = future.result()
+        for future in future_map:
+            executions.update(future.result())
     return DownloadExecutionResult(
         executions=executions,
         method_used="direct",
@@ -488,7 +608,9 @@ def execute_batch_dehydrate_plans(
         )
 
     batch_attempted_accessions = ";".join(
-        dict.fromkeys(plan.preferred_accession for plan in plans),
+        get_ordered_unique_accessions(
+            plan.preferred_accession for plan in plans
+        ),
     )
     accession_file = write_accession_input_file(
         run_directories.working_root / "dehydrate_accessions.txt",
