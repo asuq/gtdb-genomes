@@ -423,6 +423,70 @@ def test_auto_preview_uses_accession_input_file_and_keeps_output_absent(
     assert not preview_inputs[0].exists()
 
 
+def test_metadata_lookup_uses_accession_input_file_and_cleans_it_up(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Metadata lookup should use a temporary input file outside the output tree."""
+
+    metadata_inputs: list[Path] = []
+    metadata_contents: list[str] = []
+
+    def fake_run_summary_lookup_with_retries(
+        accessions: tuple[str, ...] | list[str],
+        accession_file: Path,
+        ncbi_api_key: str | None = None,
+        datasets_bin: str = "datasets",
+        sleep_func=None,
+    ) -> SummaryLookupResult:
+        """Capture the metadata input file used by workflow planning."""
+
+        del ncbi_api_key, datasets_bin, sleep_func
+        metadata_inputs.append(accession_file)
+        metadata_contents.append(accession_file.read_text(encoding="ascii"))
+        assert tuple(accessions) == ("GCF_000001.1", "GCF_000002.1")
+        assert accession_file.is_file()
+        assert str(accession_file).startswith("/tmp/gtdb_genomes_metadata_")
+        return SummaryLookupResult(summary_map={}, failures=())
+
+    monkeypatch.setattr(
+        "gtdb_genomes.cli.check_required_tools",
+        lambda required_tools: None,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.load_release_taxonomy",
+        lambda resolution: build_multi_accession_taxonomy_frame(
+            "d__Bacteria;p__Proteobacteria;g__Escherichia",
+        ),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.run_summary_lookup_with_retries",
+        fake_run_summary_lookup_with_retries,
+    )
+
+    output_dir = tmp_path / "metadata-input-file"
+    exit_code = main(
+        [
+            "--release",
+            "202",
+            "--taxon",
+            "g__Escherichia",
+            "--output",
+            str(output_dir),
+            "--download-method",
+            "direct",
+            "--prefer-genbank",
+            "--dry-run",
+        ],
+    )
+
+    assert exit_code == 0
+    assert not output_dir.exists()
+    assert len(metadata_inputs) == 1
+    assert metadata_contents == ["GCF_000001.1\nGCF_000002.1\n"]
+    assert not metadata_inputs[0].exists()
+
+
 def test_total_runtime_failure_leaves_final_accession_blank(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

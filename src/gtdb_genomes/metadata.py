@@ -12,7 +12,12 @@ import time
 
 import polars as pl
 
-from gtdb_genomes.download import CommandFailureRecord, RETRY_DELAYS_SECONDS
+from pathlib import Path
+
+from gtdb_genomes.download import (
+    CommandFailureRecord,
+    RETRY_DELAYS_SECONDS,
+)
 
 
 ACCESSION_PATTERN = re.compile(r"(?P<prefix>GC[AF])_(?P<numeric>\d+)\.(?P<version>\d+)")
@@ -50,7 +55,7 @@ class SummaryLookupResult:
 
 
 def build_summary_command(
-    accessions: Iterable[str],
+    accession_file: Path,
     ncbi_api_key: str | None = None,
     datasets_bin: str = "datasets",
 ) -> list[str]:
@@ -61,7 +66,8 @@ def build_summary_command(
         "summary",
         "genome",
         "accession",
-        *accessions,
+        "--inputfile",
+        str(accession_file),
         "--as-json-lines",
     ]
     if ncbi_api_key:
@@ -85,6 +91,7 @@ def parse_assembly_accession(accession: str) -> AssemblyAccession | None:
 
 def run_summary_lookup_with_retries(
     accessions: Iterable[str],
+    accession_file: Path,
     ncbi_api_key: str | None = None,
     datasets_bin: str = "datasets",
     sleep_func: Callable[[float], None] = time.sleep,
@@ -95,7 +102,7 @@ def run_summary_lookup_with_retries(
     if not ordered_accessions:
         return SummaryLookupResult(summary_map={}, failures=())
     command = build_summary_command(
-        ordered_accessions,
+        accession_file,
         ncbi_api_key=ncbi_api_key,
         datasets_bin=datasets_bin,
     )

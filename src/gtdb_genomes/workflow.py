@@ -23,6 +23,7 @@ from gtdb_genomes.download import (
     build_rehydrate_command,
     download_with_accession_fallback,
     get_direct_download_concurrency,
+    get_ordered_unique_accessions,
     get_rehydrate_workers,
     run_preview_command,
     run_retryable_command,
@@ -965,26 +966,38 @@ def run_workflow(args: CliArgs) -> int:
 
     summary_map: dict[str, set[str]] = {}
     metadata_failures: tuple[CommandFailureRecord, ...] = ()
+    supported_accessions = get_ordered_unique_accessions(
+        supported_selected_frame.get_column("ncbi_accession").to_list(),
+    )
     if not supported_selected_frame.is_empty() and args.prefer_genbank:
-        metadata_command = build_summary_command(
-            supported_selected_frame.get_column("ncbi_accession").unique().to_list(),
-            ncbi_api_key=args.ncbi_api_key,
-        )
-        logger.debug("Running %s", redact_command(metadata_command, secrets))
-        try:
-            summary_lookup = run_summary_lookup_with_retries(
-                supported_selected_frame.get_column("ncbi_accession").unique().to_list(),
+        with TemporaryDirectory(
+            prefix="gtdb_genomes_metadata_",
+            dir="/tmp",
+        ) as metadata_directory:
+            metadata_accession_file = write_accession_input_file(
+                Path(metadata_directory) / "accessions.txt",
+                supported_accessions,
+            )
+            metadata_command = build_summary_command(
+                metadata_accession_file,
                 ncbi_api_key=args.ncbi_api_key,
             )
-            summary_map = summary_lookup.summary_map
-            metadata_failures = summary_lookup.failures
-        except MetadataLookupError as error:
-            metadata_failures = error.failures
-            logger.warning(
-                "Metadata lookup failed; falling back to original accessions: %s",
-                redact_text(str(error), secrets),
-            )
-            summary_map = {}
+            logger.debug("Running %s", redact_command(metadata_command, secrets))
+            try:
+                summary_lookup = run_summary_lookup_with_retries(
+                    supported_accessions,
+                    metadata_accession_file,
+                    ncbi_api_key=args.ncbi_api_key,
+                )
+                summary_map = summary_lookup.summary_map
+                metadata_failures = summary_lookup.failures
+            except MetadataLookupError as error:
+                metadata_failures = error.failures
+                logger.warning(
+                    "Metadata lookup failed; falling back to original accessions: %s",
+                    redact_text(str(error), secrets),
+                )
+                summary_map = {}
 
     supported_mapped_frame = apply_accession_preferences(
         supported_selected_frame,
@@ -1005,13 +1018,16 @@ def run_workflow(args: CliArgs) -> int:
     accession_plans = build_accession_plans(supported_mapped_frame)
     preview_text: str | None = None
     if args.download_method == "auto" and accession_plans:
+        preview_accessions = get_ordered_unique_accessions(
+            plan.preferred_accession for plan in accession_plans
+        )
         with TemporaryDirectory(
             prefix="gtdb_genomes_preview_",
             dir="/tmp",
         ) as preview_directory:
             preview_accession_file = write_accession_input_file(
                 Path(preview_directory) / "accessions.txt",
-                [plan.preferred_accession for plan in accession_plans],
+                preview_accessions,
             )
             preview_command = build_preview_command(
                 preview_accession_file,

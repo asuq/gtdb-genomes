@@ -81,6 +81,14 @@ class AccessionDownloadResult:
     failures: tuple[CommandFailureRecord, ...]
 
 
+def get_ordered_unique_accessions(
+    accessions: Iterable[str],
+) -> tuple[str, ...]:
+    """Return first-seen unique accessions in deterministic order."""
+
+    return tuple(dict.fromkeys(accessions))
+
+
 def validate_include_value(include: str) -> str:
     """Normalise and validate a datasets include value."""
 
@@ -137,7 +145,7 @@ def build_download_command(
         "download",
         "genome",
         "accession",
-        *dict.fromkeys(accessions),
+        *get_ordered_unique_accessions(accessions),
         "--filename",
         str(archive_path),
         "--include",
@@ -186,7 +194,7 @@ def write_accession_input_file(
 ) -> Path:
     """Write a datasets accession input file in deterministic order."""
 
-    ordered_accessions = tuple(dict.fromkeys(accessions))
+    ordered_accessions = get_ordered_unique_accessions(accessions)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "".join(f"{accession}\n" for accession in ordered_accessions),

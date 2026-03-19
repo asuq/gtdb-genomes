@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 
 import polars as pl
 import pytest
@@ -20,7 +21,7 @@ def test_build_summary_command_includes_ncbi_api_key() -> None:
     """The summary command should pass the requested API key through."""
 
     command = build_summary_command(
-        ["GCF_000001.1"],
+        Path("/tmp/accessions.txt"),
         ncbi_api_key="secret",
         datasets_bin="datasets",
     )
@@ -30,7 +31,8 @@ def test_build_summary_command_includes_ncbi_api_key() -> None:
         "summary",
         "genome",
         "accession",
-        "GCF_000001.1",
+        "--inputfile",
+        "/tmp/accessions.txt",
         "--as-json-lines",
         "--api-key",
         "secret",
@@ -56,6 +58,9 @@ def test_run_summary_lookup_with_retries_parses_requested_accessions(
         """Return a fake successful datasets response."""
 
         assert command[:4] == ["datasets", "summary", "genome", "accession"]
+        assert "--inputfile" in command
+        assert "GCF_000001.1" not in command
+        assert "GCA_000002.1" not in command
         assert capture_output is True
         assert text is True
         assert check is False
@@ -63,7 +68,10 @@ def test_run_summary_lookup_with_retries_parses_requested_accessions(
 
     monkeypatch.setattr(subprocess, "run", fake_run)
 
-    result = run_summary_lookup_with_retries(["GCF_000001.1", "GCA_000002.1"])
+    result = run_summary_lookup_with_retries(
+        ["GCF_000001.1", "GCA_000002.1"],
+        Path("/tmp/accessions.txt"),
+    )
 
     assert result.summary_map == {
         "GCF_000001.1": {"GCF_000001.1", "GCA_000001.1"},
@@ -97,6 +105,7 @@ def test_run_summary_lookup_with_retries_raises_on_command_failure(
     with pytest.raises(MetadataLookupError, match="metadata lookup failed"):
         run_summary_lookup_with_retries(
             ["GCF_000001.1"],
+            Path("/tmp/accessions.txt"),
             sleep_func=lambda delay: None,
         )
 
@@ -251,6 +260,7 @@ def test_run_summary_lookup_with_retries_retries_invalid_json(
 
     result = run_summary_lookup_with_retries(
         ["GCF_000001.1"],
+        Path("/tmp/accessions.txt"),
         sleep_func=sleep_calls.append,
     )
 
@@ -292,6 +302,7 @@ def test_run_summary_lookup_with_retries_raises_after_full_retry_budget(
     with pytest.raises(MetadataLookupError, match="metadata lookup failed"):
         run_summary_lookup_with_retries(
             ["GCF_000001.1"],
+            Path("/tmp/accessions.txt"),
             sleep_func=sleep_calls.append,
         )
 
