@@ -1929,3 +1929,33 @@ PY`
 - Deviations:
   - the concise README still retains a short workflow summary and the NCBI API
     key alert so the landing page remains self-contained for first-time users
+
+### Commit `3c3712a` - `test(docs): align readme contract assertions`
+
+- Implemented:
+  - updated the README contract test to match the current post-reset README
+    shape without editing the README itself
+  - renamed the test so it no longer claims the README must stay slimmer than
+    the current repository state
+  - changed the assertions to expect `Output Layout` and `Summary Files` in the
+    README while continuing to require `Runtime Contract`, `Retry Policy`, and
+    `NCBI datasets CLI` in `docs/usage-details.md`
+  - changed the alert assertion to accept the current README `> [!NOTE]`
+    block for the legacy `UBA*` warning
+- Why:
+  - the reset restored commit `6264dfb`, which changed the README content back
+    to an older, more detailed form
+  - the user explicitly asked to keep the README unchanged in this state, so
+    the correct fix was to realign the enforced docs contract rather than edit
+    the README again
+  - this resolved the only failing test without changing runtime behaviour
+- Files:
+  - `tests/test_entrypoints.py`
+- Checks run:
+  - `.venv/bin/python -m pytest -q tests/test_entrypoints.py`
+  - `.venv/bin/python -m pytest -q`
+  - `shasum -a 256 README.md`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - none
