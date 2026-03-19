@@ -1858,3 +1858,74 @@ PY`
   - no, by design
 - Deviations:
   - none
+
+### Commit `1d36dd2` - `refactor(cli): rename GTDB selection options`
+
+- Implemented:
+  - renamed the public CLI surface from `--release`, `--taxon`, and `--output`
+    to `--gtdb-release`, `--gtdb-taxon`, and `--outdir`
+  - removed `--no-prefer-genbank` and changed `--prefer-genbank` to an opt-in
+    flag with default `false`
+  - renamed the normalised `CliArgs` fields to `gtdb_release`,
+    `gtdb_taxa`, and `outdir`, then updated the workflow to use those names
+  - updated the real-data runner helpers and runner suites so they invoke the
+    renamed CLI without the removed GenBank-negation flag
+  - refreshed parser, integration, contract, and bash-helper tests to reject
+    the removed legacy flags and assert the new default preference behaviour
+- Why:
+  - the old public option names were generic and inconsistent with the tool's
+    GTDB-specific interface
+  - switching GenBank preference to explicit opt-in makes bundled-data-only
+    direct and dry-run use the default path instead of requiring users to
+    negate a default-on preference
+- Files:
+  - `src/gtdb_genomes/cli.py`
+  - `src/gtdb_genomes/workflow.py`
+  - `bin/real-data-test-common.sh`
+  - `bin/run-real-data-tests-local.sh`
+  - `bin/run-real-data-tests-remote.sh`
+  - `tests/test_cli.py`
+  - `tests/test_cli_integration.py`
+  - `tests/test_edge_contract.py`
+  - `tests/test_real_data_scripts.py`
+- Checks run:
+  - `.venv/bin/python -m pytest -q tests/test_cli.py tests/test_cli_integration.py tests/test_edge_contract.py tests/test_real_data_scripts.py`
+  - `bash -n bin/real-data-test-common.sh bin/run-real-data-tests-local.sh bin/run-real-data-tests-remote.sh`
+  - `python3 -m compileall src`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - none
+
+### Commit `198f2d9` - `docs: split usage details from readme`
+
+- Implemented:
+  - rewrote the README as a shorter landing page focused on installation,
+    renamed CLI examples, workflow overview, and links to supporting documents
+  - added `docs/usage-details.md` as the single detailed reference for CLI
+    option behaviour, output layout, summary files, NCBI `datasets`, retry
+    policy, runtime contract, bundled taxonomy rules, and failure handling
+  - moved the output-layout diagram into `docs/usage-details.md` so the README
+    no longer carries the full operational specification
+  - updated the entrypoint documentation test to assert the README/doc split and
+    the renamed flag surface
+  - refreshed `docs/pipeline-concept.md` so its still-relevant CLI examples use
+    `--gtdb-taxon` and `--outdir`
+- Why:
+  - the previous README update had turned the README into both a landing page
+    and a full reference manual
+  - separating the detailed operational material into `usage-details.md` keeps
+    the README readable while preserving one authoritative detailed document
+- Files:
+  - `README.md`
+  - `docs/usage-details.md`
+  - `docs/pipeline-concept.md`
+  - `tests/test_entrypoints.py`
+- Checks run:
+  - `.venv/bin/python -m pytest -q tests/test_entrypoints.py`
+  - `.venv/bin/python -m pytest -q`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the concise README still retains a short workflow summary and the NCBI API
+    key alert so the landing page remains self-contained for first-time users
