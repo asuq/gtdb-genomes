@@ -40,7 +40,7 @@ def test_command_builders_match_datasets_cli_shape() -> None:
     """Command builders should emit the expected datasets argv layout."""
 
     preview_command = build_preview_command(
-        ["GCA_1", "GCA_1", "GCF_2"],
+        Path("/tmp/accessions.txt"),
         "genome,gff3",
         api_key="secret",
         debug=True,
@@ -71,8 +71,8 @@ def test_command_builders_match_datasets_cli_shape() -> None:
         "download",
         "genome",
         "accession",
-        "GCA_1",
-        "GCF_2",
+        "--inputfile",
+        "/tmp/accessions.txt",
         "--include",
         "genome,gff3",
         "--preview",
@@ -80,6 +80,8 @@ def test_command_builders_match_datasets_cli_shape() -> None:
         "secret",
         "--debug",
     ]
+    assert "GCA_1" not in preview_command
+    assert "GCF_2" not in preview_command
     assert download_command == [
         "datasets",
         "download",
@@ -153,10 +155,24 @@ def test_parse_preview_size_bytes_uses_largest_size_value() -> None:
     assert parse_preview_size_bytes(preview) == int(2.5 * 1024**3)
 
 
+def test_parse_preview_size_bytes_accepts_json_preview_output() -> None:
+    """Preview parsing should accept JSON output from datasets preview."""
+
+    preview = (
+        '{"resource_updated_on":"2026-03-18T16:17:00Z",'
+        '"record_count":1024,'
+        '"estimated_file_size_mb":1556,'
+        '"included_data_files":{"all_genomic_fasta":{"file_count":1024,'
+        '"size_mb":1556.5991}}}\n'
+    )
+
+    assert parse_preview_size_bytes(preview) == int(1556.5991 * 1024**2)
+
+
 def test_worker_caps_and_accession_input_file_follow_documented_limits(
     tmp_path: Path,
 ) -> None:
-    """Worker caps and dehydrated accession files should stay deterministic."""
+    """Worker caps and accession input files should stay deterministic."""
 
     accession_file = write_accession_input_file(
         tmp_path / "accessions.txt",
@@ -274,7 +290,7 @@ def test_preview_command_uses_full_retry_budget(
 
     with pytest.raises(PreviewError, match="preview failed"):
         run_preview_command(
-            ["GCA_1"],
+            Path("/tmp/accessions.txt"),
             "genome",
             sleep_func=lambda delay: None,
             runner=fake_run,

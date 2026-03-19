@@ -56,6 +56,31 @@ def build_mixed_uba_taxonomy_frame(lineage: str) -> pl.DataFrame:
     )
 
 
+def build_multi_accession_taxonomy_frame(lineage: str) -> pl.DataFrame:
+    """Build a taxonomy frame with repeated and distinct supported accessions."""
+
+    return pl.DataFrame(
+        {
+            "gtdb_accession": [
+                "RS_GCF_000001.1",
+                "RS_GCF_000001.1_copy",
+                "RS_GCF_000002.1",
+            ],
+            "lineage": [lineage, lineage, lineage],
+            "ncbi_accession": [
+                "GCF_000001.1",
+                "GCF_000001.1",
+                "GCF_000002.1",
+            ],
+            "taxonomy_file": [
+                "bac120_taxonomy_r202.tsv",
+                "bac120_taxonomy_r202.tsv",
+                "bac120_taxonomy_r202.tsv",
+            ],
+        },
+    )
+
+
 def build_uba_only_taxonomy_frame(lineage: str) -> pl.DataFrame:
     """Build a taxonomy frame containing only unsupported UBA accessions."""
 
@@ -327,6 +352,75 @@ def test_auto_preview_failure_returns_exit_code_five_without_output_tree(
 
     assert exit_code == 5
     assert not output_dir.exists()
+
+
+def test_auto_preview_uses_accession_input_file_and_keeps_output_absent(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Auto preview should use a temporary input file outside the output tree."""
+
+    preview_inputs: list[Path] = []
+    preview_contents: list[str] = []
+
+    def fake_run_preview_command(
+        accession_file: Path,
+        include: str,
+        api_key: str | None = None,
+        datasets_bin: str = "datasets",
+        debug: bool = False,
+        sleep_func=None,
+        runner=None,
+    ) -> str:
+        """Capture the preview input file used by auto mode."""
+
+        del api_key, datasets_bin, debug, sleep_func, runner
+        preview_inputs.append(accession_file)
+        preview_contents.append(accession_file.read_text(encoding="ascii"))
+        assert include == "genome"
+        assert accession_file.is_file()
+        assert str(accession_file).startswith("/tmp/gtdb_genomes_preview_")
+        return "Package size: 1.0 GB\n"
+
+    monkeypatch.setattr(
+        "gtdb_genomes.cli.check_required_tools",
+        lambda required_tools: None,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.load_release_taxonomy",
+        lambda resolution: build_multi_accession_taxonomy_frame(
+            "d__Bacteria;p__Proteobacteria;g__Escherichia",
+        ),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.run_summary_lookup_with_retries",
+        lambda *args, **kwargs: SummaryLookupResult(summary_map={}, failures=()),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.run_preview_command",
+        fake_run_preview_command,
+    )
+
+    output_dir = tmp_path / "preview-input-file"
+    exit_code = main(
+        [
+            "--release",
+            "202",
+            "--taxon",
+            "g__Escherichia",
+            "--output",
+            str(output_dir),
+            "--download-method",
+            "auto",
+            "--dry-run",
+        ],
+    )
+
+    assert exit_code == 0
+    assert not output_dir.exists()
+    assert len(preview_inputs) == 1
+    assert preview_contents == ["GCF_000001.1\nGCF_000002.1\n"]
+    assert not preview_inputs[0].exists()
 
 
 def test_total_runtime_failure_leaves_final_accession_blank(

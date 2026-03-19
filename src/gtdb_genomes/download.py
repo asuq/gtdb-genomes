@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import re
 import subprocess
@@ -95,20 +96,21 @@ def validate_include_value(include: str) -> str:
 
 
 def build_preview_command(
-    accessions: Iterable[str],
+    accession_file: Path,
     include: str,
     api_key: str | None = None,
     datasets_bin: str = "datasets",
     debug: bool = False,
 ) -> list[str]:
-    """Build a datasets preview command for genome accessions."""
+    """Build a datasets preview command for genome accessions from a file."""
 
     command = [
         datasets_bin,
         "download",
         "genome",
         "accession",
-        *dict.fromkeys(accessions),
+        "--inputfile",
+        str(accession_file),
         "--include",
         validate_include_value(include),
         "--preview",
@@ -194,7 +196,7 @@ def write_accession_input_file(
 
 
 def run_preview_command(
-    accessions: Iterable[str],
+    accession_file: Path,
     include: str,
     api_key: str | None = None,
     datasets_bin: str = "datasets",
@@ -205,7 +207,7 @@ def run_preview_command(
     """Run `datasets --preview` and return its raw stdout."""
 
     command = build_preview_command(
-        accessions,
+        accession_file,
         include,
         api_key=api_key,
         datasets_bin=datasets_bin,
@@ -253,6 +255,32 @@ def build_rehydrate_command(
 
 def parse_preview_size_bytes(preview_text: str) -> int | None:
     """Extract the largest size value from preview output."""
+
+    stripped_preview = preview_text.strip()
+    if not stripped_preview:
+        return None
+    json_sizes_mb: list[float] = []
+    for line in stripped_preview.splitlines():
+        if not line.strip().startswith("{"):
+            continue
+        try:
+            preview_payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        estimated_size_mb = preview_payload.get("estimated_file_size_mb")
+        if isinstance(estimated_size_mb, int | float):
+            json_sizes_mb.append(float(estimated_size_mb))
+        included_data_files = preview_payload.get("included_data_files", {})
+        if not isinstance(included_data_files, dict):
+            continue
+        for file_metadata in included_data_files.values():
+            if not isinstance(file_metadata, dict):
+                continue
+            size_mb = file_metadata.get("size_mb")
+            if isinstance(size_mb, int | float):
+                json_sizes_mb.append(float(size_mb))
+    if json_sizes_mb:
+        return int(max(json_sizes_mb) * SIZE_UNITS["MB"])
 
     matches = SIZE_PATTERN.findall(preview_text)
     if not matches:

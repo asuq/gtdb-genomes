@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, UTC
 import logging
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Any
 import uuid
 
@@ -1004,24 +1005,32 @@ def run_workflow(args: CliArgs) -> int:
     accession_plans = build_accession_plans(supported_mapped_frame)
     preview_text: str | None = None
     if args.download_method == "auto" and accession_plans:
-        preview_command = build_preview_command(
-            [plan.preferred_accession for plan in accession_plans],
-            args.include,
-            api_key=args.api_key,
-            debug=args.debug,
-        )
-        logger.debug("Running %s", redact_command(preview_command, secrets))
-        try:
-            preview_text = run_preview_command(
+        with TemporaryDirectory(
+            prefix="gtdb_genomes_preview_",
+            dir="/tmp",
+        ) as preview_directory:
+            preview_accession_file = write_accession_input_file(
+                Path(preview_directory) / "accessions.txt",
                 [plan.preferred_accession for plan in accession_plans],
+            )
+            preview_command = build_preview_command(
+                preview_accession_file,
                 args.include,
                 api_key=args.api_key,
                 debug=args.debug,
             )
-        except PreviewError as error:
-            logger.error("%s", redact_text(str(error), secrets))
-            close_logger(logger)
-            return 5
+            logger.debug("Running %s", redact_command(preview_command, secrets))
+            try:
+                preview_text = run_preview_command(
+                    preview_accession_file,
+                    args.include,
+                    api_key=args.api_key,
+                    debug=args.debug,
+                )
+            except PreviewError as error:
+                logger.error("%s", redact_text(str(error), secrets))
+                close_logger(logger)
+                return 5
     if accession_plans:
         try:
             decision = select_download_method(
