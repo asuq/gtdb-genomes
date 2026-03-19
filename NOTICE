@@ -1,0 +1,12 @@
+Bundled GTDB taxonomy data notice
+================================
+
+The MIT licence in this repository applies to the code and packaging for
+gtdb-genomes.
+
+Bundled GTDB taxonomy data is included for runtime use and testing
+convenience, but it remains subject to the applicable upstream terms,
+copyright, attribution requirements, and redistribution conditions.
+
+Users distributing or reusing the bundled GTDB taxonomy payload should check
+the current upstream GTDB terms directly.

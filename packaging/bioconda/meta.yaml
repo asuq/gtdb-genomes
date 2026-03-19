@@ -51,9 +51,8 @@ about:
     in the root README, including bundled GTDB taxonomy data for offline
     release resolution, the standard Python console entrypoint without any
     uv runtime requirement, and the packaged ncbi-datasets-cli dependency.
-  license: TBD
-  # Replace the placeholder licence metadata with the real project licence
-  # before turning this template into a release recipe.
+  license: MIT
+  license_file: LICENSE
   doc_url: https://github.com/your-org/gtdb-genomes
   dev_url: https://github.com/your-org/gtdb-genomes
 
