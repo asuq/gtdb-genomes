@@ -30,13 +30,13 @@ def test_main_passes_normalised_arguments_into_workflow(
 
     exit_code = main(
         [
-            "--release",
+            "--gtdb-release",
             " latest ",
-            "--taxon",
+            "--gtdb-taxon",
             " g__Escherichia ",
-            "--taxon",
+            "--gtdb-taxon",
             "g__Escherichia",
-            "--output",
+            "--outdir",
             str(tmp_path / "output"),
             "--download-method",
             "direct",
@@ -52,10 +52,10 @@ def test_main_passes_normalised_arguments_into_workflow(
     assert exit_code == 6
     assert captured_args == [
         CliArgs(
-            release="latest",
-            taxa=("g__Escherichia",),
-            output=tmp_path / "output",
-            prefer_genbank=True,
+            gtdb_release="latest",
+            gtdb_taxa=("g__Escherichia",),
+            outdir=tmp_path / "output",
+            prefer_genbank=False,
             download_method="direct",
             threads=3,
             ncbi_api_key=None,

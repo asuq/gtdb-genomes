@@ -407,12 +407,12 @@ real_data_run_case() {
     fi
 
     mkdir -p "${evidence_root}"
-    real_data_write_command_file "${command_file}" "$@" --output "${output_root}"
+    real_data_write_command_file "${command_file}" "$@" --outdir "${output_root}"
     raw_stdout_file=$(mktemp "${TMPDIR:-/tmp}/gtdb_real_stdout.XXXXXX")
     raw_stderr_file=$(mktemp "${TMPDIR:-/tmp}/gtdb_real_stderr.XXXXXX")
 
     start_epoch=$(date +%s)
-    "$@" --output "${output_root}" > "${raw_stdout_file}" 2> "${raw_stderr_file}"
+    "$@" --outdir "${output_root}" > "${raw_stdout_file}" 2> "${raw_stderr_file}"
     actual_exit=$?
     end_epoch=$(date +%s)
     real_data_redact_file "${raw_stdout_file}" "${stdout_file}"

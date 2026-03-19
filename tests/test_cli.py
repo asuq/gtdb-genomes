@@ -14,10 +14,11 @@ def test_help_includes_documented_flags() -> None:
     """The parser help should include the documented Phase 1 flags."""
 
     help_text = build_parser().format_help()
-    assert "--release" in help_text
-    assert "--taxon" in help_text
-    assert "--output" in help_text
+    assert "--gtdb-release" in help_text
+    assert "--gtdb-taxon" in help_text
+    assert "--outdir" in help_text
     assert "--prefer-genbank" in help_text
+    assert "--no-prefer-genbank" not in help_text
     assert "--download-method" in help_text
     assert "--threads" in help_text
     assert "--ncbi-api-key" in help_text
@@ -34,22 +35,23 @@ def test_parse_args_normalises_and_deduplicates_taxa(tmp_path: Path) -> None:
     args = parse_args(
         parser,
         [
-            "--release",
+            "--gtdb-release",
             " latest ",
-            "--taxon",
+            "--gtdb-taxon",
             " g__Escherichia ",
-            "--taxon",
+            "--gtdb-taxon",
             "g__Escherichia",
-            "--taxon",
+            "--gtdb-taxon",
             " s__Escherichia coli ",
-            "--output",
+            "--outdir",
             str(tmp_path),
         ],
     )
 
     assert isinstance(args, CliArgs)
-    assert args.release == "latest"
-    assert args.taxa == ("g__Escherichia", "s__Escherichia coli")
+    assert args.gtdb_release == "latest"
+    assert args.gtdb_taxa == ("g__Escherichia", "s__Escherichia coli")
+    assert args.prefer_genbank is False
 
 
 def test_parse_args_rejects_blank_release(tmp_path: Path) -> None:
@@ -60,11 +62,11 @@ def test_parse_args_rejects_blank_release(tmp_path: Path) -> None:
         parse_args(
             parser,
             [
-                "--release",
+                "--gtdb-release",
                 " ",
-                "--taxon",
+                "--gtdb-taxon",
                 "g__Escherichia",
-                "--output",
+                "--outdir",
                 str(tmp_path),
             ],
         )
@@ -79,11 +81,11 @@ def test_parse_args_rejects_blank_taxon(tmp_path: Path) -> None:
         parse_args(
             parser,
             [
-                "--release",
+                "--gtdb-release",
                 "latest",
-                "--taxon",
+                "--gtdb-taxon",
                 " ",
-                "--output",
+                "--outdir",
                 str(tmp_path),
             ],
         )
@@ -98,11 +100,11 @@ def test_parse_args_rejects_non_positive_threads(tmp_path: Path) -> None:
         parse_args(
             parser,
             [
-                "--release",
+                "--gtdb-release",
                 "latest",
-                "--taxon",
+                "--gtdb-taxon",
                 "g__Escherichia",
-                "--output",
+                "--outdir",
                 str(tmp_path),
                 "--threads",
                 "0",
@@ -119,11 +121,11 @@ def test_parse_args_requires_genome_in_include(tmp_path: Path) -> None:
         parse_args(
             parser,
             [
-                "--release",
+                "--gtdb-release",
                 "latest",
-                "--taxon",
+                "--gtdb-taxon",
                 "g__Escherichia",
-                "--output",
+                "--outdir",
                 str(tmp_path),
                 "--include",
                 "gff3",
@@ -144,11 +146,11 @@ def test_parse_args_rejects_non_empty_output_directory(tmp_path: Path) -> None:
         parse_args(
             parser,
             [
-                "--release",
+                "--gtdb-release",
                 "latest",
-                "--taxon",
+                "--gtdb-taxon",
                 "g__Escherichia",
-                "--output",
+                "--outdir",
                 str(output_dir),
             ],
         )
@@ -162,11 +164,11 @@ def test_parse_args_accepts_ncbi_api_key_flag(tmp_path: Path) -> None:
     args = parse_args(
         parser,
         [
-            "--release",
+            "--gtdb-release",
             "latest",
-            "--taxon",
+            "--gtdb-taxon",
             "g__Escherichia",
-            "--output",
+            "--outdir",
             str(tmp_path),
             "--ncbi-api-key",
             "secret",
@@ -184,17 +186,39 @@ def test_parse_args_rejects_legacy_api_key_flag(tmp_path: Path) -> None:
         parse_args(
             parser,
             [
-                "--release",
+                "--gtdb-release",
                 "latest",
-                "--taxon",
+                "--gtdb-taxon",
                 "g__Escherichia",
-                "--output",
+                "--outdir",
                 str(tmp_path),
                 "--api-key",
                 "secret",
             ],
         )
     assert error.value.code == 2
+
+
+def test_parse_args_rejects_removed_legacy_flags(tmp_path: Path) -> None:
+    """Removed legacy CLI flags should be rejected."""
+
+    for legacy_flag in ("--release", "--taxon", "--output", "--no-prefer-genbank"):
+        parser = build_parser()
+        argv = [
+            "--gtdb-release",
+            "latest",
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--outdir",
+            str(tmp_path),
+        ]
+        if legacy_flag == "--no-prefer-genbank":
+            argv.append(legacy_flag)
+        else:
+            argv.extend([legacy_flag, "legacy-value"])
+        with pytest.raises(SystemExit) as error:
+            parse_args(parser, argv)
+        assert error.value.code == 2
 
 
 def test_main_returns_preflight_error_code(
@@ -212,11 +236,11 @@ def test_main_returns_preflight_error_code(
     monkeypatch.setattr("gtdb_genomes.cli.check_required_tools", raise_preflight_error)
     exit_code = main(
         [
-            "--release",
+            "--gtdb-release",
             "latest",
-            "--taxon",
+            "--gtdb-taxon",
             "g__Escherichia",
-            "--output",
+            "--outdir",
             str(tmp_path),
         ],
     )

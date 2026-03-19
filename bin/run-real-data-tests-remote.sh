@@ -71,10 +71,9 @@ run_remote_case() {
                 "${REMOTE_TEST_ROOT}" "${case_id}" 0 present "" \
                 remote_check_direct_success \
                 gtdb-genomes \
-                --release latest \
-                --taxon "s__Thermoflexus hugenholtzii" \
+                --gtdb-release latest \
+                --gtdb-taxon "s__Thermoflexus hugenholtzii" \
                 --download-method direct \
-                --no-prefer-genbank \
                 --threads 2 \
                 --include genome
             ;;
@@ -84,8 +83,8 @@ run_remote_case() {
                 "${REMOTE_TEST_ROOT}" "${case_id}" 0 present "" \
                 remote_check_direct_success \
                 gtdb-genomes \
-                --release 89 \
-                --taxon "s__Thermoflexus hugenholtzii" \
+                --gtdb-release 89 \
+                --gtdb-taxon "s__Thermoflexus hugenholtzii" \
                 --download-method direct \
                 --prefer-genbank \
                 --threads 1 \
@@ -98,8 +97,8 @@ run_remote_case() {
                 "${REMOTE_TEST_ROOT}" "${case_id}" 0 present "" \
                 remote_check_direct_success \
                 gtdb-genomes \
-                --release 207 \
-                --taxon g__Methanobrevibacter \
+                --gtdb-release 207 \
+                --gtdb-taxon g__Methanobrevibacter \
                 --download-method direct \
                 --prefer-genbank \
                 --threads 4 \
@@ -111,10 +110,9 @@ run_remote_case() {
                 "${REMOTE_TEST_ROOT}" "${case_id}" 6 present 'PRJNA417962' \
                 remote_check_legacy_mixed \
                 gtdb-genomes \
-                --release 80 \
-                --taxon g__Acholeplasma_C \
+                --gtdb-release 80 \
+                --gtdb-taxon g__Acholeplasma_C \
                 --download-method direct \
-                --no-prefer-genbank \
                 --threads 1 \
                 --include genome
             ;;
@@ -124,8 +122,8 @@ run_remote_case() {
                 "${REMOTE_TEST_ROOT}" "${case_id}" 0 present "" \
                 remote_check_dehydrate_result \
                 gtdb-genomes \
-                --release 202 \
-                --taxon g__Bacteroides \
+                --gtdb-release 202 \
+                --gtdb-taxon g__Bacteroides \
                 --download-method auto \
                 --prefer-genbank \
                 --threads 12 \
@@ -136,10 +134,9 @@ run_remote_case() {
             real_data_run_case \
                 "${REMOTE_TEST_ROOT}" "${case_id}" 0 absent "" "" \
                 gtdb-genomes \
-                --release release220/220.0 \
-                --taxon "s__Thermoflexus hugenholtzii" \
+                --gtdb-release release220/220.0 \
+                --gtdb-taxon "s__Thermoflexus hugenholtzii" \
                 --download-method direct \
-                --no-prefer-genbank \
                 --dry-run
             ;;
         C7)
@@ -148,8 +145,8 @@ run_remote_case() {
                 "${REMOTE_TEST_ROOT}" "${case_id}" 0 present "" \
                 remote_check_dehydrate_result \
                 gtdb-genomes \
-                --release 214 \
-                --taxon g__Bacteroides \
+                --gtdb-release 214 \
+                --gtdb-taxon g__Bacteroides \
                 --download-method auto \
                 --prefer-genbank \
                 --threads 12 \

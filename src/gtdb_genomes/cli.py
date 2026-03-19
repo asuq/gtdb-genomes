@@ -22,9 +22,9 @@ from gtdb_genomes.workflow import run_workflow
 class CliArgs:
     """Normalised command-line arguments for gtdb-genomes."""
 
-    release: str
-    taxa: tuple[str, ...]
-    output: Path
+    gtdb_release: str
+    gtdb_taxa: tuple[str, ...]
+    outdir: Path
     prefer_genbank: bool
     download_method: str
     threads: int
@@ -51,7 +51,7 @@ def normalise_release(parser: argparse.ArgumentParser, release: str) -> str:
 
     value = release.strip()
     if not value:
-        parser.error("argument --release: value must not be empty")
+        parser.error("argument --gtdb-release: value must not be empty")
     return value
 
 
@@ -66,7 +66,7 @@ def normalise_taxa(
     for raw_taxon in taxa:
         taxon = raw_taxon.strip()
         if not taxon:
-            parser.error("argument --taxon: value must not be empty")
+            parser.error("argument --gtdb-taxon: value must not be empty")
         if taxon in seen:
             continue
         seen.add(taxon)
@@ -90,11 +90,11 @@ def validate_output_path(parser: argparse.ArgumentParser, output: str) -> Path:
     if path.exists():
         if not path.is_dir():
             parser.error(
-                "argument --output: path must not be an existing file",
+                "argument --outdir: path must not be an existing file",
             )
         if any(path.iterdir()):
             parser.error(
-                "argument --output: directory must be empty if it already exists",
+                "argument --outdir: directory must be empty if it already exists",
             )
     return path
 
@@ -109,9 +109,9 @@ def parse_args(
     if namespace.threads <= 0:
         parser.error("argument --threads: value must be a positive integer")
     return CliArgs(
-        release=normalise_release(parser, namespace.release),
-        taxa=normalise_taxa(parser, namespace.taxon),
-        output=validate_output_path(parser, namespace.output),
+        gtdb_release=normalise_release(parser, namespace.gtdb_release),
+        gtdb_taxa=normalise_taxa(parser, namespace.gtdb_taxon),
+        outdir=validate_output_path(parser, namespace.outdir),
         prefer_genbank=namespace.prefer_genbank,
         download_method=namespace.download_method,
         threads=namespace.threads,
@@ -130,25 +130,24 @@ def build_parser() -> argparse.ArgumentParser:
         description="Download NCBI genomes by GTDB taxon and GTDB release.",
     )
     parser.add_argument(
-        "--release",
+        "--gtdb-release",
         required=True,
         help="GTDB release alias or bundled release identifier.",
     )
     parser.add_argument(
-        "--taxon",
+        "--gtdb-taxon",
         action="append",
         required=True,
         help="GTDB taxon token. Repeat to request multiple taxa.",
     )
     parser.add_argument(
-        "--output",
+        "--outdir",
         required=True,
         help="Output directory for the run.",
     )
     parser.add_argument(
         "--prefer-genbank",
-        action=argparse.BooleanOptionalAction,
-        default=True,
+        action="store_true",
         help="Prefer paired GenBank accessions when available.",
     )
     parser.add_argument(

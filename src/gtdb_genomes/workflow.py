@@ -855,7 +855,7 @@ def build_run_summary_row(
         "include": args.include,
         "prefer_genbank": str(args.prefer_genbank).lower(),
         "debug_enabled": str(args.debug).lower(),
-        "requested_taxa_count": len(args.taxa),
+        "requested_taxa_count": len(args.gtdb_taxa),
         "matched_rows": matched_rows,
         "unique_gtdb_accessions": len(
             {row["gtdb_accession"] for row in accession_rows},
@@ -1002,7 +1002,7 @@ def run_workflow(args: CliArgs) -> int:
     started_at = datetime.now(UTC).isoformat()
 
     try:
-        resolution = resolve_and_validate_release(args.release)
+        resolution = resolve_and_validate_release(args.gtdb_release)
     except BundledDataError as error:
         logger.error("%s", error)
         close_logger(logger)
@@ -1010,8 +1010,8 @@ def run_workflow(args: CliArgs) -> int:
 
     taxonomy_frame = load_release_taxonomy(resolution)
     selected_frame = attach_taxon_slugs(
-        select_taxa(taxonomy_frame, args.taxa),
-        args.taxa,
+        select_taxa(taxonomy_frame, args.gtdb_taxa),
+        args.gtdb_taxa,
     )
 
     if selected_frame.is_empty():
@@ -1020,19 +1020,19 @@ def run_workflow(args: CliArgs) -> int:
             close_logger(logger)
             return 4
 
-        run_directories = initialise_run_directories(args.output)
+        run_directories = initialise_run_directories(args.outdir)
         close_logger(logger)
         logger, _ = configure_logging(
             debug=args.debug,
             dry_run=False,
             output_root=run_directories.output_root,
         )
-        taxon_slug_map = build_taxon_slug_map(args.taxa)
+        taxon_slug_map = build_taxon_slug_map(args.gtdb_taxa)
         exit_code = 4
         run_summary_rows = [
             build_run_summary_row(
                 args,
-                args.release,
+                args.gtdb_release,
                 resolution.resolved_release,
                 args.download_method,
                 0,
@@ -1059,11 +1059,11 @@ def run_workflow(args: CliArgs) -> int:
                     run_directories.taxa_root / taxon_slug_map[requested_taxon],
                 ),
             }
-            for requested_taxon in args.taxa
+            for requested_taxon in args.gtdb_taxa
         ]
         write_zero_match_outputs(
             run_directories,
-            args.taxa,
+            args.gtdb_taxa,
             taxon_slug_map,
             run_summary_rows,
             taxon_summary_rows,
@@ -1182,7 +1182,7 @@ def run_workflow(args: CliArgs) -> int:
         close_logger(logger)
         return 0
 
-    run_directories = initialise_run_directories(args.output)
+    run_directories = initialise_run_directories(args.outdir)
     close_logger(logger)
     logger, _ = configure_logging(
         debug=args.debug,
@@ -1340,7 +1340,7 @@ def run_workflow(args: CliArgs) -> int:
     run_summary_rows = [
         build_run_summary_row(
             args,
-            args.release,
+            args.gtdb_release,
             resolution.resolved_release,
             execution_result.method_used,
             execution_result.download_concurrency_used,

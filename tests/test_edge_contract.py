@@ -152,9 +152,9 @@ def build_cli_args(output_dir: Path) -> CliArgs:
     """Build a minimal CLI argument object for workflow unit tests."""
 
     return CliArgs(
-        release="80",
-        taxa=("s__Escherichia coli",),
-        output=output_dir,
+        gtdb_release="80",
+        gtdb_taxa=("s__Escherichia coli",),
+        outdir=output_dir,
         prefer_genbank=True,
         download_method="direct",
         threads=4,
@@ -184,11 +184,11 @@ def test_zero_match_run_writes_header_only_outputs(
     output_dir = tmp_path / "zero-match"
     exit_code = main(
         [
-            "--release",
+            "--gtdb-release",
             "95",
-            "--taxon",
+            "--gtdb-taxon",
             "g__Escherichia",
-            "--output",
+            "--outdir",
             str(output_dir),
         ],
     )
@@ -236,15 +236,14 @@ def test_mixed_uba_dry_run_warns_once_and_skips_outputs(
     output_dir = tmp_path / "mixed-uba-dry-run"
     exit_code = main(
         [
-            "--release",
+            "--gtdb-release",
             "80",
-            "--taxon",
+            "--gtdb-taxon",
             "g__Escherichia",
-            "--output",
+            "--outdir",
             str(output_dir),
             "--download-method",
             "direct",
-            "--no-prefer-genbank",
             "--dry-run",
         ],
     )
@@ -290,15 +289,14 @@ def test_uba_only_dry_run_warns_once_and_skips_ncbi_calls(
     output_dir = tmp_path / "uba-only-dry-run"
     exit_code = main(
         [
-            "--release",
+            "--gtdb-release",
             "80",
-            "--taxon",
+            "--gtdb-taxon",
             "g__Escherichia",
-            "--output",
+            "--outdir",
             str(output_dir),
             "--download-method",
             "direct",
-            "--no-prefer-genbank",
             "--dry-run",
         ],
     )
@@ -565,11 +563,11 @@ def test_auto_preview_failure_returns_exit_code_five_without_output_tree(
     output_dir = tmp_path / "preview-failure"
     exit_code = main(
         [
-            "--release",
+            "--gtdb-release",
             "95",
-            "--taxon",
+            "--gtdb-taxon",
             "g__Escherichia",
-            "--output",
+            "--outdir",
             str(output_dir),
             "--download-method",
             "auto",
@@ -630,11 +628,11 @@ def test_auto_preview_uses_accession_input_file_and_keeps_output_absent(
     output_dir = tmp_path / "preview-input-file"
     exit_code = main(
         [
-            "--release",
+            "--gtdb-release",
             "202",
-            "--taxon",
+            "--gtdb-taxon",
             "g__Escherichia",
-            "--output",
+            "--outdir",
             str(output_dir),
             "--download-method",
             "auto",
@@ -693,11 +691,11 @@ def test_metadata_lookup_uses_accession_input_file_and_cleans_it_up(
     output_dir = tmp_path / "metadata-input-file"
     exit_code = main(
         [
-            "--release",
+            "--gtdb-release",
             "202",
-            "--taxon",
+            "--gtdb-taxon",
             "g__Escherichia",
-            "--output",
+            "--outdir",
             str(output_dir),
             "--download-method",
             "direct",
@@ -773,11 +771,11 @@ def test_total_runtime_failure_leaves_final_accession_blank(
     output_dir = tmp_path / "runtime-failure"
     exit_code = main(
         [
-            "--release",
+            "--gtdb-release",
             "95",
-            "--taxon",
+            "--gtdb-taxon",
             "g__Escherichia",
-            "--output",
+            "--outdir",
             str(output_dir),
             "--download-method",
             "direct",
@@ -859,15 +857,14 @@ def test_mixed_uba_real_run_records_failed_unsupported_rows(
     output_dir = tmp_path / "mixed-uba-real"
     exit_code = main(
         [
-            "--release",
+            "--gtdb-release",
             "80",
-            "--taxon",
+            "--gtdb-taxon",
             "g__Escherichia",
-            "--output",
+            "--outdir",
             str(output_dir),
             "--download-method",
             "direct",
-            "--no-prefer-genbank",
         ],
     )
 
@@ -936,15 +933,14 @@ def test_uba_only_real_run_writes_failed_manifests_and_exits_seven(
     output_dir = tmp_path / "uba-only-real"
     exit_code = main(
         [
-            "--release",
+            "--gtdb-release",
             "80",
-            "--taxon",
+            "--gtdb-taxon",
             "g__Escherichia",
-            "--output",
+            "--outdir",
             str(output_dir),
             "--download-method",
             "direct",
-            "--no-prefer-genbank",
         ],
     )
 
@@ -1029,13 +1025,13 @@ def test_failure_manifest_collapses_shared_accession_taxa(
     output_dir = tmp_path / "shared-failure"
     exit_code = main(
         [
-            "--release",
+            "--gtdb-release",
             "95",
-            "--taxon",
+            "--gtdb-taxon",
             "g__Escherichia",
-            "--taxon",
+            "--gtdb-taxon",
             "s__Escherichia coli",
-            "--output",
+            "--outdir",
             str(output_dir),
             "--download-method",
             "direct",
@@ -1145,9 +1141,9 @@ def test_batch_dehydrate_failure_falls_back_to_direct(
         ),
     )
     args = CliArgs(
-        release="95",
-        taxa=("g__Escherichia",),
-        output=tmp_path / "output",
+        gtdb_release="95",
+        gtdb_taxa=("g__Escherichia",),
+        outdir=tmp_path / "output",
         prefer_genbank=True,
         download_method="dehydrate",
         threads=4,

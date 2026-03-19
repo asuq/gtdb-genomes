@@ -153,91 +153,82 @@ run_local_case() {
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent 'PRJNA417962' "" \
                 "${LOCAL_LAUNCHER[@]}" \
-                --release 80 \
-                --taxon g__Acholeplasma_C \
+                --gtdb-release 80 \
+                --gtdb-taxon g__Acholeplasma_C \
                 --download-method direct \
-                --no-prefer-genbank \
                 --dry-run
             ;;
         A2)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
                 "${LOCAL_LAUNCHER[@]}" \
-                --release 83 \
-                --taxon "s__Thermoflexus hugenholtzii" \
+                --gtdb-release 83 \
+                --gtdb-taxon "s__Thermoflexus hugenholtzii" \
                 --download-method direct \
-                --no-prefer-genbank \
                 --dry-run
             ;;
         A3)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
                 "${LOCAL_LAUNCHER[@]}" \
-                --release 86 \
-                --taxon g__Methanobrevibacter \
+                --gtdb-release 86 \
+                --gtdb-taxon g__Methanobrevibacter \
                 --download-method direct \
-                --no-prefer-genbank \
                 --dry-run
             ;;
         A4)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
                 "${LOCAL_LAUNCHER[@]}" \
-                --release 89 \
-                --taxon "s__Thermoflexus hugenholtzii" \
+                --gtdb-release 89 \
+                --gtdb-taxon "s__Thermoflexus hugenholtzii" \
                 --download-method direct \
-                --no-prefer-genbank \
                 --dry-run
             ;;
         A5)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
                 "${LOCAL_LAUNCHER[@]}" \
-                --release 95 \
-                --taxon g__Thermoflexus \
-                --taxon "s__Thermoflexus hugenholtzii" \
+                --gtdb-release 95 \
+                --gtdb-taxon g__Thermoflexus \
+                --gtdb-taxon "s__Thermoflexus hugenholtzii" \
                 --download-method direct \
-                --no-prefer-genbank \
                 --dry-run
             ;;
         A6)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
                 "${LOCAL_LAUNCHER[@]}" \
-                --release 202 \
-                --taxon g__Bacteroides \
+                --gtdb-release 202 \
+                --gtdb-taxon g__Bacteroides \
                 --download-method auto \
-                --no-prefer-genbank \
                 --dry-run
             ;;
         A7)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
                 "${LOCAL_LAUNCHER[@]}" \
-                --release 207 \
-                --taxon g__Methanobrevibacter \
+                --gtdb-release 207 \
+                --gtdb-taxon g__Methanobrevibacter \
                 --download-method direct \
-                --no-prefer-genbank \
                 --dry-run
             ;;
         A8)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
                 "${LOCAL_LAUNCHER[@]}" \
-                --release release220/220.0 \
-                --taxon "s__Thermoflexus hugenholtzii" \
+                --gtdb-release release220/220.0 \
+                --gtdb-taxon "s__Thermoflexus hugenholtzii" \
                 --download-method direct \
-                --no-prefer-genbank \
                 --dry-run
             ;;
         A9)
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 absent "" "" \
                 "${LOCAL_LAUNCHER[@]}" \
-                --release latest \
-                --taxon g__Methanobrevibacter \
+                --gtdb-release latest \
+                --gtdb-taxon g__Methanobrevibacter \
                 --download-method direct \
-                --no-prefer-genbank \
                 --dry-run
             ;;
         B1)
@@ -245,10 +236,9 @@ run_local_case() {
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 present "" \
                 local_check_direct_success \
                 "${LOCAL_LAUNCHER[@]}" \
-                --release 83 \
-                --taxon "s__Thermoflexus hugenholtzii" \
+                --gtdb-release 83 \
+                --gtdb-taxon "s__Thermoflexus hugenholtzii" \
                 --download-method direct \
-                --no-prefer-genbank \
                 --threads 1 \
                 --include genome
             ;;
@@ -258,8 +248,8 @@ run_local_case() {
                 "${LOCAL_TEST_ROOT}" "${case_id}" 6 present 'PRJNA417962' \
                 local_check_legacy_mixed \
                 "${LOCAL_LAUNCHER[@]}" \
-                --release 86 \
-                --taxon g__Methanobrevibacter \
+                --gtdb-release 86 \
+                --gtdb-taxon g__Methanobrevibacter \
                 --download-method direct \
                 --prefer-genbank \
                 --threads 2 \
@@ -271,11 +261,10 @@ run_local_case() {
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 present "" \
                 local_check_duplicate_success \
                 "${LOCAL_LAUNCHER[@]}" \
-                --release 95 \
-                --taxon g__Thermoflexus \
-                --taxon "s__Thermoflexus hugenholtzii" \
+                --gtdb-release 95 \
+                --gtdb-taxon g__Thermoflexus \
+                --gtdb-taxon "s__Thermoflexus hugenholtzii" \
                 --download-method direct \
-                --no-prefer-genbank \
                 --threads 2 \
                 --include genome
             ;;
@@ -284,10 +273,9 @@ run_local_case() {
                 "${LOCAL_TEST_ROOT}" "${case_id}" 6 present 'PRJNA417962' \
                 local_check_legacy_mixed \
                 "${LOCAL_LAUNCHER[@]}" \
-                --release 80 \
-                --taxon g__Acholeplasma_C \
+                --gtdb-release 80 \
+                --gtdb-taxon g__Acholeplasma_C \
                 --download-method direct \
-                --no-prefer-genbank \
                 --threads 1 \
                 --include genome
             ;;
@@ -296,10 +284,9 @@ run_local_case() {
                 "${LOCAL_TEST_ROOT}" "${case_id}" 7 present 'PRJNA417962' \
                 local_check_legacy_only \
                 "${LOCAL_LAUNCHER[@]}" \
-                --release 80 \
-                --taxon g__UBA10030 \
+                --gtdb-release 80 \
+                --gtdb-taxon g__UBA10030 \
                 --download-method direct \
-                --no-prefer-genbank \
                 --threads 1 \
                 --include genome
             ;;
@@ -309,8 +296,8 @@ run_local_case() {
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 present "" \
                 local_check_direct_success \
                 "${LOCAL_LAUNCHER[@]}" \
-                --release 207 \
-                --taxon g__Methanobrevibacter \
+                --gtdb-release 207 \
+                --gtdb-taxon g__Methanobrevibacter \
                 --download-method direct \
                 --prefer-genbank \
                 --threads 4 \

@@ -39,7 +39,7 @@ def test_real_data_write_command_file_redacts_ncbi_api_key(
         f"export NCBI_API_KEY={shlex.quote(secret)}\n"
         "real_data_write_command_file "
         f"{shlex.quote(str(command_file))} "
-        "gtdb-genomes --release 95 --ncbi-api-key \"$NCBI_API_KEY\" --output /tmp/out\n"
+        "gtdb-genomes --gtdb-release 95 --ncbi-api-key \"$NCBI_API_KEY\" --outdir /tmp/out\n"
     )
 
     result = run_bash(script)
