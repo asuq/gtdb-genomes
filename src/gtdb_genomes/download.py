@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-import math
 from pathlib import Path
 import re
 import subprocess
@@ -58,6 +57,7 @@ class CommandFailureRecord:
     error_type: str
     error_message: str
     final_status: str
+    attempted_accession: str | None = None
 
 
 @dataclass(slots=True)
@@ -151,12 +151,59 @@ def build_download_command(
     return command
 
 
+def build_batch_dehydrate_command(
+    accession_file: Path,
+    archive_path: Path,
+    include: str,
+    api_key: str | None = None,
+    datasets_bin: str = "datasets",
+    debug: bool = False,
+) -> list[str]:
+    """Build a batch dehydrated datasets download command."""
+
+    command = [
+        datasets_bin,
+        "download",
+        "genome",
+        "accession",
+        "--inputfile",
+        str(accession_file),
+        "--filename",
+        str(archive_path),
+        "--include",
+        validate_include_value(include),
+        "--dehydrated",
+    ]
+    if api_key:
+        command.extend(["--api-key", api_key])
+    if debug:
+        command.append("--debug")
+    return command
+
+
+def write_accession_input_file(
+    path: Path,
+    accessions: Iterable[str],
+) -> Path:
+    """Write a datasets accession input file in deterministic order."""
+
+    ordered_accessions = tuple(dict.fromkeys(accessions))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "".join(f"{accession}\n" for accession in ordered_accessions),
+        encoding="ascii",
+    )
+    return path
+
+
 def run_preview_command(
     accessions: Iterable[str],
     include: str,
     api_key: str | None = None,
     datasets_bin: str = "datasets",
     debug: bool = False,
+    sleep_func: Callable[[float], None] = time.sleep,
+    runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
 ) -> str:
     """Run `datasets --preview` and return its raw stdout."""
 
@@ -167,18 +214,20 @@ def run_preview_command(
         datasets_bin=datasets_bin,
         debug=debug,
     )
-    result = subprocess.run(
+    result = run_retryable_command(
         command,
-        capture_output=True,
-        text=True,
-        check=False,
+        stage="preview",
+        sleep_func=sleep_func,
+        runner=runner,
     )
-    if result.returncode != 0:
-        error_message = result.stderr.strip() or result.stdout.strip()
-        if not error_message:
-            error_message = "datasets preview failed"
-        raise PreviewError(error_message)
-    return result.stdout
+    if result.succeeded:
+        return result.stdout
+    error_message = result.stderr.strip() or result.stdout.strip()
+    if not error_message and result.failures:
+        error_message = result.failures[-1].error_message
+    if not error_message:
+        error_message = "datasets preview failed"
+    raise PreviewError(error_message)
 
 
 def build_rehydrate_command(
@@ -265,40 +314,21 @@ def get_rehydrate_workers(threads: int) -> int:
     return max(1, min(threads, REHYDRATE_WORKER_CAP))
 
 
-def split_direct_download_batches(
-    accessions: Iterable[str],
-    threads: int,
-) -> tuple[tuple[str, ...], ...]:
-    """Split accessions into deterministic direct-download batches."""
-
-    ordered_accessions = tuple(dict.fromkeys(accessions))
-    if not ordered_accessions:
-        return ()
-    concurrency = get_direct_download_concurrency(
-        threads,
-        len(ordered_accessions),
-    )
-    chunk_size = math.ceil(len(ordered_accessions) / concurrency)
-    batches = [
-        ordered_accessions[index : index + chunk_size]
-        for index in range(0, len(ordered_accessions), chunk_size)
-    ]
-    return tuple(batches)
-
-
 def run_retryable_command(
     command: list[str],
     stage: str,
     final_failure_status: str = "retry_exhausted",
+    attempted_accession: str | None = None,
     sleep_func: Callable[[float], None] = time.sleep,
-    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
 ) -> RetryableCommandResult:
     """Run a retryable subprocess command with the fixed retry schedule."""
 
+    command_runner = subprocess.run if runner is None else runner
     max_attempts = len(RETRY_DELAYS_SECONDS) + 1
     failures: list[CommandFailureRecord] = []
     for attempt_index in range(1, max_attempts + 1):
-        result = runner(
+        result = command_runner(
             command,
             capture_output=True,
             text=True,
@@ -320,6 +350,7 @@ def run_retryable_command(
                     error_type="subprocess",
                     error_message=result.stderr.strip() or result.stdout.strip(),
                     final_status="retry_scheduled",
+                    attempted_accession=attempted_accession,
                 ),
             )
             sleep_func(RETRY_DELAYS_SECONDS[attempt_index - 1])
@@ -332,6 +363,7 @@ def run_retryable_command(
                 error_type="subprocess",
                 error_message=result.stderr.strip() or result.stdout.strip(),
                 final_status=final_failure_status,
+                attempted_accession=attempted_accession,
             ),
         )
         return RetryableCommandResult(
@@ -368,6 +400,7 @@ def download_with_accession_fallback(
             debug=debug,
         ),
         stage="preferred_download",
+        attempted_accession=preferred_accession,
         sleep_func=sleep_func,
         runner=runner,
     )
@@ -397,6 +430,7 @@ def download_with_accession_fallback(
         ),
         stage="fallback_download",
         final_failure_status="fallback_exhausted",
+        attempted_accession=fallback_accession,
         sleep_func=sleep_func,
         runner=runner,
     )

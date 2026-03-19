@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, UTC
 import logging
 from pathlib import Path
@@ -17,6 +17,7 @@ from gtdb_genomes.download import (
     AccessionDownloadResult,
     CommandFailureRecord,
     PreviewError,
+    build_batch_dehydrate_command,
     build_download_command,
     build_preview_command,
     build_rehydrate_command,
@@ -26,6 +27,7 @@ from gtdb_genomes.download import (
     run_preview_command,
     run_retryable_command,
     select_download_method,
+    write_accession_input_file,
 )
 from gtdb_genomes.layout import (
     LayoutError,
@@ -71,7 +73,6 @@ if TYPE_CHECKING:
 class AccessionPlan:
     """One unique accession to resolve and download for the run."""
 
-    gtdb_accession: str
     original_accession: str
     preferred_accession: str
     conversion_status: str
@@ -89,6 +90,16 @@ class AccessionExecution:
     failures: tuple[CommandFailureRecord, ...]
 
 
+@dataclass(slots=True)
+class DownloadExecutionResult:
+    """The realised download execution details for one run."""
+
+    executions: dict[str, AccessionExecution]
+    method_used: str
+    download_concurrency_used: int
+    rehydrate_workers_used: int
+
+
 def build_accession_plans(mapped_frame: pl.DataFrame) -> tuple[AccessionPlan, ...]:
     """Build one unique download plan per original NCBI accession."""
 
@@ -101,12 +112,30 @@ def build_accession_plans(mapped_frame: pl.DataFrame) -> tuple[AccessionPlan, ..
     ).rows(named=True)
     return tuple(
         AccessionPlan(
-            gtdb_accession=row["gtdb_accession"],
             original_accession=row["ncbi_accession"],
             preferred_accession=row["final_accession"],
             conversion_status=row["conversion_status"],
         )
         for row in unique_rows
+    )
+
+
+def clone_failures_for_accession(
+    failures: tuple[CommandFailureRecord, ...],
+    attempted_accession: str,
+) -> tuple[CommandFailureRecord, ...]:
+    """Attach an accession identifier to failure records when needed."""
+
+    return tuple(
+        replace(
+            failure,
+            attempted_accession=(
+                failure.attempted_accession
+                if failure.attempted_accession is not None
+                else attempted_accession
+            ),
+        )
+        for failure in failures
     )
 
 
@@ -276,18 +305,22 @@ def execute_accession_plan(
     )
 
 
-def execute_accession_plans(
+def execute_direct_accession_plans(
     plans: tuple[AccessionPlan, ...],
     args: CliArgs,
-    decision_method: str,
     run_directories: RunDirectories,
     logger: logging.Logger,
     secrets: tuple[str, ...],
-) -> dict[str, AccessionExecution]:
-    """Execute all accession plans with bounded concurrency."""
+) -> DownloadExecutionResult:
+    """Execute direct accession downloads with bounded concurrency."""
 
     if not plans:
-        return {}
+        return DownloadExecutionResult(
+            executions={},
+            method_used="direct",
+            download_concurrency_used=0,
+            rehydrate_workers_used=0,
+        )
     max_workers = max(1, get_direct_download_concurrency(args.threads, len(plans)))
     executions: dict[str, AccessionExecution] = {}
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -296,7 +329,7 @@ def execute_accession_plans(
                 execute_accession_plan,
                 plan,
                 args,
-                decision_method,
+                "direct",
                 run_directories,
                 logger,
                 secrets,
@@ -305,7 +338,221 @@ def execute_accession_plans(
         }
         for future, original_accession in future_map.items():
             executions[original_accession] = future.result()
-    return executions
+    return DownloadExecutionResult(
+        executions=executions,
+        method_used="direct",
+        download_concurrency_used=max_workers,
+        rehydrate_workers_used=0,
+    )
+
+
+def build_batch_layout_failures(
+    failures: tuple[CommandFailureRecord, ...],
+    error: Exception,
+) -> tuple[CommandFailureRecord, ...]:
+    """Append one synthetic local layout failure to a batch failure list."""
+
+    return failures + (build_layout_failure(error),)
+
+
+def build_batch_archive_path(run_directories: RunDirectories) -> Path:
+    """Return the shared archive path for a dehydrated batch download."""
+
+    return run_directories.downloads_root / "dehydrated_batch.zip"
+
+
+def execute_batch_dehydrate_plans(
+    plans: tuple[AccessionPlan, ...],
+    args: CliArgs,
+    run_directories: RunDirectories,
+    logger: logging.Logger,
+    secrets: tuple[str, ...],
+) -> DownloadExecutionResult:
+    """Execute one dehydrated batch download with fallback to direct mode."""
+
+    if not plans:
+        return DownloadExecutionResult(
+            executions={},
+            method_used="dehydrate",
+            download_concurrency_used=0,
+            rehydrate_workers_used=0,
+        )
+
+    accession_file = write_accession_input_file(
+        run_directories.working_root / "dehydrate_accessions.txt",
+        (plan.preferred_accession for plan in plans),
+    )
+    archive_path = build_batch_archive_path(run_directories)
+    download_command = build_batch_dehydrate_command(
+        accession_file,
+        archive_path,
+        args.include,
+        api_key=args.api_key,
+        debug=args.debug,
+    )
+    logger.debug("Running %s", redact_command(download_command, secrets))
+    batch_download = run_retryable_command(
+        download_command,
+        stage="preferred_download",
+    )
+    if not batch_download.succeeded:
+        return fallback_batch_to_direct(
+            plans,
+            args,
+            run_directories,
+            logger,
+            secrets,
+            batch_failures=batch_download.failures,
+            rehydrate_workers_used=0,
+        )
+
+    extraction_root = run_directories.extracted_root / "dehydrated_batch"
+    try:
+        extract_archive(archive_path, extraction_root)
+    except LayoutError as error:
+        return fallback_batch_to_direct(
+            plans,
+            args,
+            run_directories,
+            logger,
+            secrets,
+            batch_failures=build_batch_layout_failures(
+                batch_download.failures,
+                error,
+            ),
+            rehydrate_workers_used=0,
+        )
+
+    rehydrate_workers = get_rehydrate_workers(args.threads)
+    rehydrate_command = build_rehydrate_command(
+        extraction_root,
+        rehydrate_workers,
+        api_key=args.api_key,
+        debug=args.debug,
+    )
+    logger.debug("Running %s", redact_command(rehydrate_command, secrets))
+    rehydrate_result = run_retryable_command(
+        rehydrate_command,
+        stage="rehydrate",
+    )
+    if not rehydrate_result.succeeded:
+        return fallback_batch_to_direct(
+            plans,
+            args,
+            run_directories,
+            logger,
+            secrets,
+            batch_failures=batch_download.failures + rehydrate_result.failures,
+            rehydrate_workers_used=rehydrate_workers,
+        )
+
+    shared_failures = batch_download.failures + rehydrate_result.failures
+    executions: dict[str, AccessionExecution] = {}
+    try:
+        for plan in plans:
+            payload_directory = locate_accession_payload_directory(
+                extraction_root,
+                plan.preferred_accession,
+            )
+            executions[plan.original_accession] = AccessionExecution(
+                original_accession=plan.original_accession,
+                final_accession=plan.preferred_accession,
+                conversion_status=plan.conversion_status,
+                download_status="downloaded",
+                payload_directory=payload_directory,
+                failures=clone_failures_for_accession(
+                    shared_failures,
+                    plan.preferred_accession,
+                ),
+            )
+    except LayoutError as error:
+        return fallback_batch_to_direct(
+            plans,
+            args,
+            run_directories,
+            logger,
+            secrets,
+            batch_failures=build_batch_layout_failures(shared_failures, error),
+            rehydrate_workers_used=rehydrate_workers,
+        )
+
+    return DownloadExecutionResult(
+        executions=executions,
+        method_used="dehydrate",
+        download_concurrency_used=1,
+        rehydrate_workers_used=rehydrate_workers,
+    )
+
+
+def fallback_batch_to_direct(
+    plans: tuple[AccessionPlan, ...],
+    args: CliArgs,
+    run_directories: RunDirectories,
+    logger: logging.Logger,
+    secrets: tuple[str, ...],
+    batch_failures: tuple[CommandFailureRecord, ...],
+    rehydrate_workers_used: int,
+) -> DownloadExecutionResult:
+    """Fall back from a failed dehydrated batch workflow to direct downloads."""
+
+    logger.warning(
+        "Batch dehydrated download failed; falling back to per-accession direct downloads",
+    )
+    direct_result = execute_direct_accession_plans(
+        plans,
+        args,
+        run_directories,
+        logger,
+        secrets,
+    )
+    executions: dict[str, AccessionExecution] = {}
+    for plan in plans:
+        direct_execution = direct_result.executions[plan.original_accession]
+        executions[plan.original_accession] = AccessionExecution(
+            original_accession=direct_execution.original_accession,
+            final_accession=direct_execution.final_accession,
+            conversion_status=direct_execution.conversion_status,
+            download_status=direct_execution.download_status,
+            payload_directory=direct_execution.payload_directory,
+            failures=clone_failures_for_accession(
+                batch_failures,
+                plan.preferred_accession,
+            )
+            + direct_execution.failures,
+        )
+    return DownloadExecutionResult(
+        executions=executions,
+        method_used="dehydrate_fallback_direct",
+        download_concurrency_used=direct_result.download_concurrency_used,
+        rehydrate_workers_used=rehydrate_workers_used,
+    )
+
+
+def execute_accession_plans(
+    plans: tuple[AccessionPlan, ...],
+    args: CliArgs,
+    decision_method: str,
+    run_directories: RunDirectories,
+    logger: logging.Logger,
+    secrets: tuple[str, ...],
+) -> DownloadExecutionResult:
+    """Execute accession plans for the selected download method."""
+
+    if decision_method == "dehydrate":
+        return execute_batch_dehydrate_plans(
+            plans,
+            args,
+            run_directories,
+            logger,
+            secrets,
+        )
+    return execute_direct_accession_plans(
+        plans,
+        args,
+        run_directories,
+        logger,
+        secrets,
+    )
 
 
 def build_taxon_summary_rows(
@@ -363,7 +610,9 @@ def build_run_summary_row(
     args: CliArgs,
     requested_release: str,
     resolved_release: str,
-    decision_method: str,
+    method_used: str,
+    download_concurrency_used: int,
+    rehydrate_workers_used: int,
     matched_rows: int,
     accession_rows: list[dict[str, Any]],
     output_root: Path | None,
@@ -380,10 +629,10 @@ def build_run_summary_row(
         "requested_release": requested_release,
         "resolved_release": resolved_release,
         "download_method_requested": args.download_method,
-        "download_method_used": decision_method,
+        "download_method_used": method_used,
         "threads_requested": args.threads,
-        "download_concurrency_used": min(args.threads, 5),
-        "rehydrate_workers_used": get_rehydrate_workers(args.threads),
+        "download_concurrency_used": download_concurrency_used,
+        "rehydrate_workers_used": rehydrate_workers_used,
         "include": args.include,
         "prefer_genbank": str(args.prefer_genbank).lower(),
         "debug_enabled": str(args.debug).lower(),
@@ -417,20 +666,40 @@ def build_run_summary_row(
 def build_failure_rows(
     enriched_rows: list[dict[str, Any]],
     executions: dict[str, AccessionExecution],
+    metadata_failures: tuple[CommandFailureRecord, ...],
     secrets: tuple[str, ...],
 ) -> list[dict[str, Any]]:
-    """Build `download_failures.tsv` rows from accession executions."""
+    """Build attempt-centric `download_failures.tsv` rows."""
 
     failure_rows: list[dict[str, Any]] = []
+    rows_by_accession: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in enriched_rows:
-        execution = executions[row["ncbi_accession"]]
-        for failure in execution.failures:
+        rows_by_accession[row["ncbi_accession"]].append(row)
+
+    for accession, rows in rows_by_accession.items():
+        execution = executions[accession]
+        accession_failures = clone_failures_for_accession(
+            metadata_failures,
+            accession,
+        ) + execution.failures
+        requested_taxa = ";".join(
+            sorted({row["requested_taxon"] for row in rows}),
+        )
+        taxon_slugs = ";".join(
+            sorted({row["taxon_slug"] for row in rows}),
+        )
+        gtdb_accessions = ";".join(
+            sorted({row["gtdb_accession"] for row in rows}),
+        )
+        final_accession = execution.final_accession or ""
+        for failure in accession_failures:
             failure_rows.append(
                 {
-                    "requested_taxon": row["requested_taxon"],
-                    "taxon_slug": row["taxon_slug"],
-                    "gtdb_accession": row["gtdb_accession"],
-                    "final_accession": row["final_accession"],
+                    "requested_taxon": requested_taxa,
+                    "taxon_slug": taxon_slugs,
+                    "gtdb_accession": gtdb_accessions,
+                    "attempted_accession": failure.attempted_accession or accession,
+                    "final_accession": final_accession,
                     "stage": failure.stage,
                     "attempt_index": failure.attempt_index,
                     "max_attempts": failure.max_attempts,
@@ -466,6 +735,7 @@ def run_workflow(args: CliArgs) -> int:
     )
 
     summary_map: dict[str, set[str]] = {}
+    metadata_failures: tuple[CommandFailureRecord, ...] = ()
     if not selected_frame.is_empty() and args.prefer_genbank:
         metadata_command = build_summary_command(
             selected_frame.get_column("ncbi_accession").unique().to_list(),
@@ -478,7 +748,9 @@ def run_workflow(args: CliArgs) -> int:
                 api_key=args.api_key,
             )
             summary_map = summary_lookup.summary_map
+            metadata_failures = summary_lookup.failures
         except MetadataLookupError as error:
+            metadata_failures = error.failures
             logger.warning(
                 "Metadata lookup failed; falling back to original accessions: %s",
                 redact_text(str(error), secrets),
@@ -511,6 +783,8 @@ def run_workflow(args: CliArgs) -> int:
                 args.release,
                 resolution.resolved_release,
                 args.download_method,
+                0,
+                0,
                 0,
                 [],
                 run_directories.output_root,
@@ -592,7 +866,7 @@ def run_workflow(args: CliArgs) -> int:
         output_root=run_directories.output_root,
     )
 
-    executions = execute_accession_plans(
+    execution_result = execute_accession_plans(
         accession_plans,
         args,
         decision.method_used,
@@ -603,7 +877,7 @@ def run_workflow(args: CliArgs) -> int:
 
     enriched_rows: list[dict[str, Any]] = []
     for row in mapped_frame.rows(named=True):
-        execution = executions[row["ncbi_accession"]]
+        execution = execution_result.executions[row["ncbi_accession"]]
         final_accession = execution.final_accession or ""
         enriched_rows.append(
             {
@@ -622,8 +896,12 @@ def run_workflow(args: CliArgs) -> int:
                     else ""
                 ),
                 "conversion_status": execution.conversion_status,
-                "download_method_used": decision.method_used,
-                "download_batch": row["ncbi_accession"],
+                "download_method_used": execution_result.method_used,
+                "download_batch": (
+                    "dehydrated_batch"
+                    if execution_result.method_used == "dehydrate"
+                    else row["ncbi_accession"]
+                ),
                 "output_relpath": "",
                 "download_status": execution.download_status,
                 "duplicate_across_taxa": False,
@@ -646,7 +924,9 @@ def run_workflow(args: CliArgs) -> int:
                     row["taxon_slug"],
                     row["final_accession"],
                 )
-                payload_directory = executions[row["ncbi_accession"]].payload_directory
+                payload_directory = execution_result.executions[
+                    row["ncbi_accession"]
+                ].payload_directory
                 if payload_directory is None:
                     raise AssertionError("successful accessions must have payloads")
                 copy_accession_payload(payload_directory, destination_directory)
@@ -686,7 +966,12 @@ def run_workflow(args: CliArgs) -> int:
             },
         )
 
-    failure_rows = build_failure_rows(enriched_rows, executions, secrets)
+    failure_rows = build_failure_rows(
+        enriched_rows,
+        execution_result.executions,
+        metadata_failures,
+        secrets,
+    )
     taxon_summary_rows = build_taxon_summary_rows(
         enriched_rows,
         duplicate_counts,
@@ -714,7 +999,9 @@ def run_workflow(args: CliArgs) -> int:
             args,
             args.release,
             resolution.resolved_release,
-            decision.method_used,
+            execution_result.method_used,
+            execution_result.download_concurrency_used,
+            execution_result.rehydrate_workers_used,
             mapped_frame.height,
             enriched_rows,
             run_directories.output_root,

@@ -11,6 +11,7 @@ from gtdb_genomes.download import (
     DEHYDRATE_ACCESSION_THRESHOLD,
     DEHYDRATE_SIZE_GB_THRESHOLD,
     PreviewError,
+    build_batch_dehydrate_command,
     build_download_command,
     build_preview_command,
     build_rehydrate_command,
@@ -19,9 +20,10 @@ from gtdb_genomes.download import (
     get_rehydrate_workers,
     parse_preview_size_bytes,
     run_retryable_command,
+    run_preview_command,
     select_download_method,
-    split_direct_download_batches,
     validate_include_value,
+    write_accession_input_file,
 )
 
 
@@ -54,6 +56,13 @@ def test_command_builders_match_datasets_cli_shape() -> None:
     rehydrate_command = build_rehydrate_command(
         Path("/tmp/bag"),
         7,
+        api_key="secret",
+        debug=True,
+    )
+    batch_dehydrate_command = build_batch_dehydrate_command(
+        Path("/tmp/accessions.txt"),
+        Path("/tmp/out.zip"),
+        "genome",
         api_key="secret",
         debug=True,
     )
@@ -99,6 +108,22 @@ def test_command_builders_match_datasets_cli_shape() -> None:
         "secret",
         "--debug",
     ]
+    assert batch_dehydrate_command == [
+        "datasets",
+        "download",
+        "genome",
+        "accession",
+        "--inputfile",
+        "/tmp/accessions.txt",
+        "--filename",
+        "/tmp/out.zip",
+        "--include",
+        "genome",
+        "--dehydrated",
+        "--api-key",
+        "secret",
+        "--debug",
+    ]
 
 
 def test_select_download_method_uses_preview_size_and_count_thresholds() -> None:
@@ -130,17 +155,19 @@ def test_parse_preview_size_bytes_uses_largest_size_value() -> None:
     assert parse_preview_size_bytes(preview) == int(2.5 * 1024**3)
 
 
-def test_batching_and_worker_caps_follow_documented_limits() -> None:
-    """Direct batching and worker caps should honour the fixed limits."""
+def test_worker_caps_and_accession_input_file_follow_documented_limits(
+    tmp_path: Path,
+) -> None:
+    """Worker caps and dehydrated accession files should stay deterministic."""
 
-    accessions = [f"GCA_{index}" for index in range(12)]
-    batches = split_direct_download_batches(accessions, 8)
+    accession_file = write_accession_input_file(
+        tmp_path / "accessions.txt",
+        ["GCA_1", "GCA_1", "GCF_2"],
+    )
 
     assert get_direct_download_concurrency(8, 12) == 5
     assert get_rehydrate_workers(64) == 30
-    assert sum(len(batch) for batch in batches) == 12
-    assert len(batches) <= 5
-    assert batches[0] == ("GCA_0", "GCA_1", "GCA_2")
+    assert accession_file.read_text(encoding="ascii") == "GCA_1\nGCF_2\n"
 
 
 def test_run_retryable_command_records_retries_before_success() -> None:
@@ -223,3 +250,34 @@ def test_preferred_gca_download_uses_full_retry_budget_before_fallback() -> None
         "GCF_000001.1",
     ]
     assert result.failures[-1].final_status == "retry_exhausted"
+
+
+def test_preview_command_uses_full_retry_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Preview should retry network failures three times before raising."""
+
+    attempts = iter([1, 1, 1, 1])
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        """Return repeated preview failures."""
+
+        return subprocess.CompletedProcess(
+            command,
+            next(attempts),
+            stdout="",
+            stderr="preview failed",
+        )
+
+    with pytest.raises(PreviewError, match="preview failed"):
+        run_preview_command(
+            ["GCA_1"],
+            "genome",
+            sleep_func=lambda delay: None,
+            runner=fake_run,
+        )

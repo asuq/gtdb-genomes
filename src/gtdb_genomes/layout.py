@@ -87,6 +87,7 @@ DOWNLOAD_FAILURE_COLUMNS = (
     "requested_taxon",
     "taxon_slug",
     "gtdb_accession",
+    "attempted_accession",
     "final_accession",
     "stage",
     "attempt_index",
