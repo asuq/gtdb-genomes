@@ -1087,3 +1087,22 @@ PY`
     semicolon-joined manifest values instead of being repeated once per
     accession, because that is a more faithful record of the commands that
     actually ran
+
+### Commit `997a556` - `docs(readme): clarify shared failure outcomes`
+
+- Implemented:
+  - updated the runtime README so `download_failures.tsv` explicitly allows a
+    shared final accession set when a failed network step covered multiple
+    accessions but the final outcomes are known
+  - aligned the user-facing wording with the shipped shared-failure workflow
+    instead of implying that only singular final accessions can appear
+- Files:
+  - `README.md`
+- Checks run:
+  - `.venv/bin/pytest -q`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the README now describes shared failure rows in terms of accession sets as
+    well as singular accessions, which is narrower and more accurate than the
+    earlier wording
