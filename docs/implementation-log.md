@@ -1652,3 +1652,56 @@ PY`
   - the README now depends on GitHub-oriented badge and alert syntax for better
     rendering in the repository view, which is a presentation-level
     improvement rather than a runtime behaviour change
+
+### Commit `b21dac4` - `feat(ci): add pytest and offline validation workflow`
+
+- Implemented:
+  - added the first GitHub Actions workflow at `.github/workflows/ci.yml`
+  - configured a standard `pytest` matrix for `ubuntu-latest` and
+    `macos-latest` on Python `3.12`
+  - added a deterministic Ubuntu-only offline validation job that reuses the
+    existing local validation runner in `LOCAL_LAUNCHER_MODE=module`
+  - locked the offline validation subset to `A1 A2 A8`, covering the legacy
+    `UBA*` warning path, a clean bundled-data dry-run, and the release-alias
+    path form without depending on `datasets`, `unzip`, NCBI network access,
+    or secrets
+  - enabled per-workflow per-ref concurrency cancellation and artifact upload
+    for the offline validation evidence tree
+- Files:
+  - `.github/workflows/ci.yml`
+- Checks run:
+  - `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/ci.yml"); YAML.load_file(".github/workflows/live-validation.yml"); puts "yaml-ok"'`
+  - `.venv/bin/pytest -q`
+  - `LOCAL_LAUNCHER_MODE=module LOCAL_TEST_ROOT=/tmp/gtdb-realtests/ci-offline-local bin/run-real-data-tests-local.sh A1 A2 A8`
+  - `sed -n '1,20p' /tmp/gtdb-realtests/ci-offline-local/_evidence/case-results.tsv`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the repository previously had no `.github/workflows` directory at all, so
+    the CI addition starts from a minimal deterministic baseline rather than
+    trying to fold these jobs into a pre-existing workflow layout
+
+### Commit `e992ec8` - `feat(ci): add gated live validation workflow`
+
+- Implemented:
+  - added `.github/workflows/live-validation.yml` for one real downloader case
+  - gated the live workflow to `workflow_dispatch` and pushes to `main`, so
+    the live NCBI-backed check stays out of normal PR CI
+  - used `mamba-org/setup-micromamba@v2` to provision an Ubuntu environment
+    with `python=3.12`, `uv`, `ncbi-datasets-cli`, and `unzip`
+  - reused the existing local validation runner in module mode for the live
+    case, choosing `B1` as the smallest real end-to-end genome download path
+    that does not require `NCBI_API_KEY`
+  - enabled evidence artifact upload for the live validation tree as well
+- Files:
+  - `.github/workflows/live-validation.yml`
+- Checks run:
+  - `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/ci.yml"); YAML.load_file(".github/workflows/live-validation.yml"); puts "yaml-ok"'`
+  - `PATH=/Users/asuq/miniforge3/envs/gtdb-genome-netcheck/bin:/usr/bin:/bin LOCAL_LAUNCHER_MODE=module LOCAL_TEST_ROOT=/tmp/gtdb-realtests/ci-live-local bin/run-real-data-tests-local.sh B1`
+  - `sed -n '1,20p' /tmp/gtdb-realtests/ci-live-local/_evidence/case-results.tsv`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the live workflow intentionally does not use an NCBI API-key secret, so it
+    validates a smaller non-secret case rather than one of the metadata-heavy
+    `--prefer-genbank` scenarios
