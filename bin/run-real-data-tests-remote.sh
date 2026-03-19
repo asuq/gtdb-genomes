@@ -79,7 +79,7 @@ run_remote_case() {
                 --include genome
             ;;
         C2)
-            real_data_require_api_key
+            real_data_require_ncbi_api_key
             real_data_run_case \
                 "${REMOTE_TEST_ROOT}" "${case_id}" 0 present "" \
                 remote_check_direct_success \
@@ -90,10 +90,10 @@ run_remote_case() {
                 --prefer-genbank \
                 --threads 1 \
                 --include genome \
-                --api-key "${NCBI_API_KEY}"
+                --ncbi-api-key "${NCBI_API_KEY}"
             ;;
         C3)
-            real_data_require_api_key
+            real_data_require_ncbi_api_key
             real_data_run_case \
                 "${REMOTE_TEST_ROOT}" "${case_id}" 0 present "" \
                 remote_check_direct_success \
@@ -104,7 +104,7 @@ run_remote_case() {
                 --prefer-genbank \
                 --threads 4 \
                 --include genome,gff3 \
-                --api-key "${NCBI_API_KEY}"
+                --ncbi-api-key "${NCBI_API_KEY}"
             ;;
         C4)
             real_data_run_case \
@@ -119,7 +119,7 @@ run_remote_case() {
                 --include genome
             ;;
         C5)
-            real_data_require_api_key
+            real_data_require_ncbi_api_key
             real_data_run_case \
                 "${REMOTE_TEST_ROOT}" "${case_id}" 0 present "" \
                 remote_check_dehydrate_result \
@@ -130,7 +130,7 @@ run_remote_case() {
                 --prefer-genbank \
                 --threads 12 \
                 --include genome \
-                --api-key "${NCBI_API_KEY}"
+                --ncbi-api-key "${NCBI_API_KEY}"
             ;;
         C6)
             real_data_run_case \
@@ -143,7 +143,7 @@ run_remote_case() {
                 --dry-run
             ;;
         C7)
-            real_data_require_api_key
+            real_data_require_ncbi_api_key
             real_data_run_case \
                 "${REMOTE_TEST_ROOT}" "${case_id}" 0 present "" \
                 remote_check_dehydrate_result \
@@ -154,7 +154,7 @@ run_remote_case() {
                 --prefer-genbank \
                 --threads 12 \
                 --include genome \
-                --api-key "${NCBI_API_KEY}"
+                --ncbi-api-key "${NCBI_API_KEY}"
             ;;
         *)
             real_data_die "Unknown remote case ID: ${case_id}"

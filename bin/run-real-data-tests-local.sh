@@ -245,7 +245,7 @@ run_local_case() {
                 --include genome
             ;;
         B2)
-            real_data_require_api_key
+            real_data_require_ncbi_api_key
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 6 present 'PRJNA417962' \
                 local_check_legacy_mixed \
@@ -256,7 +256,7 @@ run_local_case() {
                 --prefer-genbank \
                 --threads 2 \
                 --include genome,gff3 \
-                --api-key "${NCBI_API_KEY}"
+                --ncbi-api-key "${NCBI_API_KEY}"
             ;;
         B3)
             real_data_run_case \
@@ -296,7 +296,7 @@ run_local_case() {
                 --include genome
             ;;
         B6)
-            real_data_require_api_key
+            real_data_require_ncbi_api_key
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 present "" \
                 local_check_direct_success \
@@ -307,7 +307,7 @@ run_local_case() {
                 --prefer-genbank \
                 --threads 4 \
                 --include genome,gff3 \
-                --api-key "${NCBI_API_KEY}"
+                --ncbi-api-key "${NCBI_API_KEY}"
             ;;
         *)
             real_data_die "Unknown local case ID: ${case_id}"

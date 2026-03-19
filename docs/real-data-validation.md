@@ -82,6 +82,9 @@ Required environment:
 
 - `NCBI_API_KEY` for metadata-heavy cases such as `B2` and `B6`
 
+The local runner passes `NCBI_API_KEY` to the CLI as `--ncbi-api-key` for the
+cases that need NCBI metadata or download access.
+
 The local runner uses:
 
 - `LOCAL_TEST_ROOT`, default `/tmp/gtdb-realtests/local-YYYYMMDD`
@@ -123,6 +126,9 @@ The remote runner uses:
 Required environment:
 
 - `NCBI_API_KEY` for `C2`, `C3`, `C5`, and `C7`
+
+The remote runner passes `NCBI_API_KEY` to the installed command as
+`--ncbi-api-key`.
 
 ## Case Matrix
 

@@ -67,7 +67,7 @@ The CLI includes:
 - `--prefer-genbank` / `--no-prefer-genbank`
 - `--download-method {auto,direct,dehydrate}`
 - `--threads`
-- `--api-key`
+- `--ncbi-api-key`
 - `--include`
 - `--debug`
 - `--keep-temp`
@@ -77,7 +77,7 @@ The interface does not include:
 
 - `--taxa-file`
 - `--domain`
-- `--api-key-env`
+- `--ncbi-api-key-env`
 
 ## Option Notes
 
@@ -408,14 +408,18 @@ Pass an NCBI API key directly to the command:
 gtdb-genomes \
   --release latest \
   --taxon g__Salmonella \
-  --api-key "${NCBI_API_KEY}" \
+  --ncbi-api-key "${NCBI_API_KEY}" \
   --output results/salmonella
 ```
 
 ## API Key Handling
 
-The tool passes `--api-key` through to the upstream `datasets` command without
-writing it to project files.
+`--ncbi-api-key` expects an NCBI API key. The tool passes it only to the
+upstream `datasets` command and does not use it for GTDB release resolution,
+local taxonomy loading, or any other service.
+
+The tool forwards `--ncbi-api-key` to `datasets --api-key` without writing it
+to project files.
 
 It:
 

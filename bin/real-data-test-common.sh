@@ -37,7 +37,7 @@ real_data_require_command() {
 }
 
 
-real_data_require_api_key() {
+real_data_require_ncbi_api_key() {
     if [ -z "${NCBI_API_KEY:-}" ]; then
         real_data_die "NCBI_API_KEY is required for this case"
     fi

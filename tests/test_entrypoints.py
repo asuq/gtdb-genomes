@@ -81,6 +81,11 @@ def test_runtime_docs_mark_uv_as_development_only() -> None:
     assert "The MIT licence in this repository applies to the code" in notice_text
     assert "GTDB taxonomy data" in notice_text
     assert "license: MIT" in bioconda_text
+    assert "--ncbi-api-key" in readme_text
+    assert "- `--api-key`" not in readme_text
+    assert "expects an NCBI API key" in readme_text
+    assert "passes it only to the" in readme_text
+    assert "`datasets` command" in readme_text
 
 
 def test_real_data_validation_guide_describes_local_requirements() -> None:
@@ -103,3 +108,4 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
     assert "debug output can print the raw API-key header" in (
         guide_text
     )
+    assert "--ncbi-api-key" in guide_text
