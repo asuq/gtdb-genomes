@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, UTC
 import logging
 from pathlib import Path
@@ -117,6 +117,25 @@ def build_accession_plans(mapped_frame: pl.DataFrame) -> tuple[AccessionPlan, ..
             conversion_status=row["conversion_status"],
         )
         for row in unique_rows
+    )
+
+
+def attach_attempted_accession(
+    failures: tuple[CommandFailureRecord, ...],
+    attempted_accession: str,
+) -> tuple[CommandFailureRecord, ...]:
+    """Fill missing attempted-accession values on shared failure records."""
+
+    return tuple(
+        replace(
+            failure,
+            attempted_accession=(
+                failure.attempted_accession
+                if failure.attempted_accession is not None
+                else attempted_accession
+            ),
+        )
+        for failure in failures
     )
 
 
@@ -282,7 +301,6 @@ def execute_direct_accession_plans(
     args: CliArgs,
     run_directories: RunDirectories,
     logger: logging.Logger,
-    secrets: tuple[str, ...],
 ) -> DownloadExecutionResult:
     """Execute direct accession downloads with bounded concurrency."""
 
@@ -378,8 +396,10 @@ def execute_batch_dehydrate_plans(
             args,
             run_directories,
             logger,
-            secrets,
-            batch_failures=batch_download.failures,
+            batch_failures=attach_attempted_accession(
+                batch_download.failures,
+                batch_attempted_accessions,
+            ),
             rehydrate_workers_used=0,
         )
 
@@ -392,10 +412,9 @@ def execute_batch_dehydrate_plans(
             args,
             run_directories,
             logger,
-            secrets,
-            batch_failures=build_batch_layout_failures(
-                batch_download.failures,
-                error,
+            batch_failures=attach_attempted_accession(
+                build_batch_layout_failures(batch_download.failures, error),
+                batch_attempted_accessions,
             ),
             rehydrate_workers_used=0,
         )
@@ -419,12 +438,17 @@ def execute_batch_dehydrate_plans(
             args,
             run_directories,
             logger,
-            secrets,
-            batch_failures=batch_download.failures + rehydrate_result.failures,
+            batch_failures=attach_attempted_accession(
+                batch_download.failures + rehydrate_result.failures,
+                batch_attempted_accessions,
+            ),
             rehydrate_workers_used=rehydrate_workers,
         )
 
-    shared_failures = batch_download.failures + rehydrate_result.failures
+    shared_failures = attach_attempted_accession(
+        batch_download.failures + rehydrate_result.failures,
+        batch_attempted_accessions,
+    )
     executions: dict[str, AccessionExecution] = {}
     try:
         payload_directories = locate_batch_payload_directories(
@@ -446,8 +470,10 @@ def execute_batch_dehydrate_plans(
             args,
             run_directories,
             logger,
-            secrets,
-            batch_failures=build_batch_layout_failures(shared_failures, error),
+            batch_failures=attach_attempted_accession(
+                build_batch_layout_failures(shared_failures, error),
+                batch_attempted_accessions,
+            ),
             rehydrate_workers_used=rehydrate_workers,
         )
 
@@ -465,7 +491,6 @@ def fallback_batch_to_direct(
     args: CliArgs,
     run_directories: RunDirectories,
     logger: logging.Logger,
-    secrets: tuple[str, ...],
     batch_failures: tuple[CommandFailureRecord, ...],
     rehydrate_workers_used: int,
 ) -> DownloadExecutionResult:
@@ -479,7 +504,6 @@ def fallback_batch_to_direct(
         args,
         run_directories,
         logger,
-        secrets,
     )
     return DownloadExecutionResult(
         executions=direct_result.executions,
@@ -513,7 +537,6 @@ def execute_accession_plans(
         args,
         run_directories,
         logger,
-        secrets,
     )
 
 
@@ -623,6 +646,60 @@ def build_run_summary_row(
         "output_dir": "" if output_root is None else str(output_root),
         "exit_code": exit_code,
     }
+
+
+def join_unique_row_values(
+    rows: list[dict[str, Any]],
+    field_name: str,
+) -> str:
+    """Collapse one row field into a deterministic semicolon-joined value."""
+
+    return ";".join(
+        sorted(
+            {
+                str(row.get(field_name, "")).strip()
+                for row in rows
+                if str(row.get(field_name, "")).strip()
+            },
+        ),
+    )
+
+
+def build_shared_failure_rows(
+    rows: list[dict[str, Any]],
+    failures: tuple[CommandFailureRecord, ...],
+    secrets: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    """Build one failure-manifest row per shared command attempt."""
+
+    if not rows or not failures:
+        return []
+    requested_taxa = join_unique_row_values(rows, "requested_taxon")
+    taxon_slugs = join_unique_row_values(rows, "taxon_slug")
+    gtdb_accessions = join_unique_row_values(rows, "gtdb_accession")
+    ncbi_accessions = join_unique_row_values(rows, "ncbi_accession")
+    final_accessions = join_unique_row_values(rows, "final_accession")
+    return [
+        {
+            "requested_taxon": requested_taxa,
+            "taxon_slug": taxon_slugs,
+            "gtdb_accession": gtdb_accessions,
+            "attempted_accession": (
+                failure.attempted_accession or ncbi_accessions
+            ),
+            "final_accession": final_accessions,
+            "stage": failure.stage,
+            "attempt_index": failure.attempt_index,
+            "max_attempts": failure.max_attempts,
+            "error_type": failure.error_type,
+            "error_message_redacted": redact_text(
+                failure.error_message,
+                secrets,
+            ),
+            "final_status": failure.final_status,
+        }
+        for failure in failures
+    ]
 
 
 def build_failure_rows(
@@ -937,6 +1014,7 @@ def run_workflow(args: CliArgs) -> int:
         enriched_rows,
         execution_result.executions,
         metadata_failures,
+        execution_result.shared_failures,
         secrets,
     )
     taxon_summary_rows = build_taxon_summary_rows(

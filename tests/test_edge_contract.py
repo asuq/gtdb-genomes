@@ -300,12 +300,14 @@ def test_failure_manifest_collapses_shared_metadata_attempts() -> None:
             "taxon_slug": "g__Escherichia",
             "gtdb_accession": "RS_GCF_000001.1",
             "ncbi_accession": "GCF_000001.1",
+            "final_accession": "GCF_000001.1",
         },
         {
             "requested_taxon": "s__Escherichia coli",
             "taxon_slug": "s__Escherichia_coli",
             "gtdb_accession": "RS_GCF_000002.1",
             "ncbi_accession": "GCF_000002.1",
+            "final_accession": "GCF_000002.1",
         },
     ]
     executions = {
@@ -350,6 +352,7 @@ def test_failure_manifest_collapses_shared_metadata_attempts() -> None:
         executions,
         metadata_failures,
         (),
+        (),
     )
 
     assert len(failure_rows) == 2
@@ -359,7 +362,9 @@ def test_failure_manifest_collapses_shared_metadata_attempts() -> None:
     assert failure_rows[0]["attempted_accession"] == (
         "GCF_000001.1;GCF_000002.1"
     )
-    assert failure_rows[0]["final_accession"] == ""
+    assert failure_rows[0]["final_accession"] == (
+        "GCF_000001.1;GCF_000002.1"
+    )
 
 
 def test_batch_dehydrate_failure_falls_back_to_direct(
@@ -419,7 +424,6 @@ def test_batch_dehydrate_failure_falls_back_to_direct(
         args: CliArgs,
         run_directories,
         logger,
-        secrets,
     ) -> DownloadExecutionResult:
         """Return a synthetic direct-download fallback result."""
 
@@ -455,6 +459,7 @@ def test_batch_dehydrate_failure_falls_back_to_direct(
 
     assert result.method_used == "dehydrate_fallback_direct"
     assert result.download_concurrency_used == 2
-    assert result.executions["GCF_000001.1"].failures[0].attempted_accession == (
-        "GCA_000001.1"
+    assert result.executions["GCF_000001.1"].failures == ()
+    assert result.shared_failures[0].attempted_accession == (
+        "GCA_000001.1;GCA_000002.1"
     )
