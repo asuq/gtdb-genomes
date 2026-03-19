@@ -1959,3 +1959,109 @@ PY`
   - no, by design
 - Deviations:
   - none
+
+### Commit `8911a3b` - `fix(workflow): defer tool preflight until selection`
+
+- Implemented:
+  - removed the unconditional external-tool preflight from `cli.main()` and
+    moved the requirement check into the workflow after GTDB release loading
+    and taxonomy selection
+  - extended preflight tool resolution so zero-match runs and
+    unsupported-`UBA*`-only runs require no external tools
+  - kept `PreflightError` as the public CLI error path so missing supported-run
+    tools still return exit code `5` with the normal command-line error output
+  - updated CLI and edge-contract tests to assert the new workflow-aware
+    preflight boundary, including zero-match and supported-path regressions
+- Why:
+  - the earlier audit reproduced a real bug where a zero-match query failed
+    with missing `datasets` instead of taking the documented exit-`4` path
+  - tool checks should depend on whether the selected rows actually require NCBI
+    or archive work, not only on the raw CLI flags
+- Files:
+  - `src/gtdb_genomes/cli.py`
+  - `src/gtdb_genomes/preflight.py`
+  - `src/gtdb_genomes/workflow.py`
+  - `tests/test_cli.py`
+  - `tests/test_edge_contract.py`
+- Checks run:
+  - `.venv/bin/python -m pytest -q tests/test_cli.py tests/test_edge_contract.py`
+  - `PATH=/usr/bin:/bin .venv/bin/python -m gtdb_genomes --gtdb-release 95 --gtdb-taxon g__DefinitelyNotReal --outdir /tmp/gtdb-zero-match-check-plan`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - none
+
+### Commit `be9be16` - `fix(download): tighten preview size parsing`
+
+- Implemented:
+  - changed preview size parsing to prefer labelled `Package size:` or
+    `Download size:` text instead of taking the largest arbitrary size token
+  - changed JSON preview parsing to prefer `estimated_file_size_mb` and fall
+    back to the summed `included_data_files[*].size_mb` total only when the
+    estimate is absent
+  - made ambiguous multi-size plain-text preview output return `None` so
+    `select_download_method()` fails explicitly instead of silently switching to
+    the wrong mode
+  - removed the unused `AccessionDownloadResult` dataclass and the dead
+    `download_with_accession_fallback()` helper, which runtime code no longer
+    called
+  - updated the download tests to cover the `Download size` versus
+    `Uncompressed size` regression and the new JSON fallback rule
+- Why:
+  - the audit reproduced a real `auto`-mode bug where a small package preview
+    was forced into `dehydrate` by a larger unrelated `Uncompressed size`
+    token
+  - the dead direct-fallback helper had become stale after the grouped workflow
+    refactor and was no longer part of the live runtime
+- Files:
+  - `src/gtdb_genomes/download.py`
+  - `tests/test_download.py`
+- Checks run:
+  - `.venv/bin/python -m pytest -q tests/test_download.py`
+  - `PYTHONPATH=src python3 - <<'PY' ... select_download_method(\"auto\", 5, preview_text=\"Download size: 1.0 GB\\nUncompressed size: 16.0 GB\\n\") ... PY`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - none
+
+### Commit `8a1dc0d` - `fix(workflow): correct layout and batch attribution`
+
+- Implemented:
+  - introduced explicit `download_batch` tracking on `AccessionExecution` so
+    manifests now report the actual preferred, fallback, or dehydrated batch
+    unit that was attempted
+  - changed local unzip and payload-discovery failures from `stage=preflight`
+    to `stage=layout`
+  - updated direct grouped execution so shared-preferred successes report the
+    shared preferred accession as the batch, while fallback rows report the
+    original accession that was actually downloaded
+  - changed successful dehydrated executions to record `dehydrated_batch`
+    directly on the execution rather than reconstructing it during manifest
+    writing
+  - refactored taxon selection into a single explode/join pass that preserves
+    requested-taxon order and per-taxon row order without rescanning the full
+    frame once per taxon
+  - refreshed the edge-contract, CLI-integration, and selection tests, and
+    updated `docs/usage-details.md` to describe deferred tool requirements and
+    the new `layout` failure stage
+- Why:
+  - the audit found incorrect failure attribution for local archive problems and
+    incorrect `download_batch` values for shared-preferred direct downloads
+  - the previous selector shape performed one full-frame filter per requested
+    taxon and created avoidable intermediate frames on large releases
+- Files:
+  - `src/gtdb_genomes/workflow.py`
+  - `src/gtdb_genomes/selection.py`
+  - `docs/usage-details.md`
+  - `tests/test_edge_contract.py`
+  - `tests/test_selection.py`
+  - `tests/test_cli_integration.py`
+- Checks run:
+  - `.venv/bin/python -m pytest -q tests/test_edge_contract.py tests/test_selection.py tests/test_entrypoints.py`
+  - `.venv/bin/python -m pytest -q`
+  - `python3 -m compileall src`
+  - `PATH=/usr/bin:/bin .venv/bin/python -m gtdb_genomes --gtdb-release 95 --gtdb-taxon g__DefinitelyNotReal --outdir /tmp/gtdb-zero-match-check-final`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - none
