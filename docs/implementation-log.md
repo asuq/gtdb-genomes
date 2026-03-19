@@ -1440,3 +1440,113 @@ PY`
     encoding earlier assumptions instead of the shipped runtime behaviour, so
     the documentation had to be brought into line with the evidence before the
     remote packaged-runtime pass
+
+### Commit `6062f25` - `chore(data): gzip bundled GTDB taxonomy payloads`
+
+- Implemented:
+  - recompressed every bundled GTDB taxonomy payload under
+    `data/gtdb_taxonomy/<release>/` from plain `.tsv` to `.tsv.gz` using
+    maximum gzip compression
+  - updated the bundled release manifest so each release row now points to the
+    compressed taxonomy filenames while leaving `releases.tsv` itself as plain
+    text for easy inspection and manifest debugging
+  - reduced the tracked bundled-data footprint from roughly `410M` to roughly
+    `28M` without changing the logical release coverage
+- Files:
+  - `data/gtdb_taxonomy/releases.tsv`
+  - `data/gtdb_taxonomy/80.0/`
+  - `data/gtdb_taxonomy/83.0/`
+  - `data/gtdb_taxonomy/86.0/`
+  - `data/gtdb_taxonomy/89.0/`
+  - `data/gtdb_taxonomy/95.0/`
+  - `data/gtdb_taxonomy/202.0/`
+  - `data/gtdb_taxonomy/207.0/`
+  - `data/gtdb_taxonomy/214.0/`
+  - `data/gtdb_taxonomy/220.0/`
+  - `data/gtdb_taxonomy/226.0/`
+- Checks run:
+  - `du -sh data/gtdb_taxonomy`
+  - `find data/gtdb_taxonomy -maxdepth 2 -type f | sort | sed -n '1,40p'`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the frozen plan assumed bundled taxonomy TSVs, but the tracked payload had
+    become large enough that runtime-transparent compression was the more
+    practical packaging shape
+
+### Commit `bd76f14` - `feat(taxonomy): load gzipped bundled data`
+
+- Implemented:
+  - taught bundled taxonomy validation to read gzip text when the resolved
+    taxonomy file ends with `.gz`, while still supporting plain files for
+    temporary tests and future fallback use
+  - kept manifest and output stability by stripping only the trailing `.gz`
+    from `taxonomy_file`, so runtime tables still report logical filenames such
+    as `bac120_taxonomy_r95.tsv`
+  - added regression coverage for real bundled resolutions returning `.tsv.gz`
+    paths and for loading temporary gzipped taxonomy tables while preserving
+    logical `taxonomy_file` values and accession normalisation
+- Files:
+  - `src/gtdb_genomes/release_resolver.py`
+  - `src/gtdb_genomes/taxonomy.py`
+  - `tests/test_release_resolver.py`
+- Checks run:
+  - `.venv/bin/python - <<'PY' ... pl.read_csv(Path('data/gtdb_taxonomy/95.0/bac120_taxonomy_r95.tsv.gz')) ... PY`
+  - `.venv/bin/pytest -q`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the runtime contract deliberately stayed stable at the manifest/output
+    level, so only the storage layer changed; the user-visible `taxonomy_file`
+    values remain `.tsv` names even though the bundled payload is compressed
+
+### Commit `9886875` - `chore(package): add MIT licence metadata`
+
+- Implemented:
+  - added a root MIT `LICENSE`
+  - added a root `NOTICE` explaining that the MIT licence covers the project
+    code and packaging while the bundled GTDB taxonomy payload remains subject
+    to upstream terms and attribution requirements
+  - updated `pyproject.toml` to declare MIT and include both licence files in
+    package builds
+  - updated the Bioconda recipe template to advertise `MIT` and install the
+    project `LICENSE` as the recipe licence file
+- Files:
+  - `LICENSE`
+  - `NOTICE`
+  - `pyproject.toml`
+  - `packaging/bioconda/meta.yaml`
+- Checks run:
+  - `PATH=/Users/asuq/miniforge3/envs/gtdb-genome-netcheck/bin:/usr/bin:/bin UV_CACHE_DIR=/tmp/gtdb_uv_cache uv build`
+  - `.venv/bin/python - <<'PY' ... zipfile.ZipFile(Path('dist/gtdb_genomes-0.1.0-py3-none-any.whl')) ... PY`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the code licence could be made explicit immediately, but the bundled GTDB
+    data was intentionally not relicensed; a separate notice was added instead
+    of implying that the bundled taxonomy payload itself had become MIT
+
+### Commit `6c4fa47` - `docs(readme): document gzipped bundled data`
+
+- Implemented:
+  - updated the README bundled-data section to explain that taxonomy payloads
+    now ship as `.tsv.gz`, are decompressed transparently at read time, and
+    still rely on a plain-text `releases.tsv` manifest
+  - documented the code-vs-data licence split in the README and pointed readers
+    at `NOTICE` for the bundled-data warning
+  - tightened the runtime docs test so the documentation contract now asserts
+    the presence of the gzip layout, the plain-text manifest note, the bundled
+    data notice, and the Bioconda MIT metadata
+- Files:
+  - `README.md`
+  - `tests/test_entrypoints.py`
+- Checks run:
+  - `.venv/bin/pytest -q`
+  - `PYTHONPATH=src .venv/bin/python -m gtdb_genomes --release 95 --taxon 's__Thermoflexus hugenholtzii' --output /tmp/gtdb-gzip-dry-run --download-method direct --no-prefer-genbank --dry-run`
+  - `test ! -e /tmp/gtdb-gzip-dry-run && echo absent`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the documentation now needs to describe the storage-optimised bundled-data
+    layout and the explicit licensing split, both of which are implementation
+    clarifications beyond the frozen development plan
