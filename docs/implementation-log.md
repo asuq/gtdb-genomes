@@ -1106,3 +1106,29 @@ PY`
   - the README now describes shared failure rows in terms of accession sets as
     well as singular accessions, which is narrower and more accurate than the
     earlier wording
+
+### Commit `b07a400` - `docs(runtime): expose shipped contract and package checks`
+
+- Implemented:
+  - expanded the README with the shipped runtime contract so end users can see
+    the exact exit codes, fixed status vocabularies, and TSV column sets
+    without needing to consult the frozen development plan during normal use
+  - documented that non-Conda installation paths such as `pip install .` still
+    need `datasets` and `unzip` on `PATH` for real download runs
+  - added a Bioconda-template test command that checks the installed package
+    can resolve its bundled GTDB release manifest
+  - replaced the placeholder `license_file` field in the Bioconda template
+    with an explicit comment so the template no longer points at a file that
+    does not yet exist in the repository
+- Files:
+  - `README.md`
+  - `packaging/bioconda/meta.yaml`
+- Checks run:
+  - `.venv/bin/pytest -q`
+  - `.venv/bin/python -m gtdb_genomes --release 95 --taxon "s__Thermoflexus hugenholtzii" --output "$(mktemp -d /tmp/gtdb_review_final.XXXXXX)" --download-method direct --no-prefer-genbank --dry-run`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the README now embeds the shipped contract directly for runtime clarity
+    instead of treating the frozen development plan as the only authoritative
+    place where those values can be read
