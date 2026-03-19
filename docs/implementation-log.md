@@ -1616,3 +1616,39 @@ PY`
   - the README now also renames the non-existent environment-flag example from
     `--api-key-env` to `--ncbi-api-key-env` so the documentation stays aligned
     with the renamed public flag instead of preserving an obsolete prefix
+
+### Commit `a69a12a` - `docs(readme): expand datasets usage guidance`
+
+- Implemented:
+  - added top-of-file README badges for Python `>=3.12`, the latest GitHub
+    release for `asuq/gtdb-genome`, and the MIT licence
+  - rewrote the opening description so it now states more plainly that GTDB
+    taxonomy is bundled locally while NCBI metadata and download operations are
+    delegated to the NCBI `datasets` CLI
+  - replaced the plain blockquote `> Caution` with GitHub's rendered alert
+    syntax `> [!CAUTION]` so the existing legacy `UBA*` warning is highlighted
+    correctly in the repository README
+  - added a dedicated `NCBI datasets CLI` section that links to
+    `https://github.com/ncbi/datasets` and explains the concrete `datasets`
+    command families used by the tool for summary lookup, preview, direct
+    download, batch dehydrate, and rehydrate
+  - tightened the API-key wording so the README now says explicitly that
+    `--ncbi-api-key` expects an NCBI API key and that the key is used only for
+    the upstream `datasets` command, not for GTDB release resolution or local
+    taxonomy loading
+  - extended the README/docs assertions so the badge references, upstream
+    `datasets` link, NCBI-only API-key wording, and GitHub alert syntax remain
+    covered by tests
+- Files:
+  - `README.md`
+  - `tests/test_entrypoints.py`
+- Checks run:
+  - `.venv/bin/pytest -q tests/test_entrypoints.py`
+  - `.venv/bin/pytest -q`
+  - `sed -n '1,70p' README.md`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the README now depends on GitHub-oriented badge and alert syntax for better
+    rendering in the repository view, which is a presentation-level
+    improvement rather than a runtime behaviour change
