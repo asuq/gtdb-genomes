@@ -36,9 +36,7 @@ requirements:
 test:
   commands:
     - gtdb-genomes --help
-    # Add an installed-package check for bundled GTDB taxonomy files in the
-    # packaged gtdb_genomes/data/gtdb_taxonomy tree once a release artefact
-    # exists for recipe validation.
+    - python -c "from gtdb_genomes.release_resolver import get_release_manifest_path; path = get_release_manifest_path(); assert path.is_file(), path"
   imports:
     - gtdb_genomes
 
@@ -54,7 +52,8 @@ about:
     release resolution, the standard Python console entrypoint without any
     uv runtime requirement, and the packaged ncbi-datasets-cli dependency.
   license: TBD
-  license_file: LICENSE
+  # Replace the placeholder licence metadata with the real project licence
+  # before turning this template into a release recipe.
   doc_url: https://github.com/your-org/gtdb-genomes
   dev_url: https://github.com/your-org/gtdb-genomes
 

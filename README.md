@@ -42,6 +42,9 @@ Source-checkout development additionally uses:
 
 - `uv`
 
+Any installation path that runs the real downloader, including `pip install .`
+or a local wheel install, still requires `datasets` and `unzip` on `PATH`.
+
 ## Command Form
 
 ```bash
@@ -243,8 +246,74 @@ otherwise collide.
   - records lineage, accession mapping, output path, and whether the accession
     is duplicated across taxa
 
-Exact fixed column sets, exit codes, and status values remain defined in the
-frozen [Step-wise development plan](docs/development-plan.md).
+When a failure comes from one shared metadata, batch download, or rehydrate
+command, the affected taxa and accessions are collapsed into semicolon-joined
+values instead of being repeated once per accession.
+
+## Runtime Contract
+
+Exit codes:
+
+- `0`: full success
+- `2`: CLI usage or validation error
+- `3`: bundled GTDB data error
+- `4`: zero matches for all requested taxa
+- `5`: external tool or preflight error
+- `6`: partial failure with at least one successful genome
+- `7`: runtime failure with no successful genomes
+
+Status values:
+
+- `conversion_status`
+  - `unchanged_original`
+  - `paired_to_gca`
+  - `metadata_lookup_failed_fallback_original`
+  - `paired_to_gca_fallback_original_on_download_failure`
+  - `failed_no_usable_accession`
+- `download_status`
+  - `downloaded`
+  - `downloaded_after_fallback`
+  - `failed`
+- `download_failures.tsv.stage`
+  - `preflight`
+  - `metadata_lookup`
+  - `preview`
+  - `preferred_download`
+  - `fallback_download`
+  - `rehydrate`
+- `download_failures.tsv.final_status`
+  - `retry_scheduled`
+  - `retry_exhausted`
+  - `fallback_exhausted`
+
+Fixed TSV columns:
+
+- `run_summary.tsv`
+  - `run_id`, `started_at`, `finished_at`, `requested_release`,
+    `resolved_release`, `download_method_requested`, `download_method_used`,
+    `threads_requested`, `download_concurrency_used`,
+    `rehydrate_workers_used`, `include`, `prefer_genbank`, `debug_enabled`,
+    `requested_taxa_count`, `matched_rows`, `unique_gtdb_accessions`,
+    `final_accessions`, `successful_accessions`, `failed_accessions`,
+    `output_dir`, `exit_code`
+- `taxon_summary.tsv`
+  - `requested_taxon`, `taxon_slug`, `matched_rows`,
+    `unique_gtdb_accessions`, `final_accessions`, `successful_accessions`,
+    `failed_accessions`, `duplicate_copies_written`, `output_dir`
+- `accession_map.tsv`
+  - `requested_taxon`, `taxon_slug`, `resolved_release`, `taxonomy_file`,
+    `lineage`, `gtdb_accession`, `final_accession`,
+    `accession_type_original`, `accession_type_final`, `conversion_status`,
+    `download_method_used`, `download_batch`, `output_relpath`,
+    `download_status`
+- `download_failures.tsv`
+  - `requested_taxon`, `taxon_slug`, `gtdb_accession`,
+    `attempted_accession`, `final_accession`, `stage`, `attempt_index`,
+    `max_attempts`, `error_type`, `error_message_redacted`, `final_status`
+- `OUTPUT/taxa/<taxon_slug>/taxon_accessions.tsv`
+  - `requested_taxon`, `taxon_slug`, `lineage`, `gtdb_accession`,
+    `final_accession`, `conversion_status`, `output_relpath`,
+    `download_status`, `duplicate_across_taxa`
 
 ## Bundled GTDB Taxonomy
 
