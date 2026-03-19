@@ -9,6 +9,7 @@ import pytest
 
 from gtdb_genomes.cli import main
 from gtdb_genomes.download import CommandFailureRecord, PreviewError
+from gtdb_genomes.metadata import SummaryLookupResult
 from gtdb_genomes.workflow import AccessionExecution
 
 
@@ -78,7 +79,10 @@ def test_auto_preview_failure_returns_exit_code_five_without_output_tree(
             "d__Bacteria;p__Proteobacteria;g__Escherichia",
         ),
     )
-    monkeypatch.setattr("gtdb_genomes.workflow.run_summary_lookup", lambda *args, **kwargs: {})
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.run_summary_lookup_with_retries",
+        lambda *args, **kwargs: SummaryLookupResult(summary_map={}, failures=()),
+    )
     monkeypatch.setattr(
         "gtdb_genomes.workflow.run_preview_command",
         lambda *args, **kwargs: (_ for _ in ()).throw(PreviewError("preview failed")),
@@ -118,7 +122,10 @@ def test_total_runtime_failure_leaves_final_accession_blank(
             "d__Bacteria;p__Proteobacteria;g__Escherichia",
         ),
     )
-    monkeypatch.setattr("gtdb_genomes.workflow.run_summary_lookup", lambda *args, **kwargs: {})
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.run_summary_lookup_with_retries",
+        lambda *args, **kwargs: SummaryLookupResult(summary_map={}, failures=()),
+    )
 
     def fake_execute_accession_plans(*args, **kwargs) -> dict[str, AccessionExecution]:
         """Return a failed accession execution for the synthetic run."""

@@ -50,7 +50,7 @@ from gtdb_genomes.metadata import (
     MetadataLookupError,
     apply_accession_preferences,
     build_summary_command,
-    run_summary_lookup,
+    run_summary_lookup_with_retries,
 )
 from gtdb_genomes.release_resolver import (
     BundledDataError,
@@ -473,10 +473,11 @@ def run_workflow(args: CliArgs) -> int:
         )
         logger.debug("Running %s", redact_command(metadata_command, secrets))
         try:
-            summary_map = run_summary_lookup(
+            summary_lookup = run_summary_lookup_with_retries(
                 selected_frame.get_column("ncbi_accession").unique().to_list(),
                 api_key=args.api_key,
             )
+            summary_map = summary_lookup.summary_map
         except MetadataLookupError as error:
             logger.warning(
                 "Metadata lookup failed; falling back to original accessions: %s",

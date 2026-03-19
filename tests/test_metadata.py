@@ -12,6 +12,7 @@ from gtdb_genomes.metadata import (
     apply_accession_preferences,
     build_summary_command,
     run_summary_lookup,
+    run_summary_lookup_with_retries,
 )
 
 
@@ -160,6 +161,128 @@ def test_apply_accession_preferences_emits_fixed_status_values() -> None:
             "conversion_status": "metadata_lookup_failed_fallback_original",
         },
     ]
+
+
+def test_apply_accession_preferences_uses_shared_numeric_identifier() -> None:
+    """Only GCA accessions with the same numeric identifier should pair."""
+
+    selection_frame = pl.DataFrame(
+        {
+            "gtdb_accession": ["RS_GCF_000001.2"],
+            "ncbi_accession": ["GCF_000001.2"],
+        },
+    )
+
+    mapped = apply_accession_preferences(
+        selection_frame,
+        {
+            "GCF_000001.2": {
+                "GCF_000001.2",
+                "GCA_000001.1",
+                "GCA_000001.3",
+                "GCA_999999.9",
+            },
+        },
+    )
+
+    assert mapped.select("final_accession", "conversion_status").rows(
+        named=True,
+    ) == [
+        {
+            "final_accession": "GCA_000001.3",
+            "conversion_status": "paired_to_gca",
+        },
+    ]
+
+
+def test_run_summary_lookup_with_retries_retries_invalid_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Invalid JSON should consume the metadata retry budget."""
+
+    attempts = iter(
+        [
+            subprocess.CompletedProcess(
+                ["datasets"],
+                0,
+                stdout="{not json}\n",
+                stderr="",
+            ),
+            subprocess.CompletedProcess(
+                ["datasets"],
+                0,
+                stdout="{still not json}\n",
+                stderr="",
+            ),
+            subprocess.CompletedProcess(
+                ["datasets"],
+                0,
+                stdout='{"accession":"GCF_000001.1","paired":"GCA_000001.1"}\n',
+                stderr="",
+            ),
+        ],
+    )
+    sleep_calls: list[float] = []
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        """Return retryable metadata responses."""
+
+        return next(attempts)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = run_summary_lookup_with_retries(
+        ["GCF_000001.1"],
+        sleep_func=sleep_calls.append,
+    )
+
+    assert result.summary_map == {
+        "GCF_000001.1": {"GCF_000001.1", "GCA_000001.1"},
+    }
+    assert sleep_calls == [5, 15]
+    assert [failure.final_status for failure in result.failures] == [
+        "retry_scheduled",
+        "retry_scheduled",
+    ]
+
+
+def test_run_summary_lookup_with_retries_raises_after_full_retry_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Metadata lookup should fail only after the full retry budget."""
+
+    attempts = iter([1, 1, 1, 1])
+    sleep_calls: list[float] = []
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        """Return repeated metadata lookup failures."""
+
+        return subprocess.CompletedProcess(
+            command,
+            next(attempts),
+            stdout="",
+            stderr="metadata lookup failed",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(MetadataLookupError, match="metadata lookup failed"):
+        run_summary_lookup_with_retries(
+            ["GCF_000001.1"],
+            sleep_func=sleep_calls.append,
+        )
+
+    assert sleep_calls == [5, 15, 45]
 
 
 def test_apply_accession_preferences_honours_disabled_gca_preference() -> None:
