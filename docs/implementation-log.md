@@ -1550,3 +1550,69 @@ PY`
   - the documentation now needs to describe the storage-optimised bundled-data
     layout and the explicit licensing split, both of which are implementation
     clarifications beyond the frozen development plan
+
+### Commit `5937a4f` - `refactor(cli): rename api key option to ncbi-api-key`
+
+- Implemented:
+  - renamed the public CLI option from `--api-key` to `--ncbi-api-key` with no
+    compatibility alias, so older command lines now fail fast instead of being
+    silently accepted
+  - renamed the normalised CLI field and the internal Python plumbing from
+    generic `api_key` names to `ncbi_api_key`, covering the CLI dataclass,
+    workflow calls, metadata lookup helpers, preview helpers, direct download
+    helpers, and dehydrate helpers
+  - kept the external `datasets` subprocess interface unchanged by continuing to
+    forward the value as the upstream `datasets --api-key` flag
+  - added parser regression coverage proving that `--ncbi-api-key` parses
+    correctly and that the removed legacy `--api-key` flag is rejected
+- Files:
+  - `src/gtdb_genomes/cli.py`
+  - `src/gtdb_genomes/download.py`
+  - `src/gtdb_genomes/metadata.py`
+  - `src/gtdb_genomes/workflow.py`
+  - `tests/test_cli.py`
+  - `tests/test_cli_integration.py`
+  - `tests/test_download.py`
+  - `tests/test_edge_contract.py`
+  - `tests/test_metadata.py`
+- Checks run:
+  - `.venv/bin/pytest -q tests/test_cli.py tests/test_cli_integration.py tests/test_metadata.py tests/test_download.py tests/test_entrypoints.py tests/test_edge_contract.py`
+  - `.venv/bin/pytest -q`
+  - `PYTHONPATH=src .venv/bin/python -m gtdb_genomes --help | sed -n '1,80p'`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the internal naming was tightened as well as the public flag so the code
+    and docs no longer mix a generic `api_key` label with an NCBI-specific
+    command-line interface
+
+### Commit `c7a9d7e` - `docs(readme): rename api key flag references`
+
+- Implemented:
+  - updated the README option list, example command, and API-key handling
+    section to use `--ncbi-api-key`
+  - clarified in the README that `--ncbi-api-key` expects an NCBI API key and
+    is used only for the upstream `datasets` command, not for GTDB resolution
+    or local taxonomy loading
+  - updated the real-data validation guide and local/remote runner scripts so
+    the runner-generated commands also use `--ncbi-api-key`
+  - renamed the shared runner helper to `real_data_require_ncbi_api_key`
+  - extended the README/docs test to lock in the new public flag name and the
+    explicit NCBI-only usage wording
+- Files:
+  - `README.md`
+  - `docs/real-data-validation.md`
+  - `bin/real-data-test-common.sh`
+  - `bin/run-real-data-tests-local.sh`
+  - `bin/run-real-data-tests-remote.sh`
+  - `tests/test_entrypoints.py`
+- Checks run:
+  - `bash -n bin/real-data-test-common.sh bin/run-real-data-tests-local.sh bin/run-real-data-tests-remote.sh`
+  - `.venv/bin/pytest -q tests/test_cli.py tests/test_cli_integration.py tests/test_metadata.py tests/test_download.py tests/test_entrypoints.py tests/test_edge_contract.py`
+  - `.venv/bin/pytest -q`
+- Match to frozen plan:
+  - no, by design
+- Deviations:
+  - the README now also renames the non-existent environment-flag example from
+    `--api-key-env` to `--ncbi-api-key-env` so the documentation stays aligned
+    with the renamed public flag instead of preserving an obsolete prefix
