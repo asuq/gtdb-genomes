@@ -3015,3 +3015,86 @@ PY`
   - the bundled GTDB taxonomy payload remains in the archives; this change
     corrects the archive metadata and packaged notices rather than switching to
     an MIT-only package layout
+
+### Commit `adae0c2` - `chore(bioconda): prepare recipe metadata for release`
+
+- Implemented:
+  - updated `packaging/bioconda/meta.yaml` from a placeholder recipe to a
+    pre-release-ready recipe targeting version `0.1.0`
+  - replaced the placeholder source host with the intended GitHub release
+    sdist asset path for `asuq/gtdb-genome`, while keeping the SHA256 field
+    intentionally unresolved until the first public release artefact exists
+  - switched the Conda build script to
+    `{{ PYTHON }} -m pip install . --no-deps --no-build-isolation -vv` so the
+    Conda-hosted Hatchling backend is used during recipe builds
+  - replaced the placeholder home, docs, and development URLs with the real
+    upstream repository metadata
+  - replaced the template description and maintainer placeholder with the
+    intended end-user package description and maintainer handle
+- Why:
+  - the checked-in recipe still used placeholder values such as `0.0.0`,
+    `example.org`, and dummy maintainer metadata, so it could not serve as a
+    reliable pre-release handoff for the first Bioconda submission
+  - using `--no-build-isolation` keeps the Conda build path aligned with the
+    declared host requirements instead of letting pip create its own isolated
+    build environment
+  - moving to the real upstream URLs now narrows the remaining release work to
+    the published source archive URL and its checksum
+- Files:
+  - `packaging/bioconda/meta.yaml`
+- Checks run:
+  - `.venv/bin/pytest -q tests/test_entrypoints.py`
+- Match to requested change:
+  - yes
+- Deviations:
+  - the recipe still carries an unresolved SHA256 placeholder by design,
+    because the first public release asset does not exist yet
+
+### Commit `9b178e8` - `docs(readme): reflect bioconda pre-release status`
+
+- Implemented:
+  - updated the root `README.md` installation section to say the Bioconda
+    recipe is prepared for the first public release rather than calling it a
+    generic template
+  - clarified that the remaining packaging work is the published release sdist
+    archive and final SHA256 checksum
+  - updated the development-and-packaging summary and additional-documents link
+    text so the README language matches the new pre-release-ready recipe state
+- Why:
+  - once the recipe metadata moved to the real upstream project, calling it a
+    template became misleading for users and future maintainers
+  - the remaining gap before submission is now specifically the release
+    artefact publication step, so the README should say that directly
+- Files:
+  - `README.md`
+- Checks run:
+  - `.venv/bin/pytest -q tests/test_entrypoints.py`
+- Match to requested change:
+  - yes
+- Deviations:
+  - none
+
+### Commit `a0f3d47` - `test(packaging): lock bioconda pre-release metadata`
+
+- Implemented:
+  - updated `tests/test_entrypoints.py` so the documentation assertions now
+    expect the new README wording about first-release readiness instead of the
+    old template wording
+  - added coverage for the Bioconda recipe's new non-isolated pip build script
+  - added a dedicated recipe assertion block that rejects the old placeholder
+    values and locks the real upstream version, URLs, and maintainer metadata
+- Why:
+  - the packaging-facing test coverage previously allowed the repository to
+    drift back toward placeholder recipe metadata without failing locally
+  - the README wording change needed matching assertions so the documentation
+    contract stayed intentional and reviewable
+- Files:
+  - `tests/test_entrypoints.py`
+- Checks run:
+  - `.venv/bin/pytest -q tests/test_entrypoints.py`
+- Match to requested change:
+  - yes
+- Deviations:
+  - the README assertion was written against wrapped Markdown text, so the test
+    checks the key phrases separately instead of relying on one long
+    single-line substring
