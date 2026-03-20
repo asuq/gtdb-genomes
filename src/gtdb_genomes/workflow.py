@@ -60,6 +60,7 @@ from gtdb_genomes.metadata import (
 from gtdb_genomes.preflight import check_required_tools, get_required_tools
 from gtdb_genomes.release_resolver import (
     BundledDataError,
+    ReleaseResolution,
     resolve_and_validate_release,
 )
 from gtdb_genomes.selection import (
@@ -138,6 +139,26 @@ class DirectBatchPhaseResult:
     executions: dict[str, AccessionExecution]
     unresolved_groups: tuple[tuple[str, tuple[AccessionPlan, ...]], ...]
     shared_failures: tuple[SharedFailureContext, ...]
+
+
+@dataclass(slots=True)
+class WorkflowSelectionPhase:
+    """Selected rows and support split for one workflow run."""
+
+    resolution: ReleaseResolution
+    selected_frame: pl.DataFrame
+    supported_selected_frame: pl.DataFrame
+    unsupported_selected_frame: pl.DataFrame
+
+
+@dataclass(slots=True)
+class WorkflowPlanningPhase:
+    """Planned download inputs after preference resolution and preview."""
+
+    mapped_frame: pl.DataFrame
+    metadata_failures: tuple[CommandFailureRecord, ...]
+    accession_plans: tuple[AccessionPlan, ...]
+    decision_method: str
 
 
 UNSUPPORTED_UBA_PREFIX = "UBA"
@@ -643,6 +664,12 @@ def execute_direct_batch_phase(
         pending_request_accessions = tuple(
             request_accession for request_accession, _ in pending_groups
         )
+        logger.info(
+            "%s: starting %s for %d request accession(s)",
+            batch_label,
+            batch_stage,
+            len(pending_request_accessions),
+        )
         affected_original_accessions = tuple(
             plan.original_accession
             for _, grouped_plans in pending_groups
@@ -676,6 +703,11 @@ def execute_direct_batch_phase(
             attempted_accession=batch_attempted_accessions,
         )
         if not batch_result.succeeded:
+            logger.warning(
+                "%s: %s failed before payload extraction",
+                batch_label,
+                batch_stage,
+            )
             shared_failures.append(
                 build_shared_failure_context(
                     affected_original_accessions,
@@ -693,6 +725,11 @@ def execute_direct_batch_phase(
         try:
             extract_archive(archive_path, extraction_root)
         except LayoutError as error:
+            logger.warning(
+                "%s: extraction failed after %s",
+                batch_label,
+                batch_stage,
+            )
             shared_failures.append(
                 build_shared_failure_context(
                     affected_original_accessions,
@@ -711,6 +748,8 @@ def execute_direct_batch_phase(
             pending_request_accessions,
         )
         made_progress = bool(resolution.resolved_payloads)
+        # Keep retrying only while a pass resolves something; repeated
+        # no-progress passes would only re-run the same failing batch.
         can_retry = attempt_index < MAX_DIRECT_BATCH_PASSES and made_progress
         unresolved_groups: list[tuple[str, tuple[AccessionPlan, ...]]] = []
         final_status = "retry_scheduled" if can_retry else "retry_exhausted"
@@ -740,6 +779,13 @@ def execute_direct_batch_phase(
             for plan in grouped_plans:
                 failure_history[plan.original_accession].append(failure_record)
             unresolved_groups.append((request_accession, grouped_plans))
+
+        logger.info(
+            "%s: completed with %d resolved and %d pending request accession(s)",
+            batch_label,
+            len(resolution.resolved_payloads),
+            len(unresolved_groups),
+        )
 
         if not unresolved_groups:
             return DirectBatchPhaseResult(
@@ -805,6 +851,8 @@ def execute_direct_accession_plans(
 
     preferred_unresolved_plans: list[AccessionPlan] = []
     fallback_groups: list[tuple[str, tuple[AccessionPlan, ...]]] = []
+    # Only rows that switched to a preferred request accession can later retry
+    # against their original accession in the fallback phase.
     for _, grouped_plans in preferred_phase.unresolved_groups:
         for plan in grouped_plans:
             preferred_unresolved_plans.append(plan)
@@ -897,6 +945,10 @@ def execute_batch_dehydrate_plans(
             plan.download_request_accession for plan in plans
         ),
     )
+    logger.info(
+        "dehydrated_batch: starting preferred_download for %d request accession(s)",
+        len(plans),
+    )
     affected_original_accessions = tuple(
         plan.original_accession for plan in plans
     )
@@ -931,6 +983,7 @@ def execute_batch_dehydrate_plans(
             ),
             rehydrate_workers_used=0,
         )
+    logger.info("dehydrated_batch: download archive completed")
 
     extraction_root = run_directories.extracted_root / "dehydrated_batch"
     try:
@@ -950,6 +1003,10 @@ def execute_batch_dehydrate_plans(
         )
 
     rehydrate_workers = get_rehydrate_workers(args.threads)
+    logger.info(
+        "dehydrated_batch: starting rehydrate with %d worker(s)",
+        rehydrate_workers,
+    )
     rehydrate_command = build_rehydrate_command(
         extraction_root,
         rehydrate_workers,
@@ -975,6 +1032,7 @@ def execute_batch_dehydrate_plans(
             ),
             rehydrate_workers_used=rehydrate_workers,
         )
+    logger.info("dehydrated_batch: rehydrate completed")
 
     shared_failures = build_shared_failure_context(
         affected_original_accessions,
@@ -1011,6 +1069,10 @@ def execute_batch_dehydrate_plans(
             ),
             rehydrate_workers_used=rehydrate_workers,
         )
+    logger.info(
+        "dehydrated_batch: completed with %d resolved accession(s)",
+        len(executions),
+    )
 
     return DownloadExecutionResult(
         executions=executions,
@@ -1033,6 +1095,10 @@ def fallback_batch_to_direct(
 
     logger.warning(
         "Batch dehydrated download failed; falling back to batch direct downloads",
+    )
+    logger.info(
+        "Starting direct fallback for %d accession plan(s)",
+        len(plans),
     )
     direct_result = execute_direct_accession_plans(
         plans,
@@ -1342,6 +1408,10 @@ def resolve_supported_accession_preferences(
         supported_selected_frame.get_column("ncbi_accession").to_list(),
     )
     if not supported_selected_frame.is_empty() and args.prefer_genbank:
+        logger.info(
+            "Running metadata lookup for %d supported accession(s)",
+            len(supported_accessions),
+        )
         with create_staging_directory("gtdb_genomes_metadata_") as metadata_directory:
             metadata_accession_file = write_accession_input_file(
                 Path(metadata_directory) / "accessions.txt",
@@ -1360,6 +1430,10 @@ def resolve_supported_accession_preferences(
                 )
                 summary_map = summary_lookup.summary_map
                 metadata_failures = summary_lookup.failures
+                logger.info(
+                    "Metadata lookup finished with %d preferred mapping(s)",
+                    len(summary_map),
+                )
             except MetadataLookupError as error:
                 metadata_failures = error.failures
                 logger.warning(
@@ -1424,106 +1498,210 @@ def plan_supported_downloads(
     return accession_plans, decision.method_used
 
 
-def run_workflow(args: CliArgs) -> int:
-    """Run the documented workflow and return the process exit code."""
+def count_unique_accessions(frame: pl.DataFrame) -> int:
+    """Return the number of unique accession values in one selection frame."""
 
-    logger, _ = configure_logging(debug=args.debug, dry_run=args.dry_run)
-    secrets = tuple(secret for secret in (args.ncbi_api_key,) if secret)
-    started_at = datetime.now(UTC).isoformat()
+    if frame.is_empty():
+        return 0
+    return len(
+        get_ordered_unique_accessions(
+            frame.get_column("ncbi_accession").to_list(),
+        ),
+    )
 
-    try:
-        resolution = resolve_and_validate_release(args.gtdb_release)
-        taxonomy_frame = load_release_taxonomy(resolution)
-    except BundledDataError as error:
-        logger.error("%s", error)
-        close_logger(logger)
-        return 3
 
+def log_run_start(
+    logger: logging.Logger,
+    args: CliArgs,
+) -> None:
+    """Log the user-facing start summary for one workflow run."""
+
+    logger.info(
+        "Starting run: release=%s taxa=%d outdir=%s dry_run=%s",
+        args.gtdb_release,
+        len(args.gtdb_taxa),
+        args.outdir,
+        str(args.dry_run).lower(),
+    )
+
+
+def log_run_finish(
+    logger: logging.Logger,
+    *,
+    successful_count: int,
+    failed_count: int,
+    exit_code: int,
+) -> None:
+    """Log the final high-level outcome for one workflow run."""
+
+    logger.info(
+        "Run finished: successful_accessions=%d failed_accessions=%d exit_code=%d",
+        successful_count,
+        failed_count,
+        exit_code,
+    )
+
+
+def prepare_selection_phase(
+    args: CliArgs,
+    logger: logging.Logger,
+) -> WorkflowSelectionPhase:
+    """Load bundled data, resolve the release, and select matching taxonomy rows."""
+
+    resolution = resolve_and_validate_release(args.gtdb_release)
+    taxonomy_frame = load_release_taxonomy(resolution)
     selected_frame = attach_taxon_slugs(
         select_taxa(taxonomy_frame, args.gtdb_taxa),
         args.gtdb_taxa,
     )
-
-    if selected_frame.is_empty():
-        if args.dry_run:
-            logger.warning("No genomes matched the requested taxa")
-            close_logger(logger)
-            return 4
-
-        run_directories = initialise_run_directories(args.outdir)
-        close_logger(logger)
-        logger, _ = configure_logging(
-            debug=args.debug,
-            dry_run=False,
-            output_root=run_directories.output_root,
-        )
-        taxon_slug_map = build_taxon_slug_map(args.gtdb_taxa)
-        exit_code = 4
-        run_summary_rows = [
-            build_run_summary_row(
-                args,
-                args.gtdb_release,
-                resolution.resolved_release,
-                args.download_method,
-                0,
-                0,
-                0,
-                [],
-                run_directories.output_root,
-                exit_code,
-                started_at,
-                datetime.now(UTC).isoformat(),
-            ),
-        ]
-        taxon_summary_rows = [
-            {
-                "requested_taxon": requested_taxon,
-                "taxon_slug": taxon_slug_map[requested_taxon],
-                "matched_rows": 0,
-                "unique_gtdb_accessions": 0,
-                "final_accessions": 0,
-                "successful_accessions": 0,
-                "failed_accessions": 0,
-                "duplicate_copies_written": 0,
-                "output_dir": str(
-                    run_directories.taxa_root / taxon_slug_map[requested_taxon],
-                ),
-            }
-            for requested_taxon in args.gtdb_taxa
-        ]
-        write_zero_match_outputs(
-            run_directories,
-            args.gtdb_taxa,
-            taxon_slug_map,
-            run_summary_rows,
-            taxon_summary_rows,
-        )
-        logger.warning("No genomes matched the requested taxa")
-        close_logger(logger)
-        if not args.keep_temp:
-            cleanup_working_directories(run_directories)
-        return exit_code
-
     supported_selected_frame, unsupported_selected_frame = (
         split_selected_rows_by_accession_support(selected_frame)
     )
-    if not unsupported_selected_frame.is_empty():
-        logger.warning(build_unsupported_uba_warning(unsupported_selected_frame))
-    if not supported_selected_frame.is_empty():
-        required_tools = get_required_tools(
-            dry_run=args.dry_run,
-        )
-        if required_tools:
-            check_required_tools(required_tools)
+    logger.info(
+        "Resolved bundled release %s and matched %d taxonomy row(s)",
+        resolution.resolved_release,
+        selected_frame.height,
+    )
+    logger.info(
+        "Selected %d supported accession(s) and %d unsupported legacy accession(s)",
+        count_unique_accessions(supported_selected_frame),
+        count_unique_accessions(unsupported_selected_frame),
+    )
+    return WorkflowSelectionPhase(
+        resolution=resolution,
+        selected_frame=selected_frame,
+        supported_selected_frame=supported_selected_frame,
+        unsupported_selected_frame=unsupported_selected_frame,
+    )
+
+
+def run_early_dry_run_unzip_check(
+    args: CliArgs,
+    logger: logging.Logger,
+) -> None:
+    """Check `unzip` early so dry-runs surface the real-run requirement sooner."""
+
+    if not args.dry_run:
+        return
+    logger.info("Checking unzip availability for dry-run")
+    check_required_tools(("unzip",))
+
+
+def handle_zero_match_exit(
+    args: CliArgs,
+    logger: logging.Logger,
+    selection_phase: WorkflowSelectionPhase,
+    started_at: str,
+) -> int | None:
+    """Handle the zero-match path and return its exit code when it applies."""
+
+    if not selection_phase.selected_frame.is_empty():
+        return None
+
+    if args.dry_run:
+        logger.warning("No genomes matched the requested taxa")
+        log_run_finish(logger, successful_count=0, failed_count=0, exit_code=4)
+        return 4
+
+    run_directories = initialise_run_directories(args.outdir)
+    logger = reconfigure_output_logger(args, logger, run_directories)
+    logger.info("Writing output manifests to %s", run_directories.output_root)
+    taxon_slug_map = build_taxon_slug_map(args.gtdb_taxa)
+    exit_code = 4
+    run_summary_rows = [
+        build_run_summary_row(
+            args,
+            args.gtdb_release,
+            selection_phase.resolution.resolved_release,
+            args.download_method,
+            0,
+            0,
+            0,
+            [],
+            run_directories.output_root,
+            exit_code,
+            started_at,
+            datetime.now(UTC).isoformat(),
+        ),
+    ]
+    taxon_summary_rows = [
+        {
+            "requested_taxon": requested_taxon,
+            "taxon_slug": taxon_slug_map[requested_taxon],
+            "matched_rows": 0,
+            "unique_gtdb_accessions": 0,
+            "final_accessions": 0,
+            "successful_accessions": 0,
+            "failed_accessions": 0,
+            "duplicate_copies_written": 0,
+            "output_dir": str(
+                run_directories.taxa_root / taxon_slug_map[requested_taxon],
+            ),
+        }
+        for requested_taxon in args.gtdb_taxa
+    ]
+    write_zero_match_outputs(
+        run_directories,
+        args.gtdb_taxa,
+        taxon_slug_map,
+        run_summary_rows,
+        taxon_summary_rows,
+    )
+    logger.warning("No genomes matched the requested taxa")
+    log_run_finish(logger, successful_count=0, failed_count=0, exit_code=exit_code)
+    close_logger(logger)
+    if not args.keep_temp:
+        cleanup_working_directories(run_directories)
+    return exit_code
+
+
+def reconfigure_output_logger(
+    args: CliArgs,
+    logger: logging.Logger,
+    run_directories: RunDirectories,
+) -> logging.Logger:
+    """Switch from console-only logging to the output-root logger when needed."""
+
+    close_logger(logger)
+    logger, _ = configure_logging(
+        debug=args.debug,
+        dry_run=False,
+        output_root=run_directories.output_root,
+    )
+    return logger
+
+
+def run_supported_preflight(
+    args: CliArgs,
+    selection_phase: WorkflowSelectionPhase,
+) -> None:
+    """Check tools that are required for supported accession planning or runs."""
+
+    if selection_phase.supported_selected_frame.is_empty():
+        return
+    required_tools = get_required_tools(
+        dry_run=args.dry_run,
+    )
+    if required_tools:
+        check_required_tools(required_tools)
+
+
+def prepare_planning_phase(
+    args: CliArgs,
+    logger: logging.Logger,
+    secrets: tuple[str, ...],
+    selection_phase: WorkflowSelectionPhase,
+) -> WorkflowPlanningPhase:
+    """Resolve accession preferences and plan the supported download strategy."""
 
     supported_mapped_frame, metadata_failures = resolve_supported_accession_preferences(
-        supported_selected_frame,
+        selection_phase.supported_selected_frame,
         args,
         logger,
         secrets,
     )
     unsupported_mapped_frame = build_unsupported_accession_frame(
-        unsupported_selected_frame,
+        selection_phase.unsupported_selected_frame,
     )
     mapped_frame = pl.concat(
         [
@@ -1533,55 +1711,73 @@ def run_workflow(args: CliArgs) -> int:
         ],
         how="vertical",
     )
-    try:
-        accession_plans, decision_method = plan_supported_downloads(
-            supported_mapped_frame,
-            args,
-            logger,
-            secrets,
-        )
-    except PreviewError as error:
-        logger.error("%s", redact_text(str(error), secrets))
-        close_logger(logger)
-        return 5
-
-    if args.dry_run:
-        close_logger(logger)
-        return 0
-
-    run_directories = initialise_run_directories(args.outdir)
-    close_logger(logger)
-    logger, _ = configure_logging(
-        debug=args.debug,
-        dry_run=False,
-        output_root=run_directories.output_root,
+    accession_plans, decision_method = plan_supported_downloads(
+        supported_mapped_frame,
+        args,
+        logger,
+        secrets,
+    )
+    logger.info(
+        "Automatic planning selected %s for %d supported accession(s)",
+        decision_method,
+        len(accession_plans),
+    )
+    return WorkflowPlanningPhase(
+        mapped_frame=mapped_frame,
+        metadata_failures=metadata_failures,
+        accession_plans=accession_plans,
+        decision_method=decision_method,
     )
 
-    if accession_plans:
-        execution_result = execute_accession_plans(
-            accession_plans,
-            args,
-            decision_method,
-            run_directories,
-            logger,
-            secrets,
-        )
-    else:
-        execution_result = DownloadExecutionResult(
+
+def build_execution_result(
+    args: CliArgs,
+    logger: logging.Logger,
+    run_directories: RunDirectories,
+    secrets: tuple[str, ...],
+    planning_phase: WorkflowPlanningPhase,
+) -> DownloadExecutionResult:
+    """Execute the planned supported downloads for one real run."""
+
+    if not planning_phase.accession_plans:
+        return DownloadExecutionResult(
             executions={},
             method_used=args.download_method,
             download_concurrency_used=0,
             rehydrate_workers_used=0,
             shared_failures=(),
         )
+    return execute_accession_plans(
+        planning_phase.accession_plans,
+        args,
+        planning_phase.decision_method,
+        run_directories,
+        logger,
+        secrets,
+    )
+
+
+def build_enriched_output_rows(
+    selection_phase: WorkflowSelectionPhase,
+    planning_phase: WorkflowPlanningPhase,
+    execution_result: DownloadExecutionResult,
+    run_directories: RunDirectories,
+    logger: logging.Logger,
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, Any]],
+    dict[str, list[dict[str, Any]]],
+    dict[str, int],
+]:
+    """Build manifest rows and copy payloads into their final taxon directories."""
+
     executions = {
         **execution_result.executions,
-        **build_unsupported_executions(unsupported_selected_frame),
+        **build_unsupported_executions(selection_phase.unsupported_selected_frame),
     }
-
     enriched_rows: list[dict[str, Any]] = []
     supported_enriched_rows: list[dict[str, Any]] = []
-    for row in mapped_frame.rows(named=True):
+    for row in planning_phase.mapped_frame.rows(named=True):
         execution = executions[row["ncbi_accession"]]
         final_accession = execution.final_accession or ""
         unsupported_accession = is_unsupported_uba_accession(row["ncbi_accession"])
@@ -1589,7 +1785,7 @@ def run_workflow(args: CliArgs) -> int:
             {
                 "requested_taxon": row["requested_taxon"],
                 "taxon_slug": row["taxon_slug"],
-                "resolved_release": resolution.resolved_release,
+                "resolved_release": selection_phase.resolution.resolved_release,
                 "taxonomy_file": row["taxonomy_file"],
                 "lineage": row["lineage"],
                 "gtdb_accession": row["gtdb_accession"],
@@ -1618,6 +1814,8 @@ def run_workflow(args: CliArgs) -> int:
     duplicate_counts: dict[str, int] = defaultdict(int)
     per_taxon_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
+    # Copy once per taxon-accession pair, then reuse the recorded path for
+    # duplicate rows that point to the same final payload within that taxon.
     for row in enriched_rows:
         if row["download_status"] != "failed" and row["final_accession"]:
             row["duplicate_across_taxa"] = row["final_accession"] in duplicate_accessions
@@ -1668,10 +1866,64 @@ def run_workflow(args: CliArgs) -> int:
             },
         )
 
+    return enriched_rows, supported_enriched_rows, per_taxon_rows, duplicate_counts
+
+
+def resolve_exit_code(
+    enriched_rows: list[dict[str, Any]],
+) -> tuple[int, int, int]:
+    """Return success count, failure count, and workflow exit code."""
+
+    successful_count = len(
+        {
+            row["final_accession"]
+            for row in enriched_rows
+            if row["download_status"] != "failed" and row["final_accession"]
+        },
+    )
+    failed_count = len(
+        {
+            row["gtdb_accession"]
+            for row in enriched_rows
+            if row["download_status"] == "failed"
+        },
+    )
+    if failed_count == 0:
+        return successful_count, failed_count, 0
+    if successful_count > 0:
+        return successful_count, failed_count, 6
+    return successful_count, failed_count, 7
+
+
+def materialise_real_run_outputs(
+    args: CliArgs,
+    logger: logging.Logger,
+    run_directories: RunDirectories,
+    started_at: str,
+    selection_phase: WorkflowSelectionPhase,
+    planning_phase: WorkflowPlanningPhase,
+    execution_result: DownloadExecutionResult,
+    secrets: tuple[str, ...],
+) -> int:
+    """Copy payloads, write manifests, and return the final exit code."""
+
+    logger.info("Writing output manifests to %s", run_directories.output_root)
+    enriched_rows, supported_enriched_rows, per_taxon_rows, duplicate_counts = (
+        build_enriched_output_rows(
+            selection_phase,
+            planning_phase,
+            execution_result,
+            run_directories,
+            logger,
+        )
+    )
     failure_rows = build_failure_rows(
         enriched_rows,
-        executions,
-        metadata_failures,
+        {
+            **execution_result.executions,
+            **build_unsupported_executions(selection_phase.unsupported_selected_frame),
+        },
+        planning_phase.metadata_failures,
         execution_result.shared_failures,
         secrets,
         shared_context_rows=supported_enriched_rows,
@@ -1681,32 +1933,16 @@ def run_workflow(args: CliArgs) -> int:
         duplicate_counts,
         run_directories,
     )
-    successful_count = len(
-        {
-            row["final_accession"]
-            for row in enriched_rows
-            if row["download_status"] != "failed" and row["final_accession"]
-        },
-    )
-    failed_count = len(
-        {row["gtdb_accession"] for row in enriched_rows if row["download_status"] == "failed"},
-    )
-    if failed_count == 0:
-        exit_code = 0
-    elif successful_count > 0:
-        exit_code = 6
-    else:
-        exit_code = 7
-
+    successful_count, failed_count, exit_code = resolve_exit_code(enriched_rows)
     run_summary_rows = [
         build_run_summary_row(
             args,
             args.gtdb_release,
-            resolution.resolved_release,
+            selection_phase.resolution.resolved_release,
             execution_result.method_used,
             execution_result.download_concurrency_used,
             execution_result.rehydrate_workers_used,
-            mapped_frame.height,
+            planning_phase.mapped_frame.height,
             enriched_rows,
             run_directories.output_root,
             exit_code,
@@ -1741,7 +1977,91 @@ def run_workflow(args: CliArgs) -> int:
     )
     for taxon_slug, rows in per_taxon_rows.items():
         write_taxon_accessions(run_directories, taxon_slug, rows)
+    log_run_finish(
+        logger,
+        successful_count=successful_count,
+        failed_count=failed_count,
+        exit_code=exit_code,
+    )
+    return exit_code
 
+
+def run_workflow(args: CliArgs) -> int:
+    """Run the documented workflow and return the process exit code."""
+
+    logger, _ = configure_logging(debug=args.debug, dry_run=args.dry_run)
+    secrets = tuple(secret for secret in (args.ncbi_api_key,) if secret)
+    started_at = datetime.now(UTC).isoformat()
+    log_run_start(logger, args)
+
+    try:
+        # Phase 1: bundled release resolution and GTDB taxon selection.
+        selection_phase = prepare_selection_phase(args, logger)
+        run_early_dry_run_unzip_check(args, logger)
+        zero_match_exit = handle_zero_match_exit(
+            args,
+            logger,
+            selection_phase,
+            started_at,
+        )
+        if zero_match_exit is not None:
+            close_logger(logger)
+            return zero_match_exit
+
+        if not selection_phase.unsupported_selected_frame.is_empty():
+            logger.warning(
+                build_unsupported_uba_warning(
+                    selection_phase.unsupported_selected_frame,
+                ),
+            )
+
+        # Phase 2: supported-accession preflight and automatic planning.
+        run_supported_preflight(args, selection_phase)
+        planning_phase = prepare_planning_phase(
+            args,
+            logger,
+            secrets,
+            selection_phase,
+        )
+    except BundledDataError as error:
+        logger.error("%s", error)
+        close_logger(logger)
+        return 3
+    except PreviewError as error:
+        logger.error("%s", redact_text(str(error), secrets))
+        close_logger(logger)
+        return 5
+
+    # Phase 3: dry-runs stop after planning and report the planned workload.
+    if args.dry_run:
+        logger.info(
+            "Dry-run finished: planned_supported_accessions=%d unsupported_legacy_accessions=%d",
+            len(planning_phase.accession_plans),
+            count_unique_accessions(selection_phase.unsupported_selected_frame),
+        )
+        close_logger(logger)
+        return 0
+
+    # Phase 4: real runs materialise payloads and write the output manifests.
+    run_directories = initialise_run_directories(args.outdir)
+    logger = reconfigure_output_logger(args, logger, run_directories)
+    execution_result = build_execution_result(
+        args,
+        logger,
+        run_directories,
+        secrets,
+        planning_phase,
+    )
+    exit_code = materialise_real_run_outputs(
+        args,
+        logger,
+        run_directories,
+        started_at,
+        selection_phase,
+        planning_phase,
+        execution_result,
+        secrets,
+    )
     close_logger(logger)
     if not args.keep_temp:
         cleanup_working_directories(run_directories)
