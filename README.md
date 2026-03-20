@@ -25,8 +25,9 @@ payload is not relicensed by this project.
 ## Installation
 
 The checked-in Bioconda recipe at
-[packaging/bioconda/meta.yaml](packaging/bioconda/meta.yaml) is a template for
-future packaging and is not a release-ready install path.
+[packaging/bioconda/meta.yaml](packaging/bioconda/meta.yaml) is prepared for
+the first public release, but it still awaits the published release sdist
+archive and final SHA256 checksum before it can be submitted.
 
 ```bash
 uv sync --group dev
@@ -201,8 +202,9 @@ Supported workflows:
 
 - source-checkout development through `uv run gtdb-genomes ...` or
   `uv run python -m gtdb_genomes ...`
-- the checked-in Bioconda recipe is a template for future packaging, not a
-  published install path from this repository snapshot
+- the checked-in Bioconda recipe is prepared for the first public release, but
+  it still needs the published release archive URL and SHA256 checksum before
+  submission
 
 `uv` is a development tool only. Packaged runtime use should not depend on it.
 
@@ -212,4 +214,4 @@ Supported workflows:
 - [Real-data validation guide](docs/real-data-validation.md)
 - [Pipeline concept](docs/pipeline-concept.md)
 - [Step-wise development plan](docs/development-plan.md)
-- [Bioconda recipe template](packaging/bioconda/meta.yaml)
+- [Bioconda recipe](packaging/bioconda/meta.yaml)
