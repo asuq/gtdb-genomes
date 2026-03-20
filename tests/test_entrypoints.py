@@ -20,6 +20,24 @@ def test_pyproject_exposes_console_script() -> None:
     assert pyproject["project"]["license"] == "MIT"
 
 
+def test_pyproject_build_targets_include_runtime_package_sources() -> None:
+    """The build config should ship both code and bundled taxonomy data."""
+
+    with Path("pyproject.toml").open("rb") as handle:
+        pyproject = tomllib.load(handle)
+
+    wheel_packages = pyproject["tool"]["hatch"]["build"]["targets"]["wheel"][
+        "packages"
+    ]
+    sdist_include = pyproject["tool"]["hatch"]["build"]["targets"]["sdist"][
+        "include"
+    ]
+
+    assert wheel_packages == ["src/gtdb_genomes"]
+    assert "src/gtdb_genomes/**" in sdist_include
+    assert "data/gtdb_taxonomy/**" in sdist_include
+
+
 def test_module_entrypoint_help_runs() -> None:
     """The module entrypoint should expose the documented CLI help."""
 
