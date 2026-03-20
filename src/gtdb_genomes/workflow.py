@@ -10,6 +10,7 @@ import logging
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import threading
 from typing import TYPE_CHECKING, Any
 import uuid
 
@@ -526,6 +527,8 @@ def execute_direct_group_fallbacks(
     """Run original-accession fallbacks for a failed request group."""
 
     executions: dict[str, AccessionExecution] = {}
+    secrets = tuple(secret for secret in (args.ncbi_api_key,) if secret)
+    worker_name = threading.current_thread().name
     for plan in grouped_plans:
         fallback_request_accession = plan.original_accession
         if fallback_request_accession == download_request_accession:
@@ -538,18 +541,26 @@ def execute_direct_group_fallbacks(
 
         archive_path = run_directories.downloads_root / f"{plan.original_accession}.zip"
         logger.debug(
-            "Download request %s failed; falling back to original accession %s",
+            "[%s] Download request %s failed; falling back to original accession %s",
+            worker_name,
             download_request_accession,
             fallback_request_accession,
         )
+        fallback_command = build_download_command(
+            [fallback_request_accession],
+            archive_path,
+            args.include,
+            ncbi_api_key=args.ncbi_api_key,
+            debug=args.debug,
+        )
+        logger.debug(
+            "[%s] Running fallback direct download command for %s: %s",
+            worker_name,
+            fallback_request_accession,
+            redact_command(fallback_command, secrets),
+        )
         fallback_result = run_retryable_command(
-            build_download_command(
-                [fallback_request_accession],
-                archive_path,
-                args.include,
-                ncbi_api_key=args.ncbi_api_key,
-                debug=args.debug,
-            ),
+            fallback_command,
             stage="fallback_download",
             final_failure_status="fallback_exhausted",
             attempted_accession=fallback_request_accession,
@@ -563,6 +574,11 @@ def execute_direct_group_fallbacks(
             )
             continue
 
+        logger.debug(
+            "[%s] Starting archive extraction for %s",
+            worker_name,
+            fallback_request_accession,
+        )
         payload, extraction_failures = extract_download_payload(
             fallback_request_accession,
             archive_path,
@@ -571,6 +587,11 @@ def execute_direct_group_fallbacks(
         )
         combined_failures += extraction_failures
         if payload is None:
+            logger.debug(
+                "[%s] Archive extraction failed for %s",
+                worker_name,
+                fallback_request_accession,
+            )
             executions[plan.original_accession] = build_failed_execution(
                 plan.original_accession,
                 combined_failures,
@@ -578,6 +599,11 @@ def execute_direct_group_fallbacks(
             )
             continue
 
+        logger.debug(
+            "[%s] Finished archive extraction for %s",
+            worker_name,
+            fallback_request_accession,
+        )
         executions[plan.original_accession] = build_successful_execution(
             plan,
             payload.final_accession,
@@ -599,20 +625,38 @@ def execute_direct_accession_group(
     """Download one request accession once and materialise grouped executions."""
 
     archive_path = run_directories.downloads_root / f"{download_request_accession}.zip"
-    logger.debug("Downloading request accession %s", download_request_accession)
+    secrets = tuple(secret for secret in (args.ncbi_api_key,) if secret)
+    worker_name = threading.current_thread().name
+    logger.debug(
+        "[%s] Starting direct download group for %s",
+        worker_name,
+        download_request_accession,
+    )
+    preferred_command = build_download_command(
+        [download_request_accession],
+        archive_path,
+        args.include,
+        ncbi_api_key=args.ncbi_api_key,
+        debug=args.debug,
+    )
+    logger.debug(
+        "[%s] Running direct download command for %s: %s",
+        worker_name,
+        download_request_accession,
+        redact_command(preferred_command, secrets),
+    )
     preferred_result = run_retryable_command(
-        build_download_command(
-            [download_request_accession],
-            archive_path,
-            args.include,
-            ncbi_api_key=args.ncbi_api_key,
-            debug=args.debug,
-        ),
+        preferred_command,
         stage="preferred_download",
         attempted_accession=download_request_accession,
     )
     if not preferred_result.succeeded:
-        return execute_direct_group_fallbacks(
+        logger.debug(
+            "[%s] Preferred direct download failed for %s; starting fallback path",
+            worker_name,
+            download_request_accession,
+        )
+        executions = execute_direct_group_fallbacks(
             download_request_accession,
             grouped_plans,
             preferred_result.failures,
@@ -620,7 +664,18 @@ def execute_direct_accession_group(
             run_directories,
             logger,
         )
+        logger.debug(
+            "[%s] Completed direct download group for %s via fallback",
+            worker_name,
+            download_request_accession,
+        )
+        return executions
 
+    logger.debug(
+        "[%s] Starting archive extraction for %s",
+        worker_name,
+        download_request_accession,
+    )
     payload, extraction_failures = extract_download_payload(
         download_request_accession,
         archive_path,
@@ -628,6 +683,11 @@ def execute_direct_accession_group(
     )
     combined_failures = preferred_result.failures + extraction_failures
     if payload is None:
+        logger.debug(
+            "[%s] Archive extraction failed for %s",
+            worker_name,
+            download_request_accession,
+        )
         return {
             plan.original_accession: build_failed_execution(
                 plan.original_accession,
@@ -637,7 +697,12 @@ def execute_direct_accession_group(
             for plan in grouped_plans
         }
 
-    return {
+    logger.debug(
+        "[%s] Finished archive extraction for %s",
+        worker_name,
+        download_request_accession,
+    )
+    executions = {
         plan.original_accession: build_successful_execution(
             plan,
             payload.final_accession,
@@ -648,6 +713,12 @@ def execute_direct_accession_group(
         )
         for plan in grouped_plans
     }
+    logger.debug(
+        "[%s] Completed direct download group for %s",
+        worker_name,
+        download_request_accession,
+    )
+    return executions
 
 
 def execute_direct_accession_plans(
@@ -670,6 +741,11 @@ def execute_direct_accession_plans(
     max_workers = max(
         1,
         get_direct_download_concurrency(args.threads, len(plan_groups)),
+    )
+    logger.debug(
+        "Direct download using %s worker(s) across %s accession group(s)",
+        max_workers,
+        len(plan_groups),
     )
     executions: dict[str, AccessionExecution] = {}
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
