@@ -8,6 +8,11 @@ import re
 
 import polars as pl
 
+from gtdb_genomes.taxon_normalisation import (
+    normalise_requested_taxa,
+    normalise_requested_taxon,
+)
+
 
 UNSAFE_TAXON_CHARACTER_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
 EXCESS_UNDERSCORE_PATTERN = re.compile(r"_{3,}")
@@ -31,10 +36,26 @@ def build_lineage_token_expression() -> pl.Expr:
     )
 
 
-def normalise_requested_taxon(requested_taxon: str) -> str:
-    """Trim only surrounding whitespace from one requested GTDB taxon."""
+def build_requested_taxa_frame(requested_taxa: Sequence[str]) -> pl.DataFrame:
+    """Build the ordered requested-taxon frame used for exact joins."""
 
-    return requested_taxon.strip()
+    requested_rows = [
+        {
+            "requested_taxon": requested_taxon,
+            "_requested_order": requested_order,
+        }
+        for requested_order, requested_taxon in enumerate(
+            normalise_requested_taxa(requested_taxa),
+        )
+        if requested_taxon
+    ]
+    return pl.DataFrame(
+        requested_rows,
+        schema={
+            "requested_taxon": pl.String,
+            "_requested_order": pl.UInt32,
+        },
+    )
 
 
 def select_taxa(
@@ -46,42 +67,35 @@ def select_taxa(
     if not requested_taxa:
         return empty_selection_frame(frame)
 
-    tokenised_frame = frame.with_row_index("_row_order").with_columns(
-        build_lineage_token_expression().alias("_lineage_tokens"),
-    )
-
-    matched_frames: list[pl.DataFrame] = []
-    for requested_order, raw_requested_taxon in enumerate(requested_taxa):
-        requested_taxon = normalise_requested_taxon(raw_requested_taxon)
-        if not requested_taxon:
-            continue
-        matched_rows = tokenised_frame.filter(
-            pl.col("_lineage_tokens").list.contains(requested_taxon),
-        )
-        if matched_rows.is_empty():
-            continue
-        matched_frames.append(
-            matched_rows.with_columns(
-                pl.lit(requested_taxon).alias("requested_taxon"),
-                pl.lit(requested_order).alias("_requested_order"),
-            ),
-        )
-
-    if not matched_frames:
+    requested_taxa_frame = build_requested_taxa_frame(requested_taxa)
+    if requested_taxa_frame.is_empty():
         return empty_selection_frame(frame)
 
-    return (
-        pl.concat(matched_frames, how="vertical")
+    selected = (
+        frame.with_row_index("_row_order")
+        .with_columns(build_lineage_token_expression().alias("requested_taxon"))
+        .explode("requested_taxon")
+        .join(requested_taxa_frame, on="requested_taxon", how="inner")
+        .unique(
+            subset=["_row_order", "_requested_order", "requested_taxon"],
+            keep="first",
+            maintain_order=True,
+        )
         .sort(["_requested_order", "_row_order"])
-        .drop("_requested_order", "_row_order", "_lineage_tokens")
-        .select([*frame.columns, "requested_taxon"])
+        .drop("_requested_order", "_row_order")
     )
+    if selected.is_empty():
+        return empty_selection_frame(frame)
+    return selected.select([*frame.columns, "requested_taxon"])
 
 
 def build_base_taxon_slug(requested_taxon: str) -> str:
     """Build a filesystem-safe slug while preserving GTDB rank markers."""
 
-    slug = UNSAFE_TAXON_CHARACTER_PATTERN.sub("_", requested_taxon.strip())
+    slug = UNSAFE_TAXON_CHARACTER_PATTERN.sub(
+        "_",
+        normalise_requested_taxon(requested_taxon),
+    )
     slug = EXCESS_UNDERSCORE_PATTERN.sub("_", slug)
     return slug or "_"
 
@@ -91,7 +105,8 @@ def build_taxon_slug_map(requested_taxa: Sequence[str]) -> dict[str, str]:
 
     base_slugs = {
         requested_taxon: build_base_taxon_slug(requested_taxon)
-        for requested_taxon in requested_taxa
+        for requested_taxon in normalise_requested_taxa(requested_taxa)
+        if requested_taxon
     }
     slug_counts: dict[str, int] = {}
     for slug in base_slugs.values():

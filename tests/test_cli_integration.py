@@ -21,7 +21,7 @@ def test_main_passes_normalised_arguments_into_workflow(
         captured_args.append(args)
         return 6
 
-    monkeypatch.setattr("gtdb_genomes.cli.run_workflow", fake_run_workflow)
+    monkeypatch.setattr("gtdb_genomes.workflow.run_workflow", fake_run_workflow)
 
     exit_code = main(
         [

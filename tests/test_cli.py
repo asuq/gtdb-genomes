@@ -302,7 +302,7 @@ def test_main_returns_preflight_error_code(
         assert args.gtdb_release == "latest"
         raise PreflightError("Missing required external tools: datasets")
 
-    monkeypatch.setattr("gtdb_genomes.cli.run_workflow", raise_preflight_error)
+    monkeypatch.setattr("gtdb_genomes.workflow.run_workflow", raise_preflight_error)
     exit_code = main(
         [
             "--gtdb-release",

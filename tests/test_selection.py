@@ -263,6 +263,27 @@ def test_attach_taxon_slugs_adds_slug_column() -> None:
     assert with_slugs["taxon_slug"].to_list() == ["g__Escherichia", "g__Escherichia"]
 
 
+def test_attach_taxon_slugs_matches_trimmed_requested_taxa() -> None:
+    """Slug attachment should compose with trimmed direct-caller taxa."""
+
+    frame = pl.DataFrame(
+        {
+            "gtdb_accession": ["GB_GCA_000001.1"],
+            "lineage": [
+                "d__Archaea;o__Altiarchaeales;s__Altiarchaeum hamiconexum",
+            ],
+            "ncbi_accession": ["GCA_000001.1"],
+            "taxonomy_file": ["ar53_taxonomy_r226.tsv"],
+        },
+    )
+
+    selected = select_taxa(frame, [" s__Altiarchaeum hamiconexum "])
+    with_slugs = attach_taxon_slugs(selected, [" s__Altiarchaeum hamiconexum "])
+
+    assert with_slugs["requested_taxon"].to_list() == ["s__Altiarchaeum hamiconexum"]
+    assert with_slugs["taxon_slug"].to_list() == ["s__Altiarchaeum_hamiconexum"]
+
+
 def test_select_taxa_does_not_treat_uba_taxon_names_as_uba_accessions() -> None:
     """UBA taxon names should not be confused with unsupported UBA accessions."""
 

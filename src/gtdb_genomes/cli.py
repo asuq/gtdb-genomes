@@ -11,7 +11,7 @@ from pathlib import Path
 
 from gtdb_genomes.download import validate_include_value
 from gtdb_genomes.preflight import PreflightError
-from gtdb_genomes.workflow import run_workflow
+from gtdb_genomes.taxon_normalisation import normalise_requested_taxon
 
 
 @dataclass(slots=True)
@@ -61,7 +61,7 @@ def normalise_taxa(
     ordered_taxa: list[str] = []
     seen: set[str] = set()
     for raw_taxon in taxa:
-        taxon = raw_taxon.strip()
+        taxon = normalise_requested_taxon(raw_taxon)
         if not taxon:
             parser.error("argument --gtdb-taxon: value must not be empty")
         if taxon in seen:
@@ -206,6 +206,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the gtdb-genomes command-line interface."""
     parser = build_parser()
     args = parse_args(parser, argv)
+    from gtdb_genomes.workflow import run_workflow
+
     try:
         return run_workflow(args)
     except PreflightError as error:
