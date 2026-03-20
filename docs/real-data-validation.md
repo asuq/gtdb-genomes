@@ -106,7 +106,7 @@ Remote validation assumes:
 - `mamba`
 - a clean runtime environment
 - installed package wheel
-- no `uv` in the runtime path
+- no `uv` in the remote runtime path
 
 Suggested remote setup:
 
@@ -134,6 +134,138 @@ Required environment:
 
 The remote runner passes `NCBI_API_KEY` to the installed command as
 `--ncbi-api-key`.
+
+## Remote Server Quickstart
+
+Use this path when you want to prove that the packaged `gtdb-genomes`
+command works on another server, rather than validating `uv run` from a source
+checkout.
+
+### 1. Build and copy the wheel from the local machine
+
+Build the wheel on the development machine, then copy the wheel to the remote
+server. Copy the remote validation scripts as well unless the server already
+has a repo checkout containing `bin/`.
+
+```bash
+uv build
+ls dist/*.whl
+scp dist/*.whl user@remote:/tmp/gtdb-genome-remote/
+scp bin/run-real-data-tests-remote.sh \
+  bin/real-data-test-common.sh \
+  user@remote:/tmp/gtdb-genome-remote/
+```
+
+### 2. Create the clean remote runtime
+
+SSH to the remote server and create a fresh packaged-runtime environment:
+
+```bash
+ssh user@remote
+mamba create -n gtdb-genome-test python=3.12 pip unzip ncbi-datasets-cli
+mamba activate gtdb-genome-test
+python -m pip install /tmp/gtdb-genome-remote/gtdb_genomes-0.1.0-py3-none-any.whl
+which gtdb-genomes
+gtdb-genomes --help
+```
+
+Run the same packaged-data sanity check used by remote `C0-manifest`:
+
+```bash
+gtdb-genomes \
+  --gtdb-release 226 \
+  --gtdb-taxon g__DefinitelyNotReal \
+  --outdir /tmp/gtdb-realtests/c0-manifest-output \
+  --dry-run
+```
+
+This command should exit with code `4`. That is the expected result for the
+deliberately missing taxon, and it proves that the installed wheel can load the
+bundled release manifest and taxonomy data without relying on a source
+checkout.
+
+### 3. Minimum smoke test
+
+Start with a `C6`-style dry-run. It validates CLI wiring and packaged bundled
+data without creating an output tree:
+
+```bash
+gtdb-genomes \
+  --gtdb-release release220/220.0 \
+  --gtdb-taxon "s__Thermoflexus hugenholtzii" \
+  --download-method direct \
+  --dry-run \
+  --outdir /tmp/gtdb-realtests/remote-smoke-c6
+```
+
+Then run a `C1` live direct-download smoke test. This confirms that the
+installed command can perform a real download on the server and does not
+require `NCBI_API_KEY`:
+
+```bash
+gtdb-genomes \
+  --gtdb-release latest \
+  --gtdb-taxon "s__Thermoflexus hugenholtzii" \
+  --download-method direct \
+  --threads 2 \
+  --include genome \
+  --outdir /tmp/gtdb-realtests/remote-smoke-c1
+```
+
+### 4. Full remote matrix
+
+Once the smoke test passes, run the packaged-runtime matrix with the existing
+remote runner. If the server already has a repo checkout, run the script from
+that checkout. Otherwise, use the copied scripts and keep the installed wheel
+on `PATH` as the command under test.
+
+Optional environment:
+
+- `REMOTE_TEST_ROOT` to override the default unique suite root
+- `NCBI_API_KEY` for `C2`, `C3`, `C5`, and `C7`
+- `RUN_OPTIONAL_LARGE=1` to include the optional `C7` stress case
+
+Examples:
+
+```bash
+export REMOTE_TEST_ROOT=/tmp/gtdb-realtests/remote-$(date +%Y%m%d)
+bash /tmp/gtdb-genome-remote/run-real-data-tests-remote.sh C1 C4 C6
+```
+
+```bash
+export REMOTE_TEST_ROOT=/tmp/gtdb-realtests/remote-$(date +%Y%m%d)
+export NCBI_API_KEY="your-ncbi-api-key"
+bash /tmp/gtdb-genome-remote/run-real-data-tests-remote.sh C1 C2 C3 C4 C5 C6
+```
+
+```bash
+export REMOTE_TEST_ROOT=/tmp/gtdb-realtests/remote-$(date +%Y%m%d)
+export NCBI_API_KEY="your-ncbi-api-key"
+RUN_OPTIONAL_LARGE=1 \
+  bash /tmp/gtdb-genome-remote/run-real-data-tests-remote.sh C7
+```
+
+### Expected results
+
+- `C6`: exit `0`, no output tree
+- `C1`: exit `0`, output present
+- `C4`: exit `6`, `unsupported_input` in `download_failures.tsv`
+- `C5`: `download_method_used` is `dehydrate` or
+  `dehydrate_fallback_direct`
+
+### Evidence to inspect on failure
+
+Review these paths under the selected `REMOTE_TEST_ROOT`:
+
+- `_evidence/tool-versions.txt`
+- `_evidence/case-results.tsv`
+- per-case `summary.txt`
+- per-case `stdout.log`
+- per-case `stderr.log`
+- per-case `combined.log`
+- copied `run_summary.tsv`
+- copied `download_failures.tsv`
+- copied `taxa-find.txt`
 
 ## Case Matrix
 
@@ -211,6 +343,7 @@ For a root such as `/tmp/gtdb-realtests/local-YYYYMMDD`:
 |-- B1/
 `-- _evidence/
     |-- case-results.tsv
+    |-- tool-versions.txt
     `-- A1/
         |-- command.sh
         |-- stdout.log
