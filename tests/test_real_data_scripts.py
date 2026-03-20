@@ -44,6 +44,16 @@ def write_fake_remote_runner(tmp_path: Path) -> Path:
     return fake_runner
 
 
+def extract_bash_function(script_path: Path, function_name: str) -> str:
+    """Extract one top-level bash function definition from a script."""
+
+    script_text = script_path.read_text(encoding="utf-8")
+    marker = f"{function_name}() {{"
+    start_index = script_text.index(marker)
+    end_index = script_text.index("\n\n\n", start_index)
+    return script_text[start_index:end_index]
+
+
 def test_real_data_write_command_file_redacts_ncbi_api_key(
     tmp_path: Path,
 ) -> None:
@@ -280,6 +290,109 @@ def test_remote_runner_uses_shared_defaults() -> None:
     assert "--threads 2" in remote_script
     assert "--download-method" not in remote_script
     assert "get_release_manifest_path" not in remote_script
+
+
+def test_real_data_run_case_accepts_expected_exit_pattern(tmp_path: Path) -> None:
+    """Case execution should accept regex-style expected exit patterns."""
+
+    test_root = tmp_path / "suite"
+    script = (
+        f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        f"real_data_initialise_suite {shlex.quote(str(test_root))}\n"
+        "real_data_run_case "
+        f"{shlex.quote(str(test_root))} "
+        "C5 '0|6' absent '' '' "
+        f"{shlex.quote(sys.executable)} -c 'import sys; sys.exit(6)'\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0
+    summary_text = (test_root / "_evidence" / "C5" / "summary.txt").read_text(
+        encoding="utf-8",
+    )
+    assert "status=PASS" in summary_text
+    assert "expected_exit=0|6" in summary_text
+    assert "actual_exit=6" in summary_text
+
+
+def test_remote_check_dehydrate_suppressed_partial_result_accepts_suppressed_only_failures(
+    tmp_path: Path,
+) -> None:
+    """C5 should pass on exit 6 when all failed rows carry the suppression note."""
+
+    output_root = tmp_path / "c5-output"
+    output_root.mkdir()
+    (output_root / "run_summary.tsv").write_text(
+        "run_id\texit_code\tdownload_method_used\tsuccessful_accessions\tfailed_accessions\n"
+        "run1\t6\tdehydrate\t1024\t1\n",
+        encoding="utf-8",
+    )
+    (output_root / "accession_map.tsv").write_text(
+        "requested_taxon\tncbi_accession\tdownload_status\n"
+        "g__Bacteroides\tGCF_000001.1\tdownloaded\n"
+        "g__Bacteroides\tGCF_003670205.1\tfailed\n",
+        encoding="utf-8",
+    )
+    (output_root / "download_failures.tsv").write_text(
+        "requested_taxon\tattempted_accession\terror_message_redacted\n"
+        "g__Bacteroides\tGCF_003670205.1\tNCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\n",
+        encoding="utf-8",
+    )
+    function_text = extract_bash_function(
+        Path("bin/run-real-data-tests-remote.sh"),
+        "remote_check_dehydrate_suppressed_partial_result",
+    )
+    script = (
+        f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        f"{function_text}\n"
+        "remote_check_dehydrate_suppressed_partial_result "
+        f"{shlex.quote(str(output_root))}\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0
+
+
+def test_remote_check_dehydrate_suppressed_partial_result_rejects_generic_partial_failures(
+    tmp_path: Path,
+) -> None:
+    """C5 should still fail when a partial failure lacks the suppression note."""
+
+    output_root = tmp_path / "c5-output"
+    output_root.mkdir()
+    (output_root / "run_summary.tsv").write_text(
+        "run_id\texit_code\tdownload_method_used\tsuccessful_accessions\tfailed_accessions\n"
+        "run1\t6\tdehydrate_fallback_direct\t1024\t1\n",
+        encoding="utf-8",
+    )
+    (output_root / "accession_map.tsv").write_text(
+        "requested_taxon\tncbi_accession\tdownload_status\n"
+        "g__Bacteroides\tGCF_000001.1\tdownloaded\n"
+        "g__Bacteroides\tGCF_003670205.1\tfailed\n",
+        encoding="utf-8",
+    )
+    (output_root / "download_failures.tsv").write_text(
+        "requested_taxon\tattempted_accession\terror_message_redacted\n"
+        "g__Bacteroides\tGCF_003670205.1\tdownload failed after retries\n",
+        encoding="utf-8",
+    )
+    function_text = extract_bash_function(
+        Path("bin/run-real-data-tests-remote.sh"),
+        "remote_check_dehydrate_suppressed_partial_result",
+    )
+    script = (
+        f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        f"{function_text}\n"
+        "remote_check_dehydrate_suppressed_partial_result "
+        f"{shlex.quote(str(output_root))}\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode != 0
+    assert "lacks suppression note" in result.stderr
 
 
 def test_server_wrapper_smoke_preset_uses_remote_smoke_cases(
