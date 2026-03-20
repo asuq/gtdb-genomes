@@ -1,12 +1,23 @@
 Bundled GTDB taxonomy data notice
 ================================
 
-The MIT licence in this repository applies to the code and packaging for
-gtdb-genomes.
+This repository contains two different licence regimes.
 
-Bundled GTDB taxonomy data is included for runtime use and testing
-convenience, but it remains subject to the applicable upstream terms,
-copyright, attribution requirements, and redistribution conditions.
+Project code and packaging metadata for `gtdb-genomes` are provided under the
+MIT licence in `LICENSE`.
 
-Users distributing or reusing the bundled GTDB taxonomy payload should check
-the current upstream GTDB terms directly.
+Bundled GTDB taxonomy data under `data/gtdb_taxonomy/**` is redistributed as
+separate GTDB release tables for runtime use and package tests. That bundled
+data is not relicensed by this project.
+
+Attribution for the bundled GTDB taxonomy data:
+- source: Genome Taxonomy Database (GTDB)
+- source page: https://gtdb.ecogenomic.org/downloads
+- applicable licence: Creative Commons Attribution-ShareAlike 4.0 International
+- licence URL: https://creativecommons.org/licenses/by-sa/4.0/
+- included licence text: licenses/CC-BY-SA-4.0.txt
+
+The bundled GTDB taxonomy payload is shipped in repository-managed `.tsv.gz`
+form for packaging convenience. Users redistributing or adapting those files
+must comply with the applicable CC BY-SA 4.0 terms, attribution requirements,
+and any downstream ShareAlike obligations.

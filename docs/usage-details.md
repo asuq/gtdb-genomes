@@ -334,9 +334,10 @@ to inspect and validate.
 First run does not contact GTDB. Missing bundled taxonomy for a requested
 release is treated as a local installation or packaging error.
 
-The project code and packaging are distributed under the MIT licence. Bundled
-GTDB taxonomy data remains subject to the applicable upstream terms and
-attribution requirements. See `NOTICE` for the bundled-data note.
+Published distribution archives include MIT-licensed project code plus bundled
+GTDB taxonomy data under CC BY-SA 4.0. The bundled taxonomy payload is shipped
+as separate `.tsv.gz` package data and is not relicensed by this project. See
+`NOTICE` and `licenses/CC-BY-SA-4.0.txt` for attribution and licence details.
 
 ## Failure Handling
 

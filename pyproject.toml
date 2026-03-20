@@ -4,8 +4,8 @@ version = "0.1.0"
 description = "Download NCBI genomes by GTDB taxon and GTDB release"
 readme = "README.md"
 requires-python = ">=3.12"
-license = "MIT"
-license-files = ["LICENSE", "NOTICE"]
+license = "MIT AND CC-BY-SA-4.0"
+license-files = ["LICENSE", "NOTICE", "licenses/CC-BY-SA-4.0.txt"]
 dependencies = [
     "polars>=1.31.0,<2.0.0",
 ]

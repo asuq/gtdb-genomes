@@ -2,11 +2,25 @@
 
 [![Python >=3.12](https://img.shields.io/badge/python-%3E%3D3.12-3776AB.svg)](https://www.python.org/downloads/)
 [![GitHub release](https://img.shields.io/github/v/release/asuq/gtdb-genome)](https://github.com/asuq/gtdb-genome/releases)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Code licence: MIT](https://img.shields.io/badge/code-MIT-green.svg)](LICENSE)
+[![Bundled data licence: CC BY-SA 4.0](https://img.shields.io/badge/bundled%20data-CC--BY--SA%204.0-blue.svg)](licenses/CC-BY-SA-4.0.txt)
 
 `gtdb-genomes` downloads NCBI genomes from GTDB taxon selections using bundled
 GTDB taxonomy tables for local taxon resolution and the NCBI `datasets` CLI for
 all NCBI metadata and genome download operations.
+
+## Licensing
+
+The project code and packaging glue are released under the MIT licence.
+Published source and wheel archives also bundle GTDB taxonomy tables under
+`data/gtdb_taxonomy`, and those bundled data files remain under
+CC BY-SA 4.0 rather than MIT.
+
+The bundled GTDB taxonomy payload is shipped as separate `.tsv.gz` release
+tables for runtime use and packaging convenience. Attribution and redistribution
+details for that bundled data are recorded in [NOTICE](NOTICE) and the included
+[CC BY-SA 4.0 licence text](licenses/CC-BY-SA-4.0.txt). The bundled taxonomy
+payload is not relicensed by this project.
 
 ## Installation
 

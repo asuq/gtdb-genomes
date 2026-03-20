@@ -17,7 +17,12 @@ def test_pyproject_exposes_console_script() -> None:
     assert pyproject["project"]["scripts"]["gtdb-genomes"] == (
         "gtdb_genomes.cli:main"
     )
-    assert pyproject["project"]["license"] == "MIT"
+    assert pyproject["project"]["license"] == "MIT AND CC-BY-SA-4.0"
+    assert pyproject["project"]["license-files"] == [
+        "LICENSE",
+        "NOTICE",
+        "licenses/CC-BY-SA-4.0.txt",
+    ]
 
 
 def test_pyproject_build_targets_include_runtime_package_sources() -> None:
@@ -83,6 +88,9 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
         encoding="utf-8",
     )
     notice_text = Path("NOTICE").read_text(encoding="utf-8")
+    cc_by_sa_text = Path("licenses/CC-BY-SA-4.0.txt").read_text(
+        encoding="utf-8",
+    )
 
     assert "Usage details" in readme_text
     assert "docs/usage-details.md" in readme_text
@@ -126,7 +134,8 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     assert "attempted_accession" in usage_details_text
     assert "img.shields.io/badge/python-" in readme_text
     assert "img.shields.io/github/v/release/asuq/gtdb-genome" in readme_text
-    assert "img.shields.io/badge/license-MIT" in readme_text
+    assert "img.shields.io/badge/code-MIT" in readme_text
+    assert "img.shields.io/badge/bundled%20data-CC--BY--SA%204.0" in readme_text
     assert "> [!NOTE]" in readme_text
     assert "PRJNA417962" in readme_text
     assert "unsupported_input" in usage_details_text
@@ -138,9 +147,13 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     assert "get_release_manifest_path" in bioconda_text
     assert ".tsv.gz" in usage_details_text
     assert "remains plain text by design" in usage_details_text
-    assert "The MIT licence in this repository applies to the code" in notice_text
-    assert "GTDB taxonomy data" in notice_text
-    assert "license: MIT" in bioconda_text
+    assert "This repository contains two different licence regimes" in notice_text
+    assert "Genome Taxonomy Database (GTDB)" in notice_text
+    assert "creativecommons.org/licenses/by-sa/4.0/" in notice_text
+    assert "repository-managed" in notice_text
+    assert ".tsv.gz" in notice_text
+    assert "license: MIT AND CC-BY-SA-4.0" in bioconda_text
+    assert "licenses/CC-BY-SA-4.0.txt" in bioconda_text
     assert "--ncbi-api-key" in readme_text
     assert "- `--api-key`" not in readme_text
     assert "expects an NCBI API key" in usage_details_text
@@ -165,6 +178,14 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     assert "realised versioned accession" in usage_details_text
     assert "GTDB release resolution and GTDB taxonomy loading remain local" in (
         usage_details_text
+    )
+    assert "CC BY-SA 4.0" in readme_text
+    assert "CC BY-SA 4.0" in usage_details_text
+    assert "not relicensed by this project" in readme_text
+    assert "not relicensed by this project" in usage_details_text
+    assert "Attribution-ShareAlike 4.0 International" in cc_by_sa_text
+    assert "Creative Commons Attribution-ShareAlike 4.0 International Public License" in (
+        cc_by_sa_text
     )
 
 
