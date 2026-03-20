@@ -2410,3 +2410,184 @@ PY`
   - yes
 - Deviations:
   - none
+
+### Commit `03bd6e2` - `chore(workflow): add threaded direct debug tracing`
+
+- Implemented:
+  - added direct-download debug instrumentation in `src/gtdb_genomes/workflow.py`
+    without changing the normal direct-download execution path
+  - logged the resolved direct-download worker count before the thread pool
+    starts
+  - logged per-group start and completion lines for threaded direct downloads
+  - logged the redacted direct `datasets download genome accession` command
+    before each preferred or fallback direct download launch
+  - logged archive extraction start, finish, and failure points for direct and
+    fallback per-accession extraction
+- Why:
+  - the intermittent remote `C1` segfault only reproduced on the threaded
+    direct-download path
+  - `remote-smoke-c1` succeeded with `--threads 2`, `c1-serial` succeeded with
+    `--threads 1`, and the failing `C1` runs created only the output
+    directories before exiting `139`, so the next useful step was to expose the
+    last threaded group activity in a `--debug` run rather than changing
+    runtime behaviour
+- Files:
+  - `src/gtdb_genomes/workflow.py`
+- Checks run:
+  - `.venv/bin/python -m pytest -q tests/test_edge_contract.py`
+  - `.venv/bin/python -m pytest -q tests/test_real_data_scripts.py`
+  - `.venv/bin/python -m pytest -q tests/test_entrypoints.py`
+- Match to requested plan:
+  - yes
+- Deviations:
+  - none
+
+### Commit `daff30b` - `chore(validation): add investigation case helpers`
+
+- Implemented:
+  - added `REAL_DATA_PREPARED_COMMAND` handling to
+    `bin/real-data-test-common.sh`
+  - added helper logic to detect whether a case command carries
+    `--ncbi-api-key`
+  - added `real_data_prepare_case_command()` so investigation settings can
+    alter case commands before they are recorded or executed
+  - added `REAL_DATA_PYTHON_FAULTHANDLER=1` support by prefixing case commands
+    with `env PYTHONFAULTHANDLER=1`
+  - added `REAL_DATA_DEBUG_SAFE=1` support by appending `--debug` only to
+    no-key cases
+  - copied `OUTPUT/debug.log` into `_evidence/<case-id>/debug.log` when a real
+    run writes one
+- Why:
+  - the remote `C1` failure needed a reproducible investigation mode with
+    richer evidence, but debug mode remained unsafe for API-key cases because
+    upstream `datasets` can emit raw headers
+  - putting this logic in the shared helper keeps the recorded `command.sh`
+    file and the executed command aligned
+- Files:
+  - `bin/real-data-test-common.sh`
+- Checks run:
+  - `.venv/bin/python -m pytest -q tests/test_real_data_scripts.py`
+  - `.venv/bin/python -m pytest -q tests/test_edge_contract.py`
+  - `.venv/bin/python -m pytest -q tests/test_entrypoints.py`
+- Match to requested plan:
+  - yes
+- Deviations:
+  - none
+
+### Commit `593909d` - `chore(validation): make C1 threads configurable`
+
+- Implemented:
+  - updated `bin/run-real-data-tests-remote.sh` so remote case `C1` now reads
+    `REAL_DATA_C1_THREADS`, defaulting to `2`
+- Why:
+  - the collected evidence showed that `C1` succeeded serially with
+    `--threads 1`, so the remote runner needed a narrow override for that one
+    investigation target without changing any default CLI behaviour or editing
+    the script on the remote machine
+- Files:
+  - `bin/run-real-data-tests-remote.sh`
+- Checks run:
+  - `.venv/bin/python -m pytest -q tests/test_real_data_scripts.py`
+  - `.venv/bin/python -m pytest -q tests/test_edge_contract.py`
+  - `.venv/bin/python -m pytest -q tests/test_entrypoints.py`
+- Match to requested plan:
+  - yes
+- Deviations:
+  - none
+
+### Commit `42a3821` - `test(validation): cover investigation runner controls`
+
+- Implemented:
+  - extended `tests/test_real_data_scripts.py` to cover investigation-mode
+    command preparation and evidence capture
+  - added a regression that records the prepared case command and asserts
+    `env PYTHONFAULTHANDLER=1` plus `--debug` are written for safe no-key cases
+  - added a regression that confirms `REAL_DATA_DEBUG_SAFE=1` does not add
+    `--debug` when `--ncbi-api-key` is present
+  - added a regression that confirms `real_data_record_output_evidence()`
+    copies `debug.log`
+  - updated the remote-runner text assertion to keep `REAL_DATA_C1_THREADS`
+    present in the script
+- Why:
+  - the new investigation controls are all shell-level behaviour, so they need
+    dedicated helper tests rather than source-text assumptions alone
+- Files:
+  - `tests/test_real_data_scripts.py`
+- Checks run:
+  - `.venv/bin/python -m pytest -q tests/test_real_data_scripts.py`
+  - `.venv/bin/python -m pytest -q tests/test_edge_contract.py`
+  - `.venv/bin/python -m pytest -q tests/test_entrypoints.py`
+- Match to requested plan:
+  - yes
+- Deviations:
+  - none
+
+### Commit `b72a6f6` - `test(workflow): cover threaded direct debug logs`
+
+- Implemented:
+  - added a workflow contract test in `tests/test_edge_contract.py` for a
+    multi-group direct-download run with debug logging enabled
+  - the new test asserts that threaded direct execution logs the worker count,
+    per-group start markers, redacted command launch lines, archive extraction
+    progress, and per-group completion markers
+- Why:
+  - the threaded instrumentation is useful only if it stays stable and
+    predictable enough to diagnose the next intermittent `C1` crash
+  - this keeps the logging contract under unit coverage without requiring a
+    real segfault reproduction in CI
+- Files:
+  - `tests/test_edge_contract.py`
+- Checks run:
+  - `.venv/bin/python -m pytest -q tests/test_edge_contract.py`
+  - `.venv/bin/python -m pytest -q tests/test_real_data_scripts.py`
+  - `.venv/bin/python -m pytest -q tests/test_entrypoints.py`
+- Match to requested plan:
+  - yes
+- Deviations:
+  - none
+
+### Commit `7a05e30` - `docs(validation): document C1 investigation mode`
+
+- Implemented:
+  - updated `docs/real-data-validation.md` to document
+    `REAL_DATA_C1_THREADS`, `REAL_DATA_PYTHON_FAULTHANDLER`, and
+    `REAL_DATA_DEBUG_SAFE`
+  - added a recommended threaded-then-serial `C1` repro sequence for remote
+    investigation mode
+  - documented that `_evidence/C1/debug.log` should be compared with stderr and
+    `run_summary.tsv` when investigation mode is used
+- Why:
+  - the remote guide previously documented smoke tests and the main matrix, but
+    not the debug-oriented rerun sequence needed for the intermittent `C1`
+    segfault
+- Files:
+  - `docs/real-data-validation.md`
+- Checks run:
+  - `.venv/bin/python -m pytest -q tests/test_entrypoints.py`
+  - `.venv/bin/python -m pytest -q tests/test_real_data_scripts.py`
+- Match to requested plan:
+  - yes
+- Deviations:
+  - none
+
+### Commit `4431f2c` - `docs(debug): capture C1 segfault investigation`
+
+- Implemented:
+  - added `docs/debug-note-c1-threaded-direct-segfault.md`
+  - recorded the observed `C1` failure pattern, the serial success comparison,
+    the patches added for investigation, and the recommended next repro
+    commands
+- Why:
+  - the repo rules require a debug note during debugging, and this issue now
+    has enough concrete evidence to deserve a dedicated note rather than only a
+    chat transcript
+- Files:
+  - `docs/debug-note-c1-threaded-direct-segfault.md`
+- Checks run:
+  - `.venv/bin/python -m pytest -q tests/test_real_data_scripts.py`
+  - `.venv/bin/python -m pytest -q tests/test_edge_contract.py`
+  - `.venv/bin/python -m pytest -q tests/test_entrypoints.py`
+- Match to requested plan:
+  - yes
+- Deviations:
+  - none
