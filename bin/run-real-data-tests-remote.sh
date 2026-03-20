@@ -74,7 +74,7 @@ run_remote_case() {
                 --gtdb-release latest \
                 --gtdb-taxon "s__Thermoflexus hugenholtzii" \
                 --download-method direct \
-                --threads 2 \
+                --threads "${REAL_DATA_C1_THREADS:-2}" \
                 --include genome
             ;;
         C2)
