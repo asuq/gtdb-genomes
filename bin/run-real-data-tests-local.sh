@@ -124,10 +124,7 @@ local_require_case_commands() {
     local case_id=$1
 
     case "${case_id}" in
-        A1 | A2 | A3 | A4 | A5 | A7 | A8 | A9)
-            return 0
-            ;;
-        A6)
+        A1 | A2 | A3 | A4 | A5 | A6 | A7 | A8 | A9)
             real_data_require_command datasets
             return 0
             ;;
@@ -153,7 +150,6 @@ run_local_case() {
                 "${LOCAL_LAUNCHER[@]}" \
                 --gtdb-release 80 \
                 --gtdb-taxon g__Acholeplasma_C \
-                --download-method direct \
                 --dry-run
             ;;
         A2)
@@ -162,7 +158,6 @@ run_local_case() {
                 "${LOCAL_LAUNCHER[@]}" \
                 --gtdb-release 83 \
                 --gtdb-taxon "s__Thermoflexus hugenholtzii" \
-                --download-method direct \
                 --dry-run
             ;;
         A3)
@@ -171,7 +166,6 @@ run_local_case() {
                 "${LOCAL_LAUNCHER[@]}" \
                 --gtdb-release 86 \
                 --gtdb-taxon g__Methanobrevibacter \
-                --download-method direct \
                 --dry-run
             ;;
         A4)
@@ -180,7 +174,6 @@ run_local_case() {
                 "${LOCAL_LAUNCHER[@]}" \
                 --gtdb-release 89 \
                 --gtdb-taxon "s__Thermoflexus hugenholtzii" \
-                --download-method direct \
                 --dry-run
             ;;
         A5)
@@ -190,7 +183,6 @@ run_local_case() {
                 --gtdb-release 95 \
                 --gtdb-taxon g__Thermoflexus \
                 --gtdb-taxon "s__Thermoflexus hugenholtzii" \
-                --download-method direct \
                 --dry-run
             ;;
         A6)
@@ -199,7 +191,6 @@ run_local_case() {
                 "${LOCAL_LAUNCHER[@]}" \
                 --gtdb-release 202 \
                 --gtdb-taxon g__Bacteroides \
-                --download-method auto \
                 --dry-run
             ;;
         A7)
@@ -208,7 +199,6 @@ run_local_case() {
                 "${LOCAL_LAUNCHER[@]}" \
                 --gtdb-release 207 \
                 --gtdb-taxon g__Methanobrevibacter \
-                --download-method direct \
                 --dry-run
             ;;
         A8)
@@ -217,7 +207,6 @@ run_local_case() {
                 "${LOCAL_LAUNCHER[@]}" \
                 --gtdb-release release220/220.0 \
                 --gtdb-taxon "s__Thermoflexus hugenholtzii" \
-                --download-method direct \
                 --dry-run
             ;;
         A9)
@@ -226,7 +215,6 @@ run_local_case() {
                 "${LOCAL_LAUNCHER[@]}" \
                 --gtdb-release latest \
                 --gtdb-taxon g__Methanobrevibacter \
-                --download-method direct \
                 --dry-run
             ;;
         B1)
@@ -236,7 +224,6 @@ run_local_case() {
                 "${LOCAL_LAUNCHER[@]}" \
                 --gtdb-release 83 \
                 --gtdb-taxon "s__Thermoflexus hugenholtzii" \
-                --download-method direct \
                 --threads 1 \
                 --include genome
             ;;
@@ -248,7 +235,6 @@ run_local_case() {
                 "${LOCAL_LAUNCHER[@]}" \
                 --gtdb-release 86 \
                 --gtdb-taxon g__Methanobrevibacter \
-                --download-method direct \
                 --prefer-genbank \
                 --threads 2 \
                 --include genome,gff3 \
@@ -262,7 +248,6 @@ run_local_case() {
                 --gtdb-release 95 \
                 --gtdb-taxon g__Thermoflexus \
                 --gtdb-taxon "s__Thermoflexus hugenholtzii" \
-                --download-method direct \
                 --threads 2 \
                 --include genome
             ;;
@@ -273,7 +258,6 @@ run_local_case() {
                 "${LOCAL_LAUNCHER[@]}" \
                 --gtdb-release 80 \
                 --gtdb-taxon g__Acholeplasma_C \
-                --download-method direct \
                 --threads 1 \
                 --include genome
             ;;
@@ -284,7 +268,6 @@ run_local_case() {
                 "${LOCAL_LAUNCHER[@]}" \
                 --gtdb-release 80 \
                 --gtdb-taxon g__UBA10030 \
-                --download-method direct \
                 --threads 1 \
                 --include genome
             ;;
@@ -296,7 +279,6 @@ run_local_case() {
                 "${LOCAL_LAUNCHER[@]}" \
                 --gtdb-release 207 \
                 --gtdb-taxon g__Methanobrevibacter \
-                --download-method direct \
                 --prefer-genbank \
                 --threads 4 \
                 --include genome,gff3 \

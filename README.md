@@ -50,7 +50,6 @@ gtdb-genomes --gtdb-release latest --gtdb-taxon g__Escherichia --outdir results
 ### Optional options
 - `--prefer-genbank`
 - `--version-fixed`
-- `--download-method {auto,direct,dehydrate}`
 - `--threads`
 - `--ncbi-api-key`
 - `--include`
@@ -64,11 +63,15 @@ family. The downloaded version may differ from the RefSeq version.
 Use `--version-fixed` with `--prefer-genbank` to keep the exact selected
 version.
 
+Download strategy is always automatic. Smaller supported requests use batch
+direct `datasets download genome accession --inputfile ... --filename ...`
+passes, while larger requests switch to batch dehydrate/rehydrate.
+
 Check `gtdb-genomes --help` for details and [usage-details](docs/usage-details.md) on optional options.
 
 ## Examples
 
-Small direct download:
+Small download where automatic planning stays on the direct path:
 
 ```bash
 gtdb-genomes \
@@ -101,13 +104,12 @@ gtdb-genomes \
   --outdir results/methanobrevibacter-fixed
 ```
 
-Bundled-data-only dry-run:
+Supported dry-run with automatic planning:
 
 ```bash
 gtdb-genomes \
   --gtdb-release 95 \
   --gtdb-taxon "s__Thermoflexus hugenholtzii" \
-  --download-method direct \
   --dry-run \
   --outdir /tmp/gtdb_dry_run
 ```
@@ -156,7 +158,7 @@ The tool:
    then requests either the latest revision in that family or the exact
    selected version when `--version-fixed` is also set.
 6. Uses the NCBI `datasets` command for metadata lookup and genome download.
-7. Chooses direct download or batch dehydrate/rehydrate based on request size.
+7. Chooses the download strategy automatically based on request size.
 8. Unzips and reorganises the downloaded payload into per-taxon folders.
 
 Detailed CLI behaviour, retry rules, output layout, runtime contract, and

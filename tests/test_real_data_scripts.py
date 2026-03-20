@@ -183,7 +183,7 @@ def test_real_data_prepare_case_command_records_faulthandler_and_safe_debug(
         "real_data_prepare_case_command "
         "gtdb-genomes --gtdb-release latest "
         "--gtdb-taxon 's__Thermoflexus hugenholtzii' "
-        "--download-method direct --threads 2 --include genome\n"
+        "--threads 2 --include genome\n"
         "real_data_write_command_file "
         f"{shlex.quote(str(command_file))} "
         '"${REAL_DATA_PREPARED_COMMAND[@]}" --outdir /tmp/out\n'
@@ -211,7 +211,7 @@ def test_real_data_prepare_case_command_skips_debug_for_api_key_case(
         "real_data_prepare_case_command "
         "gtdb-genomes --gtdb-release 207 "
         "--gtdb-taxon g__Methanobrevibacter "
-        "--download-method direct --threads 4 --include genome,gff3 "
+        "--threads 4 --include genome,gff3 "
         "--ncbi-api-key secret\n"
         "real_data_write_command_file "
         f"{shlex.quote(str(command_file))} "
@@ -260,5 +260,6 @@ def test_remote_runner_uses_shared_defaults() -> None:
     assert "gtdb-genomes \\" in remote_script
     assert "--gtdb-taxon g__DefinitelyNotReal" in remote_script
     assert "--dry-run" in remote_script
-    assert "REAL_DATA_C1_THREADS" in remote_script
+    assert "--threads 2" in remote_script
+    assert "--download-method" not in remote_script
     assert "get_release_manifest_path" not in remote_script

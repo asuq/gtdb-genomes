@@ -50,28 +50,33 @@ gtdb-genomes \
   the exact selected versioned accession instead of requesting the latest
   available revision in that family.
 
-- `--download-method`: Defaults to `auto`.
+- download strategy is automatic only.
 
   Rules:
 
-  - direct mode downloads one accession per
-    `datasets download genome accession` job, with concurrency limited to
-    `min(threads, 5)`
-  - dehydrate mode writes one accession file and runs one batch
-    `datasets download genome accession --inputfile ... --dehydrated` job
-  - auto mode switches to dehydrate when the request contains at least 1,000
-    accessions or when `datasets --preview` reports more than 15 GB
-
-  If a batch dehydrated download exhausts its retry budget, or if unzip or
-  batch rehydrate fails, the tool falls back to per-accession direct downloads
-  and records `dehydrate_fallback_direct` as the final method used.
+  - supported requests always go through the automatic planner
+  - the planner runs `datasets --preview` and switches to dehydrate when the
+    request contains at least 1,000 accessions or when preview reports more
+    than 15 GB
+  - smaller supported requests use batch direct
+    `datasets download genome accession --inputfile ... --filename ...` passes
+  - direct mode retries only the still-unresolved request accessions in later
+    batch passes
+  - if a preferred `GCA_*` request remains unresolved after its preferred
+    direct passes, the workflow may fall back to the original accession and
+    records `downloaded_after_fallback` plus
+    `paired_to_gca_fallback_original_on_download_failure`
+  - if a batch dehydrated download exhausts its retry budget, or if unzip or
+    batch rehydrate fails, the tool falls back to batch direct downloads and
+    records `dehydrate_fallback_direct` as the final method used
 
 - `--threads`: Defaults to all available CPU threads.
 
   Concurrency rules:
 
-  - direct-mode network concurrency is `min(threads, 5, accession_count)`
-  - batch dehydrated download concurrency is always `1`
+  - direct-mode network concurrency is one batch command per pass
+  - supported direct runs therefore record `download_concurrency_used=1`
+  - batch dehydrated download concurrency is also `1`
   - `datasets rehydrate --max-workers` uses `min(threads, 30)`
 
 - `--ncbi-api-key`: This option expects an NCBI API key. The tool passes it only to the
@@ -109,8 +114,8 @@ gtdb-genomes \
   - read bundled GTDB taxonomy TSVs and the local release manifest
   - perform NCBI metadata lookup when `--prefer-genbank` is enabled and the
     selected rows include supported non-`UBA*` accessions
-  - run `datasets --preview` when `--download-method auto` is used and the
-    selected rows include supported non-`UBA*` accessions
+  - run `datasets --preview` when the selected rows include supported
+    non-`UBA*` accessions
 
   Zero-match runs and unsupported-`UBA*`-only runs do not require `datasets`
   or `unzip`, because the workflow exits before any NCBI or archive step.
@@ -169,6 +174,8 @@ otherwise collide.
   - one row per run
   - records requested and resolved release, chosen method, actual concurrency,
     worker usage, counts, output path, and exit code
+  - `download_method_requested` is an internal provenance field and is always
+    `auto`
 - `taxon_summary.tsv`
   - one row per requested taxon
   - records matched rows, accession counts, duplicate-copy count, and output
@@ -177,6 +184,8 @@ otherwise collide.
   - one row per taxon-accession mapping
   - records lineage, original GTDB accession, final accession, conversion
     status, final method used, output path, and download status
+  - `download_batch` records the batch pass that produced the row, for example
+    `direct_batch_1`, `direct_fallback_batch_1`, or `dehydrated_batch`
 - `download_failures.tsv`
   - one row per recorded failed attempt
   - records collapsed taxon context, the attempted accession or accession set,
@@ -201,9 +210,10 @@ NCBI-facing work to the NCBI `datasets` CLI. Upstream project:
 The tool uses `datasets` for:
 
 - `datasets summary genome accession` during metadata lookup
-- `datasets download genome accession --preview` when `--download-method auto`
+- `datasets download genome accession --preview` when the automatic planner
   needs a size estimate
-- direct `datasets download genome accession` jobs for smaller requests
+- direct batch `datasets download genome accession --inputfile ... --filename ...`
+  passes for smaller requests
 - batch dehydrated `datasets download genome accession --inputfile ...` runs for
   larger requests
 - `datasets rehydrate` after a dehydrated batch download
@@ -227,11 +237,18 @@ This applies to:
 
 - `datasets summary genome accession`
 - `datasets download genome accession --preview`
-- direct `datasets download genome accession`
+- direct batch `datasets download genome accession --inputfile ... --filename ...`
 - batch dehydrated `datasets download genome accession --inputfile ...`
 - `datasets rehydrate`
 
 Local unzip, local file parsing, and manifest writing are not retried.
+
+Direct-mode layout resolution adds one more workflow-level retry loop on top of
+the command retry budget. One supported direct request starts with
+`direct_batch_1` and may continue through `direct_batch_4`, keeping partial
+successes and retrying only unresolved request accessions. Rows that still map
+from a preferred `GCA_*` request may then enter `direct_fallback_batch_1` to
+`direct_fallback_batch_4` against the original accession.
 
 ## Runtime Contract
 
@@ -268,7 +285,6 @@ Status values:
 - `download_failures.tsv.final_status`
   - `retry_scheduled`
   - `retry_exhausted`
-  - `fallback_exhausted`
   - `unsupported_input`
 
 Fixed TSV columns:
@@ -342,5 +358,5 @@ non-dry runs.
   identifier
 - very large requests still depend on upstream `datasets` performance and NCBI
   availability
-- direct download concurrency is intentionally limited to `min(--threads, 5)`
+- direct mode may need several batch passes before all payloads resolve
 - package size grows because bundled GTDB taxonomy releases ship locally

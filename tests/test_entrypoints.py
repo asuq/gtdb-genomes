@@ -94,6 +94,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     assert "--taxon" not in readme_text
     assert "--output" not in readme_text
     assert "--no-prefer-genbank" not in readme_text
+    assert "--download-method" not in readme_text
     assert "--prefer-genbank" in readme_text
     assert "--version-fixed" in readme_text
     assert "uv run gtdb-genomes" in readme_text
@@ -118,6 +119,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     assert "--taxon" not in usage_details_text
     assert "--output" not in usage_details_text
     assert "--no-prefer-genbank" not in usage_details_text
+    assert "--download-method" not in usage_details_text
     assert "--version-fixed" in usage_details_text
     assert "must not depend on uv at runtime" in bioconda_text
     assert "Fixed TSV columns:" in usage_details_text
@@ -148,6 +150,8 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     assert "does not download genomes directly from Python code" in usage_details_text
     assert "may differ from the RefSeq version" in readme_text
     assert "may differ from the RefSeq version" in usage_details_text
+    assert "Chooses the download strategy automatically" in readme_text
+    assert "download strategy is automatic only" in usage_details_text
     assert "suffix variants are separate taxa" in readme_text
     assert "must be quoted in the shell" in readme_text
     assert "--gtdb-taxon \"s__Altiarchaeum hamiconexum\"" in readme_text
@@ -172,12 +176,11 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
 
     assert "uv run gtdb-genomes" in guide_text
     assert "LOCAL_LAUNCHER_MODE=module" in guide_text
-    assert "A1`, `A2`, `A3`, `A4`, `A5`, `A7`, `A8`, `A9`: `uv` only" in (
+    assert "A1` to `A9`: `uv` plus `datasets`" in (
         guide_text
     )
-    assert "A6`: `uv` plus `datasets`" in guide_text
     assert "B1` to `B6`: `uv`, `datasets`, and `unzip`" in guide_text
-    assert "offline bundled-data dry-runs remain valid without NCBI access" in (
+    assert "zero-match and unsupported-`UBA*`-only dry-runs remain valid" in (
         guide_text
     )
     assert "unique path such as" in guide_text
@@ -195,3 +198,5 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
     assert "REMOTE_TEST_ROOT" in guide_text
     assert "case-results.tsv" in guide_text
     assert "tool-versions.txt" in guide_text
+    assert "--download-method" not in guide_text
+    assert "REAL_DATA_C1_THREADS" not in guide_text

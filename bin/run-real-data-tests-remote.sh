@@ -73,8 +73,7 @@ run_remote_case() {
                 gtdb-genomes \
                 --gtdb-release latest \
                 --gtdb-taxon "s__Thermoflexus hugenholtzii" \
-                --download-method direct \
-                --threads "${REAL_DATA_C1_THREADS:-2}" \
+                --threads 2 \
                 --include genome
             ;;
         C2)
@@ -85,7 +84,6 @@ run_remote_case() {
                 gtdb-genomes \
                 --gtdb-release 89 \
                 --gtdb-taxon "s__Thermoflexus hugenholtzii" \
-                --download-method direct \
                 --prefer-genbank \
                 --threads 1 \
                 --include genome \
@@ -99,7 +97,6 @@ run_remote_case() {
                 gtdb-genomes \
                 --gtdb-release 207 \
                 --gtdb-taxon g__Methanobrevibacter \
-                --download-method direct \
                 --prefer-genbank \
                 --threads 4 \
                 --include genome,gff3 \
@@ -112,7 +109,6 @@ run_remote_case() {
                 gtdb-genomes \
                 --gtdb-release 80 \
                 --gtdb-taxon g__Acholeplasma_C \
-                --download-method direct \
                 --threads 1 \
                 --include genome
             ;;
@@ -124,7 +120,6 @@ run_remote_case() {
                 gtdb-genomes \
                 --gtdb-release 202 \
                 --gtdb-taxon g__Bacteroides \
-                --download-method auto \
                 --prefer-genbank \
                 --threads 12 \
                 --include genome \
@@ -136,7 +131,6 @@ run_remote_case() {
                 gtdb-genomes \
                 --gtdb-release release220/220.0 \
                 --gtdb-taxon "s__Thermoflexus hugenholtzii" \
-                --download-method direct \
                 --dry-run
             ;;
         C7)
@@ -147,7 +141,6 @@ run_remote_case() {
                 gtdb-genomes \
                 --gtdb-release 214 \
                 --gtdb-taxon g__Bacteroides \
-                --download-method auto \
                 --prefer-genbank \
                 --threads 12 \
                 --include genome \

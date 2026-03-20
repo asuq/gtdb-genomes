@@ -117,17 +117,23 @@ Refine the GTDB accession set by preferring paired `GCA` accessions when NCBI me
 
 ### Goal
 
-Select the correct `datasets` workflow and control concurrency safely.
+Select the correct `datasets` workflow automatically and keep direct-mode
+retries deterministic.
 
 ### Concrete tasks
 
-- implement `direct`, `dehydrate`, and `auto` modes
-- run `datasets --preview` in `auto` mode
-- switch to dehydrate/rehydrate for requests with at least 1,000 genomes or more than 15 GB
-- implement direct-mode accession sharding
+- remove the public strategy flag and keep strategy selection internal
+- run `datasets --preview` for supported requests during automatic planning
+- switch to dehydrate/rehydrate for requests with at least 1,000 genomes or
+  more than 15 GB
+- implement direct mode as batch-input passes using
+  `datasets download genome accession --inputfile ... --filename ...`
+- keep partial successes from each direct batch pass and retry only unresolved
+  request accessions
+- preserve original-accession fallback after preferred `GCA_*` retries are
+  exhausted
 - require `genome` to be present in every allowed `--include` value
-- cap direct-mode download concurrency at `min(--threads, 5)` jobs
-- map `--threads` to local worker limits and rehydrate worker count
+- map `--threads` to rehydrate worker count
 - support `--include` passthrough and `--api-key` forwarding with redaction
 - allow `--dry-run` to resolve releases from the bundled manifest, read bundled taxonomy data, and query accession metadata, but prohibit GTDB network access, genome downloads, and output-tree creation
 - retry only `datasets download genome accession` and `datasets rehydrate`
@@ -135,8 +141,11 @@ Select the correct `datasets` workflow and control concurrency safely.
 
 ### Acceptance criteria
 
-- auto mode chooses the documented path for small and large requests
-- direct mode never exceeds `min(--threads, 5)` concurrent `datasets` download jobs
+- automatic planning chooses the documented path for small and large requests
+- direct mode uses one batch command per pass and records `direct_batch_N`
+  output provenance
+- preferred `GCA_*` failures may still succeed through original-accession
+  fallback
 - dehydrate mode uses one package download followed by controlled rehydration
 - command construction respects the documented `--include`, `--dry-run`, retry, and `--threads` behaviour
 
@@ -144,6 +153,8 @@ Select the correct `datasets` workflow and control concurrency safely.
 
 - upstream `datasets` behaviour may change between versions
 - preview output parsing must be robust to minor format changes
+- keeping partial successes while retrying only unresolved accessions requires
+  careful manifest bookkeeping
 
 ## Phase 6: Unzip and output reorganisation
 
@@ -214,7 +225,8 @@ Build a test suite that validates behaviour without depending on large live down
 - add fixture-based tests for taxonomy parsing and taxon matching
 - add tests for accession conversion logic
 - add tests for direct vs dehydrate decision rules
-- add tests for concurrency capping at 5
+- add tests for direct batch retries, no-progress termination, and original
+  accession fallback
 - add tests for `--include` validation and dry-run boundaries
 - add tests for download-only retry logic
 - add tests for output reorganisation and duplicate-copy handling
@@ -384,21 +396,21 @@ This section is the authoritative source of truth for validation, failure handli
 
 ### `auto` preview failure
 
-- `--download-method auto` requires a successful `datasets --preview`
-- if `datasets --preview` fails in `auto` mode, the run exits with code `5`
+- automatic planning requires a successful `datasets --preview` for supported
+  requests
+- if `datasets --preview` fails, the run exits with code `5`
 - preview failure is treated as an external-tool or preflight error, not as code `7`
 
 ### `GCA` fallback
 
 - if metadata lookup for a specific accession fails, fall back immediately to the original GTDB accession without retrying metadata lookup
-- if preferred `GCA` is selected, that preferred accession must consume its full retry budget before fallback begins
-- the preferred `GCA` attempt means:
-  - initial attempt
-  - retry 1 after 5 s
-  - retry 2 after 15 s
-  - retry 3 after 45 s
-- only after all preferred-`GCA` attempts fail may the tool retry the original accession
-- the original accession then receives its own full retry budget
+- if preferred `GCA` is selected, that preferred accession must consume its
+  direct batch retry phase before fallback begins
+- the preferred phase means `direct_batch_1` plus up to three further
+  preferred direct passes
+- only after preferred-`GCA` retries are exhausted may the tool retry the
+  original accession
+- the original accession then receives its own fallback batch retry phase
 - if fallback succeeds, keep the genome and record the failed preferred attempt in `download_failures.tsv`
 - `accession_map.tsv` records one row per requested taxon and final usable accession result
 - failed intermediate preferred-`GCA` attempts are recorded only in `download_failures.tsv`
@@ -441,13 +453,13 @@ Exit codes:
 - `preview`
 - `preferred_download`
 - `fallback_download`
+- `layout`
 - `rehydrate`
 
 `final_status` values:
 
 - `retry_scheduled`
 - `retry_exhausted`
-- `fallback_exhausted`
 
 ## Cross-Cutting Decisions
 
@@ -469,4 +481,5 @@ These decisions are fixed across all phases:
 - duplicated genomes are copied into each taxon folder and logged
 - keep successful outputs on partial failure, but exit non-zero
 - retry only download operations, with one initial attempt plus up to 3 retries
-- direct-mode network concurrency is `min(--threads, 5)`
+- direct mode uses one batch command per pass and may retry unresolved
+  accessions across preferred and fallback phases

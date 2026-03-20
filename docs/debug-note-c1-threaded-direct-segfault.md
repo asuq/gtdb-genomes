@@ -1,52 +1,35 @@
-# C1 Threaded Direct-Download Segfault Note
+# C1 Segfault Closure Note
 
-## Failure
+## Original failure
 
 - remote packaged-runtime case `C1` intermittently exited `139`
 - the failing runs created the output root plus `.gtdb_genomes_work/` and
   `taxa/`, but wrote no manifests and no stderr text
 - the same remote environment completed:
-  - `remote-smoke-c1` with `--threads 2`
-  - `c1-serial` with `--threads 1`
-  - `C4` and `C6` from the remote runner
+  - `remote-smoke-c1`
+  - `C4`
+  - `C6`
 
-## Current reading
+## Resolution
 
-- the packaged wheel and bundled taxonomy data are not the issue
-- the failing path is specific to the `latest / s__Thermoflexus hugenholtzii`
-  direct-download case under the remote runner
-- because `c1-serial` succeeds, the next investigation target is the threaded
-  direct-download path rather than release resolution or the selected taxa
+- the previous direct path used threaded per-accession downloads
+- that path has been removed
+- direct mode now uses batch-input `datasets download genome accession
+  --inputfile ... --filename ...` passes
+- partial successes are kept across direct passes
+- unresolved preferred `GCA_*` requests may still fall back to the original
+  accession, preserving
+  `paired_to_gca_fallback_original_on_download_failure`
 
-## Patches added
+## Remaining investigation tooling
 
-- debug instrumentation in the threaded direct-download workflow:
-  - resolved worker count
-  - per-group start and completion lines
-  - redacted direct download commands
-  - archive extraction start and completion lines
-- remote investigation controls:
-  - `REAL_DATA_C1_THREADS`
-  - `REAL_DATA_PYTHON_FAULTHANDLER`
-  - `REAL_DATA_DEBUG_SAFE`
-- runner evidence copy for `debug.log` when present
+- `REAL_DATA_PYTHON_FAULTHANDLER=1` still prefixes runner commands with
+  `PYTHONFAULTHANDLER=1`
+- `REAL_DATA_DEBUG_SAFE=1` still appends `--debug` only to no-key cases
+- runner evidence still copies `debug.log` when a run writes one
 
-## Next repro
+## Follow-up
 
-```bash
-export REMOTE_TEST_ROOT=/tmp/gtdb-realtests/remote-$(date +%Y%m%d)-debug
-export REAL_DATA_PYTHON_FAULTHANDLER=1
-export REAL_DATA_DEBUG_SAFE=1
-bash /tmp/gtdb-genome-remote/run-real-data-tests-remote.sh C1
-```
-
-```bash
-export REMOTE_TEST_ROOT=/tmp/gtdb-realtests/remote-$(date +%Y%m%d)-serial
-export REAL_DATA_C1_THREADS=1
-export REAL_DATA_PYTHON_FAULTHANDLER=1
-export REAL_DATA_DEBUG_SAFE=1
-bash /tmp/gtdb-genome-remote/run-real-data-tests-remote.sh C1
-```
-
-Compare `_evidence/C1/debug.log`, `_evidence/C1/stderr.log`, and
-`run_summary.tsv`.
+If a remote real-data case fails again, rerun the case with
+`REAL_DATA_PYTHON_FAULTHANDLER=1` and `REAL_DATA_DEBUG_SAFE=1`, then inspect
+`_evidence/<case-id>/debug.log`, `stderr.log`, and `run_summary.tsv`.

@@ -74,8 +74,7 @@ Optional local launcher fallback:
 
 Required commands by case family:
 
-- `A1`, `A2`, `A3`, `A4`, `A5`, `A7`, `A8`, `A9`: `uv` only
-- `A6`: `uv` plus `datasets`
+- `A1` to `A9`: `uv` plus `datasets`
 - `B1` to `B6`: `uv`, `datasets`, and `unzip`
 
 Required environment:
@@ -92,8 +91,10 @@ The local runner uses:
 
 Local environment notes:
 
-- offline bundled-data dry-runs remain valid without NCBI access
-- `A6` and all `B*` cases require outbound DNS and network access to
+- zero-match and unsupported-`UBA*`-only dry-runs remain valid without NCBI
+  access
+- the documented `A*` release-coverage dry-runs and all `B*` cases require
+  outbound DNS and network access to
   `api.ncbi.nlm.nih.gov`
 - the default runner does not add `--debug` to `A6`, because upstream
   `datasets` debug output can print the raw API-key header
@@ -193,20 +194,19 @@ data without creating an output tree:
 gtdb-genomes \
   --gtdb-release release220/220.0 \
   --gtdb-taxon "s__Thermoflexus hugenholtzii" \
-  --download-method direct \
   --dry-run \
   --outdir /tmp/gtdb-realtests/remote-smoke-c6
 ```
 
-Then run a `C1` live direct-download smoke test. This confirms that the
+Then run a `C1` live smoke test. This confirms that the
 installed command can perform a real download on the server and does not
-require `NCBI_API_KEY`:
+require `NCBI_API_KEY`. Automatic strategy selection should keep this case on
+the direct path:
 
 ```bash
 gtdb-genomes \
   --gtdb-release latest \
   --gtdb-taxon "s__Thermoflexus hugenholtzii" \
-  --download-method direct \
   --threads 2 \
   --include genome \
   --outdir /tmp/gtdb-realtests/remote-smoke-c1
@@ -224,8 +224,6 @@ Optional environment:
 - `REMOTE_TEST_ROOT` to override the default unique suite root
 - `NCBI_API_KEY` for `C2`, `C3`, `C5`, and `C7`
 - `RUN_OPTIONAL_LARGE=1` to include the optional `C7` stress case
-- `REAL_DATA_C1_THREADS`, default `2`, to override only the threaded `C1`
-  direct-download worker count
 - `REAL_DATA_PYTHON_FAULTHANDLER=1` to prefix remote case commands with
   `PYTHONFAULTHANDLER=1`
 - `REAL_DATA_DEBUG_SAFE=1` to append `--debug` only to no-key cases such as
@@ -251,10 +249,10 @@ RUN_OPTIONAL_LARGE=1 \
   bash /tmp/gtdb-genome-remote/run-real-data-tests-remote.sh C7
 ```
 
-### 5. Investigation mode for intermittent `C1` failures
+### 5. Investigation mode for a failing remote case
 
-If `C1` fails intermittently on one remote runtime, keep the normal CLI
-behaviour unchanged and rerun the remote runner in investigation mode.
+If a remote real-data case fails on one runtime, keep the normal CLI behaviour
+unchanged and rerun the runner in investigation mode.
 
 Recommended sequence:
 
@@ -265,22 +263,11 @@ export REAL_DATA_DEBUG_SAFE=1
 bash /tmp/gtdb-genome-remote/run-real-data-tests-remote.sh C1
 ```
 
-```bash
-export REMOTE_TEST_ROOT=/tmp/gtdb-realtests/remote-$(date +%Y%m%d)-serial
-export REAL_DATA_C1_THREADS=1
-export REAL_DATA_PYTHON_FAULTHANDLER=1
-export REAL_DATA_DEBUG_SAFE=1
-bash /tmp/gtdb-genome-remote/run-real-data-tests-remote.sh C1
-```
-
 Then compare:
 
 - `_evidence/C1/debug.log` when present
 - `_evidence/C1/stderr.log`
 - copied `run_summary.tsv`
-
-The current investigation target is whether the threaded `C1` direct-download
-path is unstable on that runtime while the serial `C1` path remains stable.
 
 ### Expected results
 
