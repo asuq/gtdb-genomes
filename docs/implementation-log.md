@@ -2121,3 +2121,69 @@ PY`
   - yes
 - Deviations:
   - none
+
+### Commit `854951c` - `fix(selection): lock exact GTDB taxon matching`
+
+- Implemented:
+  - extracted the lineage-token expression in `selection.py` so the exact GTDB
+    token-matching contract is explicit in one place
+  - normalised requested taxa by trimming surrounding whitespace only, without
+    changing internal whitespace or folding suffix variants
+  - updated the selection docstring to state that matching is by exact GTDB
+    lineage token
+  - added selection regressions covering suffix-variant exclusion,
+    suffix-variant exact matching when explicitly requested, preserved internal
+    species whitespace, surrounding-whitespace trimming, incomplete species
+    non-matching, and malformed double-space species non-matching
+  - extended the real-fixture tests to assert that bundled release `226.0`
+    excludes `GCF_900143255.1` from `g__Frigididesulfovibrio` and returns zero
+    matches for incomplete species token `s__Altiarchaeum`
+- Why:
+  - the selector already behaved as an exact GTDB token matcher, but the code
+    did not make that contract explicit and lacked direct regressions for
+    suffix variants and species-whitespace edge cases
+  - the user wanted a hard guarantee that incomplete species tokens do not
+    fall back to any broader taxon match
+- Files:
+  - `src/gtdb_genomes/selection.py`
+  - `tests/test_selection.py`
+  - `tests/test_selection_real_fixtures.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --group dev pytest tests/test_selection.py tests/test_selection_real_fixtures.py tests/test_cli.py tests/test_entrypoints.py`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none
+
+### Commit `a9d9779` - `docs(cli): clarify exact GTDB taxon quoting`
+
+- Implemented:
+  - updated the README and detailed usage reference to say that
+    `--gtdb-taxon` matches exact GTDB lineage tokens only after trimming
+    surrounding whitespace
+  - documented that suffix variants such as
+    `g__Frigididesulfovibrio_A` are separate taxa and are not retrieved when
+    requesting `g__Frigididesulfovibrio`
+  - documented that species taxa with spaces must be quoted in the shell and
+    gave the explicit example `--gtdb-taxon "s__Altiarchaeum hamiconexum"`
+  - documented that unquoted shell-split species input is invalid
+  - updated the CLI help text to mention quoting for species taxa
+  - added parser and entrypoint regressions to lock in the new help and
+    documentation wording
+- Why:
+  - the previous docs said matching was exact but did not spell out the
+    consequences for suffix variants or shell-quoted species names
+  - users need a clear warning that the shell will split an unquoted species
+    taxon before `gtdb-genomes` can interpret it
+- Files:
+  - `README.md`
+  - `docs/usage-details.md`
+  - `src/gtdb_genomes/cli.py`
+  - `tests/test_cli.py`
+  - `tests/test_entrypoints.py`
+- Checks run:
+  - `UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv run --group dev pytest tests/test_selection.py tests/test_selection_real_fixtures.py tests/test_cli.py tests/test_entrypoints.py`
+- Match to frozen plan:
+  - yes
+- Deviations:
+  - none
