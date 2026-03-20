@@ -2964,3 +2964,54 @@ PY`
   - yes
 - Deviations:
   - scope stayed limited to `C5`; `C7` remains strict for now
+
+### Commit `9dc56da` - `fix(licensing): declare mixed archive metadata`
+
+- Implemented:
+  - updated `pyproject.toml` so built distribution archives now declare
+    `MIT AND CC-BY-SA-4.0` instead of `MIT` alone
+  - added `licenses/CC-BY-SA-4.0.txt` so wheel and sdist builds carry the
+    bundled GTDB data licence text alongside the existing project `LICENSE`
+    and `NOTICE`
+  - replaced the previous generic bundled-data warning in `NOTICE` with an
+    explicit code-vs-data split, GTDB attribution, licence URLs, and a clear
+    statement that the bundled taxonomy payload is not relicensed by this
+    project
+  - updated `README.md`, `docs/usage-details.md`, and the Bioconda recipe
+    template so user-facing packaging metadata no longer implies an MIT-only
+    release when GTDB taxonomy data is bundled
+  - tightened `tests/test_entrypoints.py` to lock the mixed-licence metadata,
+    the new README badges, the explicit notice text, and the presence of the
+    bundled CC BY-SA 4.0 licence file
+- Why:
+  - the published wheel and sdist previously bundled GTDB taxonomy payloads
+    while advertising `MIT` as the archive licence expression, which was
+    misleading once the distribution archive itself was considered
+  - the previous `NOTICE` warned about upstream terms but did not ship the
+    actual CC BY-SA 4.0 text or concrete attribution details needed for the
+    bundled data path
+  - aligning the build metadata, packaged licence files, and release-facing
+    docs reduces the risk of publishing an archive that overstates the reach
+    of the MIT licence
+- Files:
+  - `pyproject.toml`
+  - `NOTICE`
+  - `README.md`
+  - `docs/usage-details.md`
+  - `packaging/bioconda/meta.yaml`
+  - `tests/test_entrypoints.py`
+  - `licenses/CC-BY-SA-4.0.txt`
+- Checks run:
+  - `.venv/bin/python -m pytest -q tests/test_entrypoints.py`
+  - `.venv/bin/python -m pytest -q`
+  - `PATH=/Users/asuq/miniforge3/envs/gtdb-genome/bin:/usr/bin:/bin UV_CACHE_DIR=/tmp/gtdb_uv_cache /Users/asuq/miniforge3/envs/gtdb-genome/bin/uv build --out-dir /tmp/gtdb_license_build`
+  - `python3 -m zipfile -l /tmp/gtdb_license_build/gtdb_genomes-0.1.0-py3-none-any.whl`
+  - `python3 - <<'PY' ... inspect wheel METADATA and packaged licence files ... PY`
+  - `tar -tzf /tmp/gtdb_license_build/gtdb_genomes-0.1.0.tar.gz`
+  - `tar -xOzf /tmp/gtdb_license_build/gtdb_genomes-0.1.0.tar.gz gtdb_genomes-0.1.0/PKG-INFO`
+- Match to requested change:
+  - yes
+- Deviations:
+  - the bundled GTDB taxonomy payload remains in the archives; this change
+    corrects the archive metadata and packaged notices rather than switching to
+    an MIT-only package layout
