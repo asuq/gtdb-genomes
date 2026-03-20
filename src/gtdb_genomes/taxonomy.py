@@ -6,7 +6,7 @@ from pathlib import Path
 
 import polars as pl
 
-from gtdb_genomes.release_resolver import ReleaseResolution
+from gtdb_genomes.release_resolver import BundledDataError, ReleaseResolution
 
 
 TAXONOMY_COLUMNS = ["gtdb_accession", "lineage"]
@@ -23,12 +23,17 @@ def get_logical_taxonomy_filename(path: Path) -> str:
 def load_taxonomy_table(path: Path) -> pl.DataFrame:
     """Load one bundled GTDB taxonomy table."""
 
-    frame = pl.read_csv(
-        path,
-        separator="\t",
-        has_header=False,
-        new_columns=TAXONOMY_COLUMNS,
-    )
+    try:
+        frame = pl.read_csv(
+            path,
+            separator="\t",
+            has_header=False,
+            new_columns=TAXONOMY_COLUMNS,
+        )
+    except (OSError, UnicodeDecodeError, pl.exceptions.PolarsError) as error:
+        raise BundledDataError(
+            f"Bundled taxonomy table could not be parsed: {path}",
+        ) from error
     accession_column = pl.col("gtdb_accession")
     return frame.with_columns(
         pl.when(

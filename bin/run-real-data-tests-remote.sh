@@ -187,9 +187,12 @@ main() {
     real_data_run_command_check \
         "${REMOTE_TEST_ROOT}" \
         "C0-manifest" \
-        0 \
-        "${REAL_DATA_PYTHON_VERSION_BIN}" -c \
-        "from gtdb_genomes.release_resolver import get_release_manifest_path; path = get_release_manifest_path(); assert path.is_file(), path"
+        4 \
+        gtdb-genomes \
+        --gtdb-release 226 \
+        --gtdb-taxon g__DefinitelyNotReal \
+        --outdir "${REMOTE_TEST_ROOT}/c0-manifest-output" \
+        --dry-run
 
     if [ "${#selected_cases[@]}" -eq 0 ]; then
         selected_cases=(C1 C2 C3 C4 C5 C6)

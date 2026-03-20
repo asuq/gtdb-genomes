@@ -57,6 +57,7 @@ def test_run_summary_lookup_with_retries_parses_requested_accessions(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return a fake successful datasets response."""
 
@@ -93,6 +94,7 @@ def test_run_summary_lookup_with_retries_raises_on_command_failure(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return a fake failed datasets response."""
 
@@ -314,6 +316,7 @@ def test_run_summary_lookup_with_retries_retries_invalid_json(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return retryable metadata responses."""
 
@@ -350,6 +353,7 @@ def test_run_summary_lookup_with_retries_raises_after_full_retry_budget(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return repeated metadata lookup failures."""
 
@@ -370,6 +374,26 @@ def test_run_summary_lookup_with_retries_raises_after_full_retry_budget(
         )
 
     assert sleep_calls == [5, 15, 45]
+
+
+def test_run_summary_lookup_with_retries_fails_fast_on_spawn_error() -> None:
+    """Metadata lookup should not retry when the command cannot start."""
+
+    with pytest.raises(
+        MetadataLookupError,
+        match="metadata lookup command could not start",
+    ) as error:
+        run_summary_lookup_with_retries(
+            ["GCF_000001.1"],
+            Path("/tmp/accessions.txt"),
+            sleep_func=lambda delay: None,
+            runner=lambda *args, **kwargs: (_ for _ in ()).throw(
+                FileNotFoundError("datasets"),
+            ),
+        )
+
+    assert len(error.value.failures) == 1
+    assert error.value.failures[0].error_type == "metadata_lookup_spawn_error"
 
 
 def test_apply_accession_preferences_honours_disabled_gca_preference() -> None:

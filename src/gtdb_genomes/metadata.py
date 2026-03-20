@@ -17,6 +17,12 @@ from gtdb_genomes.download import (
     CommandFailureRecord,
     RETRY_DELAYS_SECONDS,
 )
+from gtdb_genomes.subprocess_utils import (
+    DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+    build_spawn_error_message,
+    build_subprocess_error_message,
+    build_timeout_error_message,
+)
 
 
 ACCESSION_PATTERN = re.compile(r"(?P<prefix>GC[AF])_(?P<numeric>\d+)\.(?P<version>\d+)")
@@ -183,12 +189,14 @@ def run_summary_lookup_with_retries(
     ncbi_api_key: str | None = None,
     datasets_bin: str = "datasets",
     sleep_func: Callable[[float], None] = time.sleep,
+    runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
 ) -> SummaryLookupResult:
     """Look up accession metadata with the fixed retry budget."""
 
     ordered_accessions = tuple(dict.fromkeys(accessions))
     if not ordered_accessions:
         return SummaryLookupResult(summary_map={}, failures=())
+    command_runner = subprocess.run if runner is None else runner
     command = build_summary_command(
         accession_file,
         ncbi_api_key=ncbi_api_key,
@@ -197,34 +205,52 @@ def run_summary_lookup_with_retries(
     max_attempts = len(RETRY_DELAYS_SECONDS) + 1
     failures: list[CommandFailureRecord] = []
     for attempt_index in range(1, max_attempts + 1):
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode == 0:
-            try:
-                return SummaryLookupResult(
-                    summary_map=parse_summary_json_lines(
-                        result.stdout,
-                        ordered_accessions,
-                    ),
-                    failures=tuple(failures),
-                )
-            except MetadataLookupError as error:
-                error_message = str(error)
+        retry_allowed = attempt_index < max_attempts
+        try:
+            result = command_runner(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+            )
+        except subprocess.TimeoutExpired:
+            error_type = "metadata_lookup_timeout"
+            error_message = build_timeout_error_message(
+                "metadata_lookup",
+                DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+            )
+        except OSError as error:
+            error_type = "metadata_lookup_spawn_error"
+            error_message = build_spawn_error_message("metadata_lookup", error)
+            retry_allowed = False
         else:
-            error_message = result.stderr.strip() or result.stdout.strip()
-            if not error_message:
-                error_message = "datasets summary genome accession failed"
-        if attempt_index < max_attempts:
+            if result.returncode == 0:
+                try:
+                    return SummaryLookupResult(
+                        summary_map=parse_summary_json_lines(
+                            result.stdout,
+                            ordered_accessions,
+                        ),
+                        failures=tuple(failures),
+                    )
+                except MetadataLookupError as error:
+                    error_type = "metadata_lookup"
+                    error_message = str(error)
+            else:
+                error_type = "metadata_lookup"
+                error_message = build_subprocess_error_message(
+                    "metadata_lookup",
+                    result,
+                )
+
+        if retry_allowed:
             failures.append(
                 CommandFailureRecord(
                     stage="metadata_lookup",
                     attempt_index=attempt_index,
                     max_attempts=max_attempts,
-                    error_type="metadata_lookup",
+                    error_type=error_type,
                     error_message=error_message,
                     final_status="retry_scheduled",
                 ),
@@ -236,7 +262,7 @@ def run_summary_lookup_with_retries(
                 stage="metadata_lookup",
                 attempt_index=attempt_index,
                 max_attempts=max_attempts,
-                error_type="metadata_lookup",
+                error_type=error_type,
                 error_message=error_message,
                 final_status="retry_exhausted",
             ),

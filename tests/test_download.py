@@ -222,6 +222,7 @@ def test_run_retryable_command_records_retries_before_success() -> None:
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return a sequence of fake command outcomes."""
 
@@ -255,6 +256,7 @@ def test_run_retryable_command_uses_stage_message_for_silent_failures() -> None:
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return one failed subprocess result without any output."""
 
@@ -276,6 +278,67 @@ def test_run_retryable_command_uses_stage_message_for_silent_failures() -> None:
     assert result.failures[-1].error_message == "preferred download command failed"
 
 
+def test_run_retryable_command_retries_timeouts_before_success() -> None:
+    """Timeouts should consume the retry budget like other transient failures."""
+
+    attempts = iter(["timeout", "success"])
+    sleep_calls: list[float] = []
+
+    def runner(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+        timeout: int,
+    ) -> subprocess.CompletedProcess[str]:
+        """Raise one timeout before returning a success."""
+
+        attempt = next(attempts)
+        if attempt == "timeout":
+            raise subprocess.TimeoutExpired(command, timeout)
+        return subprocess.CompletedProcess(command, 0, stdout="ok", stderr="")
+
+    result = run_retryable_command(
+        ["datasets", "download"],
+        stage="preferred_download",
+        sleep_func=sleep_calls.append,
+        runner=runner,
+    )
+
+    assert result.succeeded is True
+    assert sleep_calls == [5]
+    assert result.failures[0].error_type == "timeout"
+
+
+def test_run_retryable_command_returns_spawn_failure_without_retry() -> None:
+    """Spawn failures should fail fast instead of consuming the retry budget."""
+
+    def runner(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+        timeout: int,
+    ) -> subprocess.CompletedProcess[str]:
+        """Raise a missing-executable error before a child process starts."""
+
+        raise FileNotFoundError("datasets")
+
+    result = run_retryable_command(
+        ["datasets", "download"],
+        stage="preferred_download",
+        sleep_func=lambda delay: None,
+        runner=runner,
+    )
+
+    assert result.succeeded is False
+    assert len(result.failures) == 1
+    assert result.failures[0].error_type == "spawn_error"
+    assert result.failures[0].error_message.startswith(
+        "preferred download command could not start",
+    )
+
+
 def test_preview_command_uses_full_retry_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -288,6 +351,7 @@ def test_preview_command_uses_full_retry_budget(
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return repeated preview failures."""
 

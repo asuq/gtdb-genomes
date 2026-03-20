@@ -52,6 +52,14 @@ def write_gzip_text(path: Path, content: str) -> None:
         handle.write(content)
 
 
+def write_gzip_bytes(path: Path, content: bytes) -> None:
+    """Write one gzipped binary file for a bundled-data test case."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(path, "wb") as handle:
+        handle.write(content)
+
+
 def test_load_release_manifest_reads_real_bundled_manifest() -> None:
     """The real bundled manifest should load successfully."""
 
@@ -162,6 +170,27 @@ def test_legacy_release_contains_real_uba_accessions() -> None:
     assert taxonomy_frame.filter(
         taxonomy_frame.get_column("ncbi_accession").str.starts_with("UBA"),
     ).height > 0
+
+
+def test_load_release_taxonomy_raises_for_invalid_gzip_payload(
+    tmp_path: Path,
+) -> None:
+    """Malformed bundled taxonomy tables should raise bundled-data errors."""
+
+    data_root = tmp_path / "gtdb_taxonomy"
+    write_manifest(
+        get_release_manifest_path(data_root),
+        "95.0\t95,95.0\tbac.tsv.gz\tar.tsv.gz\ttrue",
+    )
+    release_dir = data_root / "95.0"
+    write_gzip_bytes(release_dir / "bac.tsv.gz", b"\xff\xfe\xfd")
+    write_gzip_text(
+        release_dir / "ar.tsv.gz",
+        "GB_GCA_000002.1\td__Archaea;g__Methanobrevibacter\n",
+    )
+
+    with pytest.raises(BundledDataError, match="could not be parsed"):
+        load_release_taxonomy(resolve_and_validate_release("95", data_root=data_root))
 
 
 def test_load_release_manifest_raises_for_missing_manifest(tmp_path: Path) -> None:
@@ -290,6 +319,42 @@ def test_cli_returns_exit_code_three_for_malformed_manifest(
             ],
         )
         + "\n",
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.release_resolver.get_bundled_data_root",
+        lambda: data_root,
+    )
+
+    exit_code = main(
+        [
+            "--gtdb-release",
+            "95",
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--outdir",
+            str(tmp_path / "output"),
+        ],
+    )
+
+    assert exit_code == 3
+
+
+def test_cli_returns_exit_code_three_for_malformed_taxonomy_table(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """The CLI should keep the bundled-data exit code on bad taxonomy payloads."""
+
+    data_root = tmp_path / "gtdb_taxonomy"
+    write_manifest(
+        get_release_manifest_path(data_root),
+        "95.0\t95,95.0\tbac.tsv.gz\tar.tsv.gz\ttrue",
+    )
+    release_dir = data_root / "95.0"
+    write_gzip_bytes(release_dir / "bac.tsv.gz", b"\xff\xfe\xfd")
+    write_gzip_text(
+        release_dir / "ar.tsv.gz",
+        "GB_GCA_000002.1\td__Archaea;g__Methanobrevibacter\n",
     )
     monkeypatch.setattr(
         "gtdb_genomes.release_resolver.get_bundled_data_root",

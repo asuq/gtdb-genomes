@@ -45,6 +45,7 @@ def test_extract_archive_uses_unzip_runner(tmp_path: Path) -> None:
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Record the command and pretend extraction succeeded."""
 
@@ -69,12 +70,31 @@ def test_extract_archive_raises_layout_error_on_failure(tmp_path: Path) -> None:
         capture_output: bool,
         text: bool,
         check: bool,
+        timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return a fake unzip failure."""
 
         return subprocess.CompletedProcess(command, 1, stdout="", stderr="unzip failed")
 
     with pytest.raises(LayoutError, match="unzip failed"):
+        extract_archive(tmp_path / "archive.zip", tmp_path / "out", runner=runner)
+
+
+def test_extract_archive_raises_layout_error_on_spawn_failure(tmp_path: Path) -> None:
+    """Archive extraction should report missing unzip as a layout error."""
+
+    def runner(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+        timeout: int,
+    ) -> subprocess.CompletedProcess[str]:
+        """Raise a missing-executable error before extraction starts."""
+
+        raise FileNotFoundError("unzip")
+
+    with pytest.raises(LayoutError, match="archive extraction command could not start"):
         extract_archive(tmp_path / "archive.zip", tmp_path / "out", runner=runner)
 
 

@@ -9,6 +9,12 @@ from pathlib import Path
 import shutil
 import subprocess
 
+from gtdb_genomes.subprocess_utils import (
+    DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+    build_spawn_error_message,
+    build_timeout_error_message,
+)
+
 
 @dataclass(slots=True)
 class LayoutError(Exception):
@@ -155,12 +161,23 @@ def extract_archive(
 
     destination.mkdir(parents=True, exist_ok=True)
     command = build_unzip_command(archive_path, destination)
-    result = runner(
-        command,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = runner(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise LayoutError(
+            build_timeout_error_message(
+                "archive_extraction",
+                DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+            ),
+        ) from error
+    except OSError as error:
+        raise LayoutError(build_spawn_error_message("archive_extraction", error)) from error
     if result.returncode != 0:
         error_message = result.stderr.strip() or result.stdout.strip()
         if not error_message:

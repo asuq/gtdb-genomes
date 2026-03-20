@@ -179,3 +179,8 @@ def test_remote_runner_uses_shared_defaults() -> None:
 
     assert "real_data_default_suite_root remote" in remote_script
     assert "real_data_detect_python_bin" in remote_script
+    assert "\"C0-manifest\"" in remote_script
+    assert "gtdb-genomes \\" in remote_script
+    assert "--gtdb-taxon g__DefinitelyNotReal" in remote_script
+    assert "--dry-run" in remote_script
+    assert "get_release_manifest_path" not in remote_script

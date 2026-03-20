@@ -10,6 +10,13 @@ import re
 import subprocess
 import time
 
+from gtdb_genomes.subprocess_utils import (
+    DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+    build_spawn_error_message,
+    build_subprocess_error_message,
+    build_timeout_error_message,
+)
+
 
 DEHYDRATE_ACCESSION_THRESHOLD = 1000
 DEHYDRATE_SIZE_GB_THRESHOLD = 15.0
@@ -350,18 +357,6 @@ def get_rehydrate_workers(threads: int) -> int:
     return max(1, min(threads, REHYDRATE_WORKER_CAP))
 
 
-def build_subprocess_error_message(
-    stage: str,
-    result: subprocess.CompletedProcess[str],
-) -> str:
-    """Build a non-empty error message for one failed subprocess result."""
-
-    error_message = result.stderr.strip() or result.stdout.strip()
-    if error_message:
-        return error_message
-    return f"{stage.replace('_', ' ')} command failed"
-
-
 def run_retryable_command(
     command: list[str],
     stage: str,
@@ -376,27 +371,48 @@ def run_retryable_command(
     max_attempts = len(RETRY_DELAYS_SECONDS) + 1
     failures: list[CommandFailureRecord] = []
     for attempt_index in range(1, max_attempts + 1):
-        result = command_runner(
-            command,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode == 0:
-            return RetryableCommandResult(
-                succeeded=True,
-                stdout=result.stdout,
-                stderr=result.stderr,
-                failures=tuple(failures),
+        stdout = ""
+        stderr = ""
+        retry_allowed = attempt_index < max_attempts
+        try:
+            result = command_runner(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
             )
-        if attempt_index < max_attempts:
+        except subprocess.TimeoutExpired:
+            error_type = "timeout"
+            error_message = build_timeout_error_message(
+                stage,
+                DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+            )
+        except OSError as error:
+            error_type = "spawn_error"
+            error_message = build_spawn_error_message(stage, error)
+            retry_allowed = False
+        else:
+            stdout = result.stdout
+            stderr = result.stderr
+            if result.returncode == 0:
+                return RetryableCommandResult(
+                    succeeded=True,
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    failures=tuple(failures),
+                )
+            error_type = "subprocess"
+            error_message = build_subprocess_error_message(stage, result)
+
+        if retry_allowed:
             failures.append(
                 CommandFailureRecord(
                     stage=stage,
                     attempt_index=attempt_index,
                     max_attempts=max_attempts,
-                    error_type="subprocess",
-                    error_message=build_subprocess_error_message(stage, result),
+                    error_type=error_type,
+                    error_message=error_message,
                     final_status="retry_scheduled",
                     attempted_accession=attempted_accession,
                 ),
@@ -408,16 +424,16 @@ def run_retryable_command(
                 stage=stage,
                 attempt_index=attempt_index,
                 max_attempts=max_attempts,
-                error_type="subprocess",
-                error_message=build_subprocess_error_message(stage, result),
+                error_type=error_type,
+                error_message=error_message,
                 final_status=final_failure_status,
                 attempted_accession=attempted_accession,
             ),
         )
         return RetryableCommandResult(
             succeeded=False,
-            stdout=result.stdout,
-            stderr=result.stderr,
+            stdout=stdout,
+            stderr=stderr,
             failures=tuple(failures),
         )
     raise AssertionError("retry loop terminated unexpectedly")

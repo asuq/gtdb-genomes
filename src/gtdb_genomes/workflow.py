@@ -1251,12 +1251,12 @@ def run_workflow(args: CliArgs) -> int:
 
     try:
         resolution = resolve_and_validate_release(args.gtdb_release)
+        taxonomy_frame = load_release_taxonomy(resolution)
     except BundledDataError as error:
         logger.error("%s", error)
         close_logger(logger)
         return 3
 
-    taxonomy_frame = load_release_taxonomy(resolution)
     selected_frame = attach_taxon_slugs(
         select_taxa(taxonomy_frame, args.gtdb_taxa),
         args.gtdb_taxa,
