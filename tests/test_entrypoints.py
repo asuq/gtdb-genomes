@@ -169,3 +169,11 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
         guide_text
     )
     assert "--ncbi-api-key" in guide_text
+    assert "uv build" in guide_text
+    assert "python -m pip install" in guide_text
+    assert "no `uv` in the remote runtime path" in guide_text
+    assert "which gtdb-genomes" in guide_text
+    assert "remote `C0-manifest`" in guide_text
+    assert "REMOTE_TEST_ROOT" in guide_text
+    assert "case-results.tsv" in guide_text
+    assert "tool-versions.txt" in guide_text
