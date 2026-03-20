@@ -21,24 +21,40 @@ def empty_selection_frame(frame: pl.DataFrame) -> pl.DataFrame:
     )
 
 
+def build_lineage_token_expression() -> pl.Expr:
+    """Return the exact-match lineage token expression for GTDB selection."""
+
+    return (
+        pl.col("lineage")
+        .str.split(";")
+        .list.eval(pl.element().str.strip_chars())
+    )
+
+
+def normalise_requested_taxon(requested_taxon: str) -> str:
+    """Trim only surrounding whitespace from one requested GTDB taxon."""
+
+    return requested_taxon.strip()
+
+
 def select_taxa(
     frame: pl.DataFrame,
     requested_taxa: Sequence[str],
 ) -> pl.DataFrame:
-    """Select taxonomy rows whose lineage contains any requested taxon."""
+    """Select rows whose GTDB lineage contains an exact requested token."""
 
     if not requested_taxa:
         return empty_selection_frame(frame)
 
     tokenised_frame = frame.with_row_index("_row_order").with_columns(
-        pl.col("lineage")
-        .str.split(";")
-        .list.eval(pl.element().str.strip_chars())
-        .alias("_lineage_tokens"),
+        build_lineage_token_expression().alias("_lineage_tokens"),
     )
 
     matched_frames: list[pl.DataFrame] = []
-    for requested_order, requested_taxon in enumerate(requested_taxa):
+    for requested_order, raw_requested_taxon in enumerate(requested_taxa):
+        requested_taxon = normalise_requested_taxon(raw_requested_taxon)
+        if not requested_taxon:
+            continue
         matched_rows = tokenised_frame.filter(
             pl.col("_lineage_tokens").list.contains(requested_taxon),
         )

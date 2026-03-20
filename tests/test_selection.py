@@ -95,6 +95,151 @@ def test_select_taxa_trims_lineage_tokens_before_matching() -> None:
         "s__Escherichia coli",
     ]
 
+
+def test_select_taxa_does_not_match_suffix_variants() -> None:
+    """Exact token matching should exclude suffixed GTDB taxon variants."""
+
+    frame = pl.DataFrame(
+        {
+            "gtdb_accession": [
+                "RS_GCF_000001.1",
+                "RS_GCF_000002.1",
+            ],
+            "lineage": [
+                "d__Bacteria;g__Frigididesulfovibrio;s__Frigididesulfovibrio one",
+                (
+                    "d__Bacteria;g__Frigididesulfovibrio_A;"
+                    "s__Frigididesulfovibrio_A one"
+                ),
+            ],
+            "ncbi_accession": [
+                "GCF_000001.1",
+                "GCF_000002.1",
+            ],
+            "taxonomy_file": [
+                "bac120_taxonomy_r226.tsv",
+                "bac120_taxonomy_r226.tsv",
+            ],
+        },
+    )
+
+    selected = select_taxa(frame, ["g__Frigididesulfovibrio"])
+
+    assert selected["requested_taxon"].to_list() == ["g__Frigididesulfovibrio"]
+    assert selected["ncbi_accession"].to_list() == ["GCF_000001.1"]
+
+
+def test_select_taxa_matches_suffix_variant_only_when_requested() -> None:
+    """A suffixed GTDB taxon should match only its own exact token."""
+
+    frame = pl.DataFrame(
+        {
+            "gtdb_accession": [
+                "RS_GCF_000001.1",
+                "RS_GCF_000002.1",
+            ],
+            "lineage": [
+                "d__Bacteria;g__Frigididesulfovibrio;s__Frigididesulfovibrio one",
+                (
+                    "d__Bacteria;g__Frigididesulfovibrio_A;"
+                    "s__Frigididesulfovibrio_A one"
+                ),
+            ],
+            "ncbi_accession": [
+                "GCF_000001.1",
+                "GCF_000002.1",
+            ],
+            "taxonomy_file": [
+                "bac120_taxonomy_r226.tsv",
+                "bac120_taxonomy_r226.tsv",
+            ],
+        },
+    )
+
+    selected = select_taxa(frame, ["g__Frigididesulfovibrio_A"])
+
+    assert selected["requested_taxon"].to_list() == ["g__Frigididesulfovibrio_A"]
+    assert selected["ncbi_accession"].to_list() == ["GCF_000002.1"]
+
+
+def test_select_taxa_preserves_internal_species_whitespace() -> None:
+    """Species tokens should match only with their exact internal spacing."""
+
+    frame = pl.DataFrame(
+        {
+            "gtdb_accession": ["GB_GCA_000001.1"],
+            "lineage": [
+                "d__Archaea;o__Altiarchaeales;s__Altiarchaeum hamiconexum",
+            ],
+            "ncbi_accession": ["GCA_000001.1"],
+            "taxonomy_file": ["ar53_taxonomy_r226.tsv"],
+        },
+    )
+
+    selected = select_taxa(frame, ["s__Altiarchaeum hamiconexum"])
+
+    assert selected["requested_taxon"].to_list() == ["s__Altiarchaeum hamiconexum"]
+    assert selected["ncbi_accession"].to_list() == ["GCA_000001.1"]
+
+
+def test_select_taxa_trims_requested_species_surrounding_whitespace() -> None:
+    """Species taxa should ignore only leading and trailing whitespace."""
+
+    frame = pl.DataFrame(
+        {
+            "gtdb_accession": ["GB_GCA_000001.1"],
+            "lineage": [
+                "d__Archaea;o__Altiarchaeales;s__Altiarchaeum hamiconexum",
+            ],
+            "ncbi_accession": ["GCA_000001.1"],
+            "taxonomy_file": ["ar53_taxonomy_r226.tsv"],
+        },
+    )
+
+    selected = select_taxa(frame, [" s__Altiarchaeum hamiconexum "])
+
+    assert selected["requested_taxon"].to_list() == ["s__Altiarchaeum hamiconexum"]
+    assert selected["ncbi_accession"].to_list() == ["GCA_000001.1"]
+
+
+def test_select_taxa_does_not_match_incomplete_species_token() -> None:
+    """Incomplete species tokens should not fall back to partial matching."""
+
+    frame = pl.DataFrame(
+        {
+            "gtdb_accession": ["GB_GCA_000001.1"],
+            "lineage": [
+                "d__Archaea;o__Altiarchaeales;s__Altiarchaeum hamiconexum",
+            ],
+            "ncbi_accession": ["GCA_000001.1"],
+            "taxonomy_file": ["ar53_taxonomy_r226.tsv"],
+        },
+    )
+
+    selected = select_taxa(frame, ["s__Altiarchaeum"])
+
+    assert selected.is_empty()
+
+
+def test_select_taxa_does_not_normalise_internal_species_whitespace() -> None:
+    """Malformed internal species whitespace should not be normalised."""
+
+    frame = pl.DataFrame(
+        {
+            "gtdb_accession": ["GB_GCA_000001.1"],
+            "lineage": [
+                "d__Archaea;o__Altiarchaeales;s__Altiarchaeum hamiconexum",
+            ],
+            "ncbi_accession": ["GCA_000001.1"],
+            "taxonomy_file": ["ar53_taxonomy_r226.tsv"],
+        },
+    )
+
+    selected = select_taxa(frame, ["s__Altiarchaeum  hamiconexum"])
+
+    assert selected.is_empty()
+
+
 def test_build_taxon_slug_map_handles_collisions() -> None:
     """Colliding taxon slugs should receive deterministic hash suffixes."""
 

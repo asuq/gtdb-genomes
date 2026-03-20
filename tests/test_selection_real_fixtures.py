@@ -110,3 +110,23 @@ def test_select_taxa_matches_real_gtdb_export_fixture(fixture_path: Path) -> Non
     assert sorted(selected["ncbi_accession"].to_list()) == sorted(
         row.accession for row in fixture_rows
     )
+
+
+def test_release_226_excludes_suffix_variant_from_exact_genus_selection() -> None:
+    """Exact genus selection should exclude suffixed GTDB genus variants."""
+
+    taxonomy_frame = get_release_226_taxonomy()
+
+    selected = select_taxa(taxonomy_frame, ["g__Frigididesulfovibrio"])
+
+    assert "GCF_900143255.1" not in selected["ncbi_accession"].to_list()
+
+
+def test_release_226_incomplete_species_token_returns_zero_matches() -> None:
+    """Incomplete species taxa should not match bundled release 226.0 rows."""
+
+    taxonomy_frame = get_release_226_taxonomy()
+
+    selected = select_taxa(taxonomy_frame, ["s__Altiarchaeum"])
+
+    assert selected.is_empty()
