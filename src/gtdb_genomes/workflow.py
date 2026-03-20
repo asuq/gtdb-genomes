@@ -14,9 +14,9 @@ import gtdb_genomes.workflow_outputs as workflow_outputs
 import gtdb_genomes.workflow_planning as workflow_planning
 import gtdb_genomes.workflow_selection as workflow_selection
 
+
 if TYPE_CHECKING:
     import logging
-
     from gtdb_genomes.cli import CliArgs
 
 
@@ -24,7 +24,7 @@ def log_run_start(
     logger: logging.Logger,
     args: CliArgs,
 ) -> None:
-    """Log the user-facing start summary for one workflow run."""
+    """Log the user-facing start summary for workflow run."""
 
     logger.info(
         "Starting run: release=%s taxa=%d outdir=%s dry_run=%s",
@@ -36,7 +36,7 @@ def log_run_start(
 
 
 def run_workflow(args: CliArgs) -> int:
-    """Run the documented workflow and return the process exit code."""
+    """Run the workflow and return the process exit code."""
 
     logger, _ = configure_logging(debug=args.debug, dry_run=args.dry_run)
     secrets = tuple(secret for secret in (args.ncbi_api_key,) if secret)
@@ -44,7 +44,7 @@ def run_workflow(args: CliArgs) -> int:
     log_run_start(logger, args)
 
     try:
-        # Selection and early preflight.
+        # Selection and early preflight
         resolution, selected_frame, supported_selected_frame, unsupported_selected_frame = (
             workflow_selection.prepare_selection_frames(args, logger)
         )
@@ -68,9 +68,15 @@ def run_workflow(args: CliArgs) -> int:
                 ),
             )
 
-        # Supported-accession planning.
+        # Supported-accession planning
         workflow_selection.run_supported_preflight(args, supported_selected_frame)
-        mapped_frame, metadata_failures, accession_plans, decision_method = (
+        (
+            mapped_frame,
+            metadata_failures,
+            suppressed_notes,
+            accession_plans,
+            decision_method,
+        ) = (
             workflow_planning.prepare_planning_inputs(
                 supported_selected_frame,
                 unsupported_selected_frame,
@@ -79,6 +85,11 @@ def run_workflow(args: CliArgs) -> int:
                 secrets,
             )
         )
+        planning_warning = workflow_planning.build_planning_suppressed_warning(
+            suppressed_notes,
+        )
+        if planning_warning is not None:
+            logger.warning("%s", planning_warning)
     except BundledDataError as error:
         logger.error("%s", error)
         close_logger(logger)
@@ -88,7 +99,7 @@ def run_workflow(args: CliArgs) -> int:
         close_logger(logger)
         return 5
 
-    # Dry-runs stop after planning and report the planned workload.
+    # Dry-runs stop after planning and report the planned workload
     if args.dry_run:
         logger.info(
             "Dry-run finished: planned_supported_accessions=%d unsupported_legacy_accessions=%d",
@@ -98,7 +109,7 @@ def run_workflow(args: CliArgs) -> int:
         close_logger(logger)
         return 0
 
-    # Real runs execute downloads and materialise outputs.
+    # Real runs execute downloads and materialise outputs
     run_directories = initialise_run_directories(args.outdir)
     logger = workflow_outputs.configure_output_logger(args, logger, run_directories)
     if accession_plans:
@@ -132,7 +143,18 @@ def run_workflow(args: CliArgs) -> int:
         execution_result,
         unsupported_executions,
         secrets,
+        suppressed_notes=suppressed_notes,
     )
+    failed_suppressed_warning = workflow_planning.build_failed_suppressed_warning(
+        suppressed_notes,
+        tuple(
+            original_accession
+            for original_accession, execution in execution_result.executions.items()
+            if execution.download_status == "failed"
+        ),
+    )
+    if failed_suppressed_warning is not None:
+        logger.warning("%s", failed_suppressed_warning)
     close_logger(logger)
     if not args.keep_temp:
         cleanup_working_directories(run_directories)

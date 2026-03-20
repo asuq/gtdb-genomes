@@ -6,6 +6,7 @@ import logging
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -20,10 +21,13 @@ from gtdb_genomes.download import (
 )
 from gtdb_genomes.logging_utils import redact_command, redact_text
 from gtdb_genomes.metadata import (
+    AssemblyStatusInfo,
     MetadataLookupError,
+    SUPPRESSED_ASSEMBLY_NOTE,
     apply_accession_preferences,
     build_download_request_accession,
     build_summary_command,
+    is_suppressed_status,
     run_summary_lookup_with_retries,
 )
 from gtdb_genomes.workflow_execution import AccessionPlan
@@ -61,6 +65,15 @@ def create_staging_directory(prefix: str) -> TemporaryDirectory[str]:
 # Metadata preference resolution.
 
 
+@dataclass(frozen=True, slots=True)
+class SuppressedAccessionNote:
+    """One metadata-confirmed suppressed download target."""
+
+    original_accession: str
+    selected_accession: str
+    suppression_reason: str | None
+
+
 def build_accession_plans(
     mapped_frame: pl.DataFrame,
     *,
@@ -91,20 +104,129 @@ def build_accession_plans(
     )
 
 
+def build_suppressed_accession_notes(
+    mapped_frame: pl.DataFrame,
+    status_map: dict[str, AssemblyStatusInfo],
+) -> dict[str, SuppressedAccessionNote]:
+    """Return suppression notes for the accessions the workflow will download."""
+
+    suppressed_notes: dict[str, SuppressedAccessionNote] = {}
+    if mapped_frame.is_empty():
+        return suppressed_notes
+
+    unique_rows = mapped_frame.unique(
+        subset=["ncbi_accession"],
+        keep="first",
+        maintain_order=True,
+    ).rows(named=True)
+    for row in unique_rows:
+        original_accession = row["ncbi_accession"]
+        selected_accession = row["final_accession"]
+        status_info = status_map.get(original_accession)
+        if status_info is None:
+            continue
+
+        if selected_accession == original_accession:
+            if not is_suppressed_status(status_info.assembly_status):
+                continue
+            suppressed_notes[original_accession] = SuppressedAccessionNote(
+                original_accession=original_accession,
+                selected_accession=selected_accession,
+                suppression_reason=status_info.suppression_reason,
+            )
+            continue
+
+        if (
+            row["conversion_status"] == "paired_to_gca"
+            and selected_accession == status_info.paired_accession
+            and is_suppressed_status(status_info.paired_assembly_status)
+        ):
+            suppressed_notes[original_accession] = SuppressedAccessionNote(
+                original_accession=original_accession,
+                selected_accession=selected_accession,
+                suppression_reason=None,
+            )
+    return suppressed_notes
+
+
+def format_suppressed_accession_examples(
+    suppressed_notes: dict[str, SuppressedAccessionNote],
+) -> str:
+    """Format deterministic accession examples for warning messages."""
+
+    examples: list[str] = []
+    for note in suppressed_notes.values():
+        accession_text = note.selected_accession
+        if note.selected_accession != note.original_accession:
+            accession_text = (
+                f"{note.original_accession} -> {note.selected_accession}"
+            )
+        if note.suppression_reason:
+            accession_text = (
+                f"{accession_text} (reason: {note.suppression_reason})"
+            )
+        examples.append(accession_text)
+    return ", ".join(examples)
+
+
+def build_planning_suppressed_warning(
+    suppressed_notes: dict[str, SuppressedAccessionNote],
+) -> str | None:
+    """Build the planning-time warning for suppressed download targets."""
+
+    if not suppressed_notes:
+        return None
+    count = len(suppressed_notes)
+    noun = "assembly" if count == 1 else "assemblies"
+    return (
+        f"NCBI marks {count} planned {noun} as suppressed; "
+        f"{SUPPRESSED_ASSEMBLY_NOTE} "
+        f"Affected accessions: {format_suppressed_accession_examples(suppressed_notes)}"
+    )
+
+
+def build_failed_suppressed_warning(
+    suppressed_notes: dict[str, SuppressedAccessionNote],
+    failed_original_accessions: tuple[str, ...],
+) -> str | None:
+    """Build the final warning for failed suppressed download targets."""
+
+    failed_notes = {
+        original_accession: suppressed_notes[original_accession]
+        for original_accession in failed_original_accessions
+        if original_accession in suppressed_notes
+    }
+    if not failed_notes:
+        return None
+    count = len(failed_notes)
+    noun = "assembly" if count == 1 else "assemblies"
+    verb = "was" if count == 1 else "were"
+    return (
+        f"{count} failed {noun} {verb} marked suppressed by NCBI; "
+        f"{SUPPRESSED_ASSEMBLY_NOTE} "
+        f"Affected accessions: {format_suppressed_accession_examples(failed_notes)}"
+    )
+
+
 def resolve_supported_accession_preferences(
     supported_selected_frame: pl.DataFrame,
     args: CliArgs,
     logger: logging.Logger,
     secrets: tuple[str, ...],
-) -> tuple[pl.DataFrame, tuple[CommandFailureRecord, ...]]:
+) -> tuple[
+    pl.DataFrame,
+    tuple[CommandFailureRecord, ...],
+    dict[str, SuppressedAccessionNote],
+]:
     """Resolve preferred accessions for supported selected rows."""
 
     summary_map: dict[str, set[str]] = {}
+    status_map: dict[str, AssemblyStatusInfo] = {}
     metadata_failures: tuple[CommandFailureRecord, ...] = ()
     supported_accessions = get_ordered_unique_accessions(
         supported_selected_frame.get_column("ncbi_accession").to_list(),
     )
-    if not supported_selected_frame.is_empty() and args.prefer_genbank:
+    if not supported_selected_frame.is_empty():
         logger.info(
             "Running metadata lookup for %d supported accession(s)",
             len(supported_accessions),
@@ -126,6 +248,7 @@ def resolve_supported_accession_preferences(
                     ncbi_api_key=args.ncbi_api_key,
                 )
                 summary_map = summary_lookup.summary_map
+                status_map = summary_lookup.status_map
                 metadata_failures = summary_lookup.failures
                 logger.info(
                     "Metadata lookup finished with %d preferred mapping(s)",
@@ -138,13 +261,16 @@ def resolve_supported_accession_preferences(
                     redact_text(str(error), secrets),
                 )
                 summary_map = {}
+                status_map = {}
+    mapped_frame = apply_accession_preferences(
+        supported_selected_frame,
+        summary_map,
+        prefer_genbank=args.prefer_genbank,
+    )
     return (
-        apply_accession_preferences(
-            supported_selected_frame,
-            summary_map,
-            prefer_genbank=args.prefer_genbank,
-        ),
+        mapped_frame,
         metadata_failures,
+        build_suppressed_accession_notes(mapped_frame, status_map),
     )
 
 
@@ -206,12 +332,17 @@ def prepare_planning_inputs(
 ) -> tuple[
     pl.DataFrame,
     tuple[CommandFailureRecord, ...],
+    dict[str, SuppressedAccessionNote],
     tuple[AccessionPlan, ...],
     str,
 ]:
     """Resolve accession preferences and plan the supported download strategy."""
 
-    supported_mapped_frame, metadata_failures = resolve_supported_accession_preferences(
+    (
+        supported_mapped_frame,
+        metadata_failures,
+        suppressed_notes,
+    ) = resolve_supported_accession_preferences(
         supported_selected_frame,
         args,
         logger,
@@ -239,4 +370,10 @@ def prepare_planning_inputs(
         decision_method,
         len(accession_plans),
     )
-    return mapped_frame, metadata_failures, accession_plans, decision_method
+    return (
+        mapped_frame,
+        metadata_failures,
+        suppressed_notes,
+        accession_plans,
+        decision_method,
+    )

@@ -21,6 +21,7 @@ from gtdb_genomes.layout import (
     write_taxon_accessions,
 )
 from gtdb_genomes.logging_utils import close_logger, configure_logging, redact_text
+from gtdb_genomes.metadata import SUPPRESSED_ASSEMBLY_NOTE
 from gtdb_genomes.workflow_execution import (
     AccessionExecution,
     DownloadExecutionResult,
@@ -29,6 +30,7 @@ from gtdb_genomes.workflow_execution import (
 
 if TYPE_CHECKING:
     from gtdb_genomes.cli import CliArgs
+    from gtdb_genomes.workflow_planning import SuppressedAccessionNote
 
 
 # Logger and output-root helpers.
@@ -222,11 +224,17 @@ def build_failure_rows(
     shared_failures: tuple[SharedFailureContext, ...],
     secrets: tuple[str, ...],
     shared_context_rows: list[dict[str, Any]] | None = None,
+    suppressed_notes: dict[str, SuppressedAccessionNote] | None = None,
 ) -> list[dict[str, Any]]:
     """Build attempt-centric `download_failures.tsv` rows."""
 
     context_rows = enriched_rows if shared_context_rows is None else shared_context_rows
     failure_rows: list[dict[str, Any]] = []
+    suppressed_accessions = (
+        {}
+        if suppressed_notes is None
+        else suppressed_notes
+    )
     failure_rows.extend(
         build_shared_failure_rows(context_rows, metadata_failures, secrets),
     )
@@ -262,6 +270,12 @@ def build_failure_rows(
         )
         final_accession = execution.final_accession or ""
         for failure in execution.failures:
+            error_message = failure.error_message
+            if (
+                accession in suppressed_accessions
+                and execution.download_status == "failed"
+            ):
+                error_message = f"{error_message} {SUPPRESSED_ASSEMBLY_NOTE}"
             failure_rows.append(
                 {
                     "requested_taxon": requested_taxa,
@@ -274,7 +288,7 @@ def build_failure_rows(
                     "max_attempts": failure.max_attempts,
                     "error_type": failure.error_type,
                     "error_message_redacted": redact_text(
-                        failure.error_message,
+                        error_message,
                         secrets,
                     ),
                     "final_status": failure.final_status,
@@ -436,6 +450,7 @@ def materialise_real_run_outputs(
     execution_result: DownloadExecutionResult,
     unsupported_executions: dict[str, AccessionExecution],
     secrets: tuple[str, ...],
+    suppressed_notes: dict[str, SuppressedAccessionNote] | None = None,
 ) -> int:
     """Copy payloads, write manifests, and return the final exit code."""
 
@@ -460,6 +475,7 @@ def materialise_real_run_outputs(
         execution_result.shared_failures,
         secrets,
         shared_context_rows=supported_enriched_rows,
+        suppressed_notes=suppressed_notes,
     )
     taxon_summary_rows = build_taxon_summary_rows(
         enriched_rows,

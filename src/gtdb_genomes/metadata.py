@@ -6,7 +6,7 @@ import json
 import re
 import subprocess
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from json import JSONDecodeError
 from pathlib import Path
 import time
@@ -68,8 +68,33 @@ class AssemblyAccessionStem:
 class SummaryLookupResult:
     """Metadata lookup output plus retry history."""
 
+    summary_map: dict[str, set[str]] = field(default_factory=dict)
+    status_map: dict[str, "AssemblyStatusInfo"] = field(default_factory=dict)
+    failures: tuple[CommandFailureRecord, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class AssemblyStatusInfo:
+    """Structured assembly status metadata from one summary record."""
+
+    assembly_status: str | None
+    suppression_reason: str | None
+    paired_accession: str | None
+    paired_assembly_status: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedSummaryOutput:
+    """Parsed accession pairing and status metadata from summary output."""
+
     summary_map: dict[str, set[str]]
-    failures: tuple[CommandFailureRecord, ...]
+    status_map: dict[str, AssemblyStatusInfo]
+
+
+SUPPRESSED_ASSEMBLY_NOTE = (
+    "NCBI metadata marked this assembly as suppressed; "
+    "the genome payload may no longer be downloadable."
+)
 
 
 def build_summary_command(
@@ -227,11 +252,13 @@ def run_summary_lookup_with_retries(
         else:
             if result.returncode == 0:
                 try:
+                    parsed_summary = parse_summary_output(
+                        result.stdout,
+                        ordered_accessions,
+                    )
                     return SummaryLookupResult(
-                        summary_map=parse_summary_json_lines(
-                            result.stdout,
-                            ordered_accessions,
-                        ),
+                        summary_map=parsed_summary.summary_map,
+                        status_map=parsed_summary.status_map,
                         failures=tuple(failures),
                     )
                 except MetadataLookupError as error:
@@ -289,14 +316,61 @@ def extract_structured_accessions(payload: object) -> set[str]:
     return found
 
 
-def parse_summary_json_lines(
+def get_nested_string_value(
+    payload: object,
+    *path: str,
+) -> str | None:
+    """Return one nested string field when every parent is a mapping."""
+
+    current: object = payload
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    if not isinstance(current, str):
+        return None
+    stripped_value = current.strip()
+    return stripped_value or None
+
+
+def build_assembly_status_info(payload: object) -> AssemblyStatusInfo:
+    """Extract structured assembly status fields from one summary payload."""
+
+    return AssemblyStatusInfo(
+        assembly_status=get_nested_string_value(
+            payload,
+            "assemblyInfo",
+            "assemblyStatus",
+        ),
+        suppression_reason=get_nested_string_value(
+            payload,
+            "assemblyInfo",
+            "suppressionReason",
+        ),
+        paired_accession=get_nested_string_value(
+            payload,
+            "assemblyInfo",
+            "pairedAssembly",
+            "accession",
+        ),
+        paired_assembly_status=get_nested_string_value(
+            payload,
+            "assemblyInfo",
+            "pairedAssembly",
+            "status",
+        ),
+    )
+
+
+def parse_summary_output(
     raw_text: str,
     requested_accessions: Iterable[str],
-) -> dict[str, set[str]]:
-    """Map requested accessions to the accessions discovered in summary output."""
+) -> ParsedSummaryOutput:
+    """Parse summary JSON-lines into pairing and status mappings."""
 
     requested = set(requested_accessions)
     summaries: dict[str, set[str]] = {}
+    statuses: dict[str, AssemblyStatusInfo] = {}
     for raw_line in raw_text.splitlines():
         line = raw_line.strip()
         if not line:
@@ -307,9 +381,37 @@ def parse_summary_json_lines(
             raise MetadataLookupError("datasets summary returned invalid JSON") from error
         discovered = extract_structured_accessions(payload)
         matching_requested = requested.intersection(discovered)
+        if not matching_requested:
+            continue
+        status_info = build_assembly_status_info(payload)
         for requested_accession in matching_requested:
             summaries[requested_accession] = discovered
-    return summaries
+            statuses[requested_accession] = status_info
+    return ParsedSummaryOutput(summary_map=summaries, status_map=statuses)
+
+
+def parse_summary_json_lines(
+    raw_text: str,
+    requested_accessions: Iterable[str],
+) -> dict[str, set[str]]:
+    """Map requested accessions to the accessions discovered in summary output."""
+
+    return parse_summary_output(raw_text, requested_accessions).summary_map
+
+
+def parse_summary_status_map(
+    raw_text: str,
+    requested_accessions: Iterable[str],
+) -> dict[str, AssemblyStatusInfo]:
+    """Map requested accessions to their structured assembly status metadata."""
+
+    return parse_summary_output(raw_text, requested_accessions).status_map
+
+
+def is_suppressed_status(status: str | None) -> bool:
+    """Return whether one assembly status value means suppressed."""
+
+    return isinstance(status, str) and status.strip().lower() == "suppressed"
 
 
 def find_matching_genbank_accessions(
