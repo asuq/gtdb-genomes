@@ -138,7 +138,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--gtdb-taxon",
         action="append",
         required=True,
-        help="GTDB taxon token. Repeat to request multiple taxa.",
+        help=(
+            "Exact GTDB taxon token. Repeat to request multiple taxa. "
+            "Quote species taxa with spaces, for example "
+            "\"s__Altiarchaeum hamiconexum\"."
+        ),
     )
     parser.add_argument(
         "--outdir",

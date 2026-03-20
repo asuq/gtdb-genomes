@@ -35,7 +35,13 @@ gtdb-genomes --gtdb-release latest --gtdb-taxon g__Escherichia --outdir results
   network.
 
 - `--gtdb-taxon`: Repeatable. A row is selected when its GTDB lineage contains
-  the requested GTDB token exactly after trimming. Matching is case-sensitive.
+  the requested GTDB token exactly after trimming surrounding whitespace only.
+  Matching is case-sensitive, internal species whitespace is preserved, and
+  suffix variants are separate taxa. For example,
+  `g__Frigididesulfovibrio` does not match `g__Frigididesulfovibrio_A`.
+  Species taxa contain spaces and must be quoted in the shell, for example
+  `--gtdb-taxon "s__Altiarchaeum hamiconexum"`. Unquoted shell input such as
+  `--gtdb-taxon s__Altiarchaeum hamiconexum` is invalid.
 
 - `--outdir`: Output directory must either not exist or exist as an empty
   directory. The tool does not merge into or overwrite a populated output tree.

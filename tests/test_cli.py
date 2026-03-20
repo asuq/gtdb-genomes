@@ -27,6 +27,7 @@ def test_help_includes_documented_flags() -> None:
     assert "--debug" in help_text
     assert "--keep-temp" in help_text
     assert "--dry-run" in help_text
+    assert "Quote species taxa with spaces" in help_text
 
 
 def test_parse_args_normalises_and_deduplicates_taxa(tmp_path: Path) -> None:
@@ -54,6 +55,26 @@ def test_parse_args_normalises_and_deduplicates_taxa(tmp_path: Path) -> None:
     assert args.gtdb_taxa == ("g__Escherichia", "s__Escherichia coli")
     assert args.prefer_genbank is False
     assert args.version_fixed is False
+
+
+def test_parse_args_rejects_shell_split_species_taxon(tmp_path: Path) -> None:
+    """Unquoted shell-split species input should fail CLI parsing."""
+
+    parser = build_parser()
+    with pytest.raises(SystemExit) as error:
+        parse_args(
+            parser,
+            [
+                "--gtdb-release",
+                "latest",
+                "--gtdb-taxon",
+                "s__Altiarchaeum",
+                "hamiconexum",
+                "--outdir",
+                str(tmp_path),
+            ],
+        )
+    assert error.value.code == 2
 
 
 def test_parse_args_rejects_blank_release(tmp_path: Path) -> None:
