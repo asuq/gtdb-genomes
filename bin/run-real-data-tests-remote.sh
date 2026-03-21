@@ -111,22 +111,11 @@ remote_check_dehydrate_suppressed_partial_result() {
             failed_accessions+=("${accession}")
         fi
     done < <(
-        awk -F '\t' '
-            NR == 1 {
-                for (field_index = 1; field_index <= NF; field_index += 1) {
-                    if ($field_index == "ncbi_accession") {
-                        accession_index = field_index
-                    }
-                    if ($field_index == "download_status") {
-                        status_index = field_index
-                    }
-                }
-                next
-            }
-            accession_index > 0 && status_index > 0 && $status_index == "failed" {
-                print $accession_index
-            }
-        ' "${output_root}/accession_map.tsv" | sort -u
+        real_data_unique_tsv_values_for_match \
+            "${output_root}/accession_map.tsv" \
+            "ncbi_accession" \
+            "download_status" \
+            "failed"
     )
 
     if [ "${#failed_accessions[@]}" -eq 0 ]; then
@@ -136,23 +125,31 @@ remote_check_dehydrate_suppressed_partial_result() {
     fi
 
     for accession in "${failed_accessions[@]}"; do
-        if ! awk -F '\t' -v accession="${accession}" '
+        if ! awk \
+            -F '\t' \
+            -v accession="${accession}" \
+            -v suppression_note="NCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable." '
             NR == 1 {
                 for (field_index = 1; field_index <= NF; field_index += 1) {
-                    if ($field_index == "attempted_accession") {
+                    header_value = $field_index
+                    sub(/\r$/, "", header_value)
+                    if (header_value == "attempted_accession") {
                         attempted_index = field_index
                     }
-                    if ($field_index == "error_message_redacted") {
+                    if (header_value == "error_message_redacted") {
                         message_index = field_index
                     }
                 }
                 next
             }
-            attempted_index > 0 &&
-            message_index > 0 &&
-            $attempted_index == accession &&
-            $message_index ~ /NCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable\./ {
-                found = 1
+            attempted_index > 0 && message_index > 0 {
+                attempted_value = $attempted_index
+                message_value = $message_index
+                sub(/\r$/, "", attempted_value)
+                sub(/\r$/, "", message_value)
+                if (attempted_value == accession && index(message_value, suppression_note) > 0) {
+                    found = 1
+                }
             }
             END {
                 exit(found ? 0 : 1)

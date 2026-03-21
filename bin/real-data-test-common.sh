@@ -281,6 +281,48 @@ real_data_tsv_value() {
 }
 
 
+real_data_unique_tsv_values_for_match() {
+    local tsv_path=$1
+    local select_column_name=$2
+    local match_column_name=$3
+    local match_value=$4
+
+    awk -F '\t' \
+        -v select_column_name="${select_column_name}" \
+        -v match_column_name="${match_column_name}" \
+        -v match_value="${match_value}" '
+        NR == 1 {
+            for (field_index = 1; field_index <= NF; field_index += 1) {
+                header_value = $field_index
+                sub(/\r$/, "", header_value)
+                if (header_value == select_column_name) {
+                    select_index = field_index
+                }
+                if (header_value == match_column_name) {
+                    match_index = field_index
+                }
+            }
+            next
+        }
+        NR > 1 && select_index > 0 && match_index > 0 {
+            selected_value = $select_index
+            compared_value = $match_index
+            sub(/\r$/, "", selected_value)
+            sub(/\r$/, "", compared_value)
+            if (compared_value == match_value && selected_value != "") {
+                print selected_value
+            }
+        }
+        END {
+            if (select_index == 0 || match_index == 0) {
+                exit 1
+            }
+        }
+    ' "${tsv_path}" | sort -u
+    return "${PIPESTATUS[0]}"
+}
+
+
 real_data_assert_file_contains() {
     local file_path=$1
     local pattern=$2

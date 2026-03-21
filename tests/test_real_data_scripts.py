@@ -374,6 +374,33 @@ def test_real_data_tsv_value_strips_crlf_from_last_column(tmp_path: Path) -> Non
     assert result.stdout == "0\n"
 
 
+def test_real_data_unique_tsv_values_for_match_strips_crlf_from_last_column(
+    tmp_path: Path,
+) -> None:
+    """TSV matching should treat CRLF-terminated last columns as normal values."""
+
+    tsv_path = tmp_path / "accession_map.tsv"
+    tsv_path.write_bytes(
+        (
+            "ncbi_accession\tdownload_status\r\n"
+            "GCF_000001.1\tdownloaded\r\n"
+            "GCF_003670205.1\tfailed\r\n"
+            "GCF_003670205.1\tfailed\r\n"
+        ).encode("ascii")
+    )
+    script = (
+        f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        "real_data_unique_tsv_values_for_match "
+        f"{shlex.quote(str(tsv_path))} "
+        "ncbi_accession download_status failed\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0
+    assert result.stdout == "GCF_003670205.1\n"
+
+
 def test_real_data_record_output_evidence_copies_debug_log(tmp_path: Path) -> None:
     """Evidence capture should copy `debug.log` when a run writes one."""
 
@@ -480,6 +507,48 @@ def test_remote_check_dehydrate_suppressed_partial_result_accepts_suppressed_onl
         "requested_taxon\tattempted_accession\terror_message_redacted\n"
         "g__Bacteroides\tGCF_003670205.1\tNCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\n",
         encoding="utf-8",
+    )
+    function_text = extract_bash_function(
+        Path("bin/run-real-data-tests-remote.sh"),
+        "remote_check_dehydrate_suppressed_partial_result",
+    )
+    script = (
+        f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        f"{function_text}\n"
+        "remote_check_dehydrate_suppressed_partial_result "
+        f"{shlex.quote(str(output_root))}\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0
+
+
+def test_remote_check_dehydrate_suppressed_partial_result_accepts_crlf_tsvs(
+    tmp_path: Path,
+) -> None:
+    """C5 should accept CRLF-terminated TSV rows in both checked manifests."""
+
+    output_root = tmp_path / "c5-output"
+    output_root.mkdir()
+    (output_root / "run_summary.tsv").write_text(
+        "run_id\texit_code\tdownload_method_used\tsuccessful_accessions\tfailed_accessions\n"
+        "run1\t6\tdehydrate\t1024\t1\n",
+        encoding="utf-8",
+    )
+    (output_root / "accession_map.tsv").write_bytes(
+        (
+            "requested_taxon\tncbi_accession\tdownload_status\r\n"
+            "g__Bacteroides\tGCF_000001.1\tdownloaded\r\n"
+            "g__Bacteroides\tGCF_003670205.1\tfailed\r\n"
+        ).encode("ascii")
+    )
+    (output_root / "download_failures.tsv").write_bytes(
+        (
+            "requested_taxon\tattempted_accession\terror_message_redacted\r\n"
+            "g__Bacteroides\tGCF_003670205.1\t"
+            "NCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\r\n"
+        ).encode("ascii")
     )
     function_text = extract_bash_function(
         Path("bin/run-real-data-tests-remote.sh"),
