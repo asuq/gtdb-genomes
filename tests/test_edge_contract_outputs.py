@@ -320,6 +320,208 @@ def test_uba_only_real_run_writes_failed_manifests_and_exits_seven(
     assert run_summary["download_concurrency_used"] == "0"
 
 
+def test_mixed_real_run_writes_zero_match_taxon_outputs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Mixed runs should still emit output rows for requested zero-match taxa."""
+
+    payload_directory = tmp_path / "payload"
+    payload_directory.mkdir()
+    (payload_directory / "genome.fna").write_text(">seq\nACGT\n", encoding="ascii")
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.check_required_tools",
+        lambda required_tools: None,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.load_release_taxonomy",
+        lambda resolution: build_taxonomy_frame(
+            "d__Bacteria;p__Proteobacteria;g__Escherichia",
+        ),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_planning.run_summary_lookup_with_retries",
+        lambda *args, **kwargs: SummaryLookupResult(),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_planning.run_preview_command",
+        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+    )
+
+    def fake_execute_accession_plans(
+        plans,
+        args,
+        decision_method: str,
+        run_directories,
+        logger,
+        secrets,
+    ) -> DownloadExecutionResult:
+        """Return one successful direct execution for the matched taxon."""
+
+        del args, run_directories, logger, secrets
+        assert decision_method == "direct"
+        assert [plan.original_accession for plan in plans] == ["GCF_000001.1"]
+        return DownloadExecutionResult(
+            executions={
+                "GCF_000001.1": AccessionExecution(
+                    original_accession="GCF_000001.1",
+                    final_accession="GCF_000001.1",
+                    conversion_status="unchanged_original",
+                    download_status="downloaded",
+                    download_batch="direct_batch_1",
+                    payload_directory=payload_directory,
+                    failures=(),
+                ),
+            },
+            method_used="direct",
+            download_concurrency_used=1,
+            rehydrate_workers_used=0,
+        )
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_execution.execute_accession_plans",
+        fake_execute_accession_plans,
+    )
+
+    output_dir = tmp_path / "mixed-zero-match-real"
+    exit_code = main(
+        [
+            "--gtdb-release",
+            "95",
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--gtdb-taxon",
+            "g__Bacillus",
+            "--outdir",
+            str(output_dir),
+        ],
+    )
+
+    assert exit_code == 0
+    taxon_summary_header, taxon_summary_rows = parse_tsv(output_dir / "taxon_summary.tsv")
+    taxon_summaries = [
+        dict(zip(taxon_summary_header, row, strict=True))
+        for row in taxon_summary_rows
+    ]
+    assert [row["requested_taxon"] for row in taxon_summaries] == [
+        "g__Escherichia",
+        "g__Bacillus",
+    ]
+    bacillus_summary = next(
+        row for row in taxon_summaries if row["requested_taxon"] == "g__Bacillus"
+    )
+    assert bacillus_summary["matched_rows"] == "0"
+    assert bacillus_summary["unique_gtdb_accessions"] == "0"
+    assert bacillus_summary["final_accessions"] == "0"
+    assert bacillus_summary["successful_accessions"] == "0"
+    assert bacillus_summary["failed_accessions"] == "0"
+
+    bacillus_manifest = output_dir / "taxa" / "g__Bacillus" / "taxon_accessions.tsv"
+    assert bacillus_manifest.exists()
+    manifest_header, manifest_rows = parse_tsv(bacillus_manifest)
+    assert manifest_header == [
+        "requested_taxon",
+        "taxon_slug",
+        "lineage",
+        "gtdb_accession",
+        "final_accession",
+        "conversion_status",
+        "output_relpath",
+        "download_status",
+        "duplicate_across_taxa",
+    ]
+    assert manifest_rows == []
+
+
+def test_real_run_output_copy_failure_returns_exit_code_eight(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Local output-copy failures should return a stable workflow exit code."""
+
+    log_stream = install_capture_logger(monkeypatch)
+    payload_directory = tmp_path / "payload"
+    payload_directory.mkdir()
+    (payload_directory / "genome.fna").write_text(">seq\nACGT\n", encoding="ascii")
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.check_required_tools",
+        lambda required_tools: None,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.load_release_taxonomy",
+        lambda resolution: build_taxonomy_frame(
+            "d__Bacteria;p__Proteobacteria;g__Escherichia",
+        ),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_planning.run_summary_lookup_with_retries",
+        lambda *args, **kwargs: SummaryLookupResult(),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_planning.run_preview_command",
+        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_outputs.copy_accession_payload",
+        lambda source_directory, destination_directory: (_ for _ in ()).throw(
+            PermissionError("disk full"),
+        ),
+    )
+
+    def fake_execute_accession_plans(
+        plans,
+        args,
+        decision_method: str,
+        run_directories,
+        logger,
+        secrets,
+    ) -> DownloadExecutionResult:
+        """Return one successful direct execution before output copying fails."""
+
+        del args, run_directories, logger, secrets
+        assert decision_method == "direct"
+        assert [plan.original_accession for plan in plans] == ["GCF_000001.1"]
+        return DownloadExecutionResult(
+            executions={
+                "GCF_000001.1": AccessionExecution(
+                    original_accession="GCF_000001.1",
+                    final_accession="GCF_000001.1",
+                    conversion_status="unchanged_original",
+                    download_status="downloaded",
+                    download_batch="direct_batch_1",
+                    payload_directory=payload_directory,
+                    failures=(),
+                ),
+            },
+            method_used="direct",
+            download_concurrency_used=1,
+            rehydrate_workers_used=0,
+        )
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_execution.execute_accession_plans",
+        fake_execute_accession_plans,
+    )
+
+    output_dir = tmp_path / "output-copy-failure"
+    exit_code = main(
+        [
+            "--gtdb-release",
+            "95",
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--outdir",
+            str(output_dir),
+        ],
+    )
+
+    assert exit_code == 8
+    assert "Real-run output materialisation failed: disk full" in log_stream.getvalue()
+    assert not (output_dir / "run_summary.tsv").exists()
+
+
 def test_shared_preferred_direct_manifest_uses_preferred_download_batch(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

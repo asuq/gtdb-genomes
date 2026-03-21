@@ -117,7 +117,7 @@ def build_taxon_slug_map(requested_taxa: Sequence[str]) -> dict[str, str]:
         if slug_counts[slug] == 1:
             slug_map[requested_taxon] = slug
             continue
-        slug_hash = hashlib.sha1(requested_taxon.encode("ascii")).hexdigest()[:8]
+        slug_hash = hashlib.sha1(requested_taxon.encode("utf-8")).hexdigest()[:8]
         slug_map[requested_taxon] = f"{slug}__{slug_hash}"
     return slug_map
 

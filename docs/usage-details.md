@@ -254,6 +254,7 @@ Exit codes:
 - `5`: external tool or preflight error
 - `6`: partial failure with at least one successful genome
 - `7`: runtime failure with no successful genomes
+- `8`: local output materialisation failure after planning or download
 
 Status values:
 

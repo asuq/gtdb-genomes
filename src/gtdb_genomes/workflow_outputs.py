@@ -25,6 +25,7 @@ from gtdb_genomes.layout import (
 )
 from gtdb_genomes.logging_utils import attach_debug_log_handler, redact_text
 from gtdb_genomes.metadata import SUPPRESSED_ASSEMBLY_NOTE
+from gtdb_genomes.selection import build_taxon_slug_map
 from gtdb_genomes.workflow_execution import (
     AccessionExecution,
     DownloadExecutionResult,
@@ -149,6 +150,8 @@ def build_taxon_summary_rows(
     accession_rows: list[EnrichedOutputRow],
     duplicate_counts: dict[str, int],
     run_directories: RunDirectories,
+    requested_taxa: tuple[str, ...],
+    taxon_slug_map: dict[str, str],
 ) -> list[TaxonSummaryRow]:
     """Build `taxon_summary.tsv` rows from accession-level output rows."""
 
@@ -157,8 +160,9 @@ def build_taxon_summary_rows(
         grouped_rows[row["requested_taxon"]].append(row)
 
     summary_rows: list[TaxonSummaryRow] = []
-    for requested_taxon, rows in grouped_rows.items():
-        taxon_slug = rows[0]["taxon_slug"]
+    for requested_taxon in requested_taxa:
+        rows = grouped_rows.get(requested_taxon, [])
+        taxon_slug = taxon_slug_map[requested_taxon]
         summary_rows.append(
             {
                 "requested_taxon": requested_taxon,
@@ -555,6 +559,9 @@ def materialise_real_run_outputs(
             logger,
         )
     )
+    taxon_slug_map = build_taxon_slug_map(args.gtdb_taxa)
+    for requested_taxon in args.gtdb_taxa:
+        per_taxon_rows.setdefault(taxon_slug_map[requested_taxon], [])
     failure_rows = build_failure_rows(
         enriched_rows,
         {
@@ -571,6 +578,8 @@ def materialise_real_run_outputs(
         enriched_rows,
         duplicate_counts,
         run_directories,
+        args.gtdb_taxa,
+        taxon_slug_map,
     )
     successful_count, failed_count, exit_code = resolve_exit_code(enriched_rows)
     run_summary_rows = [
@@ -614,8 +623,9 @@ def materialise_real_run_outputs(
         ],
         failure_rows,
     )
-    for taxon_slug, rows in per_taxon_rows.items():
-        write_taxon_accessions(run_directories, taxon_slug, rows)
+    for requested_taxon in args.gtdb_taxa:
+        taxon_slug = taxon_slug_map[requested_taxon]
+        write_taxon_accessions(run_directories, taxon_slug, per_taxon_rows[taxon_slug])
     logger.info(
         "Run finished: successful_accessions=%d failed_accessions=%d exit_code=%d",
         successful_count,

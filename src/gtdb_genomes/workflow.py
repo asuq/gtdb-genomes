@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -18,6 +19,9 @@ import gtdb_genomes.workflow_selection as workflow_selection
 if TYPE_CHECKING:
     import logging
     from gtdb_genomes.cli import CliArgs
+
+
+OUTPUT_MATERIALISATION_FAILURE_EXIT_CODE = 8
 
 
 def log_run_start(
@@ -132,29 +136,37 @@ def run_workflow(args: CliArgs) -> int:
     unsupported_executions = workflow_selection.build_unsupported_executions(
         unsupported_selected_frame,
     )
-    exit_code = workflow_outputs.materialise_real_run_outputs(
-        args,
-        logger,
-        run_directories,
-        started_at,
-        resolution.resolved_release,
-        mapped_frame,
-        metadata_failures,
-        execution_result,
-        unsupported_executions,
-        secrets,
-        suppressed_notes=suppressed_notes,
-    )
-    failed_suppressed_warning = workflow_planning.build_failed_suppressed_warning(
-        suppressed_notes,
-        tuple(
-            original_accession
-            for original_accession, execution in execution_result.executions.items()
-            if execution.download_status == "failed"
-        ),
-    )
-    if failed_suppressed_warning is not None:
-        logger.warning("%s", failed_suppressed_warning)
+    try:
+        exit_code = workflow_outputs.materialise_real_run_outputs(
+            args,
+            logger,
+            run_directories,
+            started_at,
+            resolution.resolved_release,
+            mapped_frame,
+            metadata_failures,
+            execution_result,
+            unsupported_executions,
+            secrets,
+            suppressed_notes=suppressed_notes,
+        )
+    except (OSError, shutil.Error) as error:
+        logger.error(
+            "Real-run output materialisation failed: %s",
+            redact_text(str(error), secrets),
+        )
+        exit_code = OUTPUT_MATERIALISATION_FAILURE_EXIT_CODE
+    else:
+        failed_suppressed_warning = workflow_planning.build_failed_suppressed_warning(
+            suppressed_notes,
+            tuple(
+                original_accession
+                for original_accession, execution in execution_result.executions.items()
+                if execution.download_status == "failed"
+            ),
+        )
+        if failed_suppressed_warning is not None:
+            logger.warning("%s", failed_suppressed_warning)
     if not args.keep_temp:
         cleanup_error = cleanup_working_directories(run_directories)
         if cleanup_error is not None:

@@ -253,6 +253,21 @@ def test_build_taxon_slug_map_handles_collisions() -> None:
     assert slug_map["s__Escherichia coli"] != slug_map["s__Escherichia/coli"]
 
 
+def test_build_taxon_slug_map_handles_non_ascii_collisions() -> None:
+    """Non-ASCII collisions should still receive deterministic hash suffixes."""
+
+    slug_map = build_taxon_slug_map(
+        [
+            "s__Altiarchaeum \u03ac",
+            "s__Altiarchaeum \u00f6",
+        ],
+    )
+
+    assert slug_map["s__Altiarchaeum \u03ac"].startswith("s__Altiarchaeum___")
+    assert slug_map["s__Altiarchaeum \u00f6"].startswith("s__Altiarchaeum___")
+    assert slug_map["s__Altiarchaeum \u03ac"] != slug_map["s__Altiarchaeum \u00f6"]
+
+
 def test_attach_taxon_slugs_adds_slug_column() -> None:
     """Selected rows should receive the requested taxon slug."""
 
