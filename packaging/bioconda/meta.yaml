@@ -6,11 +6,10 @@ package:
   version: {{ version }}
 
 source:
-  # Fill these from the first public GitHub release once the upload exists.
-  # The intended source is the uploaded Hatch sdist asset for the tagged
-  # release, not a source checkout or VCS URL.
-  url: https://github.com/asuq/gtdb-genome/releases/download/v{{ version }}/gtdb_genomes-{{ version }}.tar.gz
-  sha256: 0000000000000000000000000000000000000000000000000000000000000000
+  # Update version and sha256 together from the tagged Hatch sdist uploaded by
+  # the GitHub release workflow.
+  url: https://github.com/asuq/gtdb-genomes/releases/download/v{{ version }}/gtdb_genomes-{{ version }}.tar.gz
+  sha256: fb9da1144dbbbff7cbace2c014d4702029d9f9e4e287cefb9d92c18f732ef978
 
 build:
   number: 0
@@ -32,8 +31,8 @@ requirements:
   run:
     - python >=3.12
     - polars
-    - unzip
-    - ncbi-datasets-cli
+    - unzip >=6.0,<7.0
+    - ncbi-datasets-cli >=18.21.0,<18.22.0
 
 test:
   commands:
@@ -43,7 +42,7 @@ test:
     - gtdb_genomes
 
 about:
-  home: https://github.com/asuq/gtdb-genome
+  home: https://github.com/asuq/gtdb-genomes
   summary: Download NCBI genomes by GTDB taxon and GTDB release.
   description: |
     gtdb-genomes downloads NCBI genomes by GTDB taxon and GTDB release using
@@ -62,8 +61,8 @@ about:
     - LICENSE
     - NOTICE
     - licenses/CC-BY-SA-4.0.txt
-  doc_url: https://github.com/asuq/gtdb-genome/blob/main/README.md
-  dev_url: https://github.com/asuq/gtdb-genome
+  doc_url: https://github.com/asuq/gtdb-genomes/blob/main/README.md
+  dev_url: https://github.com/asuq/gtdb-genomes
 
 extra:
   recipe-maintainers:

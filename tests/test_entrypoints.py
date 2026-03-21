@@ -419,6 +419,12 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "--prefer-genbank",
             "--threads",
             'prints the planned download list without downloading',
+            "Operational Notes",
+            "exact-token and case-sensitive",
+            "Direct downloads remain serial in the current workflow.",
+            "`genome`, `gff3`, and `protein`",
+            "`ncbi-datasets-cli >=18.21.0,<18.22.0`",
+            "`unzip >=6.0,<7.0`",
             '--gtdb-taxon "p__Pseudomonadota" "c__Alphaproteobacteria"',
         ),
     )
@@ -506,26 +512,40 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
 
 
 def test_bioconda_recipe_uses_real_upstream_metadata() -> None:
-    """The Bioconda recipe should be pre-release-ready apart from source hash."""
+    """The Bioconda recipe should use canonical release metadata."""
 
     bioconda_text = Path("packaging/bioconda/meta.yaml").read_text(
         encoding="utf-8",
     )
 
     assert '{% set version = "0.1.0" %}' in bioconda_text
-    assert "https://github.com/asuq/gtdb-genome/releases/download/" in (
+    assert "https://github.com/asuq/gtdb-genomes/releases/download/" in (
         bioconda_text
     )
-    assert "https://github.com/asuq/gtdb-genome" in bioconda_text
-    assert "https://github.com/asuq/gtdb-genome/blob/main/README.md" in (
+    assert "https://github.com/asuq/gtdb-genomes" in bioconda_text
+    assert "https://github.com/asuq/gtdb-genomes/blob/main/README.md" in (
         bioconda_text
     )
+    assert "- unzip >=6.0,<7.0" in bioconda_text
+    assert "- ncbi-datasets-cli >=18.21.0,<18.22.0" in bioconda_text
     assert "recipe-maintainers:" in bioconda_text
     assert "- asuq" in bioconda_text
     assert "example.org" not in bioconda_text
     assert "your-org" not in bioconda_text
     assert "your-github-id" not in bioconda_text
     assert '{% set version = "0.0.0" %}' not in bioconda_text
+    assert (
+        "0000000000000000000000000000000000000000000000000000000000000000"
+        not in bioconda_text
+    )
+    assert_not_contains_any(
+        bioconda_text,
+        (
+            "https://github.com/asuq/gtdb-genome/releases/download/",
+            "https://github.com/asuq/gtdb-genome/blob/main/README.md",
+            "https://github.com/asuq/gtdb-genome\n",
+        ),
+    )
 
 
 def test_real_data_validation_guide_describes_local_requirements() -> None:
@@ -557,6 +577,8 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
             "`NCBI_API_KEY` for `C2` and `C3`",
             "packaged-runtime `C` coverage is split into separate build and runtime",
             "no `uv` on `PATH`",
+            "`ncbi-datasets-cli >=18.21.0,<18.22.0`",
+            "`unzip >=6.0,<7.0`",
             "ncbi-datasets-cli=18.21.0",
             "unzip=6.0",
             "load_release_taxonomy()",
