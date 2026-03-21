@@ -7,8 +7,13 @@ from pathlib import Path
 import pytest
 
 from gtdb_genomes.cli import main
+from gtdb_genomes.layout import (
+    ACCESSION_MAP_COLUMNS,
+    RUN_SUMMARY_COLUMNS,
+    TAXON_ACCESSION_COLUMNS,
+)
+from gtdb_genomes.metadata import MetadataLookupError, SummaryLookupResult
 from gtdb_genomes.preflight import PreflightError
-from gtdb_genomes.metadata import SummaryLookupResult
 from tests.workflow_contract_helpers import (
     build_mixed_uba_taxonomy_frame,
     build_taxonomy_frame,
@@ -57,12 +62,15 @@ def test_zero_match_run_writes_header_only_outputs(
 
     assert exit_code == 4
     assert (output_dir / "run_summary.tsv").exists()
+    assert (output_dir / "run_summary.tsv").read_text().splitlines()[0].split(
+        "\t",
+    ) == list(RUN_SUMMARY_COLUMNS)
     assert (output_dir / "accession_map.tsv").read_text().splitlines() == [
-        "requested_taxon\ttaxon_slug\tresolved_release\ttaxonomy_file\tlineage\tgtdb_accession\tfinal_accession\taccession_type_original\taccession_type_final\tconversion_status\tdownload_method_used\tdownload_batch\toutput_relpath\tdownload_status",
+        "\t".join(ACCESSION_MAP_COLUMNS),
     ]
     assert (
         output_dir / "taxa" / "g__Escherichia" / "taxon_accessions.tsv"
-    ).exists()
+    ).read_text().splitlines() == ["\t".join(TAXON_ACCESSION_COLUMNS)]
 
 
 def test_mixed_uba_dry_run_warns_once_and_skips_outputs(
@@ -291,3 +299,42 @@ def test_supported_real_run_missing_tools_returns_exit_five(
 
     assert exit_code == 5
     assert not output_dir.exists()
+
+
+def test_supported_prefer_genbank_total_metadata_failure_returns_exit_five(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Total metadata lookup failure should now fail the workflow explicitly."""
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.check_required_tools",
+        lambda required_tools: None,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.load_release_taxonomy",
+        lambda resolution: build_taxonomy_frame(
+            "d__Bacteria;p__Proteobacteria;g__Escherichia",
+        ),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_planning.run_summary_lookup_with_retries",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            MetadataLookupError("metadata lookup failed"),
+        ),
+    )
+
+    output_dir = tmp_path / "prefer-genbank-metadata-failure"
+    exit_code = main(
+        [
+            "--gtdb-release",
+            "95",
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--prefer-genbank",
+            "--outdir",
+            str(output_dir),
+        ],
+    )
+
+    assert exit_code == 5

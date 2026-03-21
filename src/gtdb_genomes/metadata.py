@@ -458,9 +458,11 @@ def is_suppressed_status(status: str | None) -> bool:
 def find_matching_genbank_accessions(
     requested_accession: str,
     discovered_accessions: set[str],
+    status_map: dict[str, AssemblyStatusInfo] | None = None,
 ) -> tuple[str, ...]:
     """Return matching GenBank accessions for one RefSeq assembly accession."""
 
+    accession_status_map = {} if status_map is None else status_map
     requested_parts = parse_assembly_accession(requested_accession)
     if requested_parts is None:
         return ()
@@ -472,8 +474,18 @@ def find_matching_genbank_accessions(
         and parsed_accession.numeric_identifier == requested_parts.numeric_identifier
     ]
     matching_accessions.sort(
-        key=lambda accession: accession.version,
-        reverse=True,
+        key=lambda accession: (
+            is_suppressed_status(
+                accession_status_map.get(accession.accession, AssemblyStatusInfo(
+                    assembly_status=None,
+                    suppression_reason=None,
+                    paired_accession=None,
+                    paired_assembly_status=None,
+                )).assembly_status,
+            ),
+            -accession.version,
+            accession.accession,
+        ),
     )
     return tuple(accession.accession for accession in matching_accessions)
 
@@ -481,6 +493,7 @@ def find_matching_genbank_accessions(
 def choose_preferred_accession(
     requested_accession: str,
     discovered_accessions: set[str] | None,
+    status_map: dict[str, AssemblyStatusInfo] | None = None,
     prefer_genbank: bool = True,
 ) -> tuple[str, str]:
     """Choose the final accession and conversion status for one request."""
@@ -494,8 +507,22 @@ def choose_preferred_accession(
     paired_genbank = find_matching_genbank_accessions(
         requested_accession,
         discovered_accessions,
+        status_map=status_map,
     )
     if paired_genbank:
+        preferred_accession = paired_genbank[0]
+        if is_suppressed_status(
+            (status_map or {}).get(
+                preferred_accession,
+                AssemblyStatusInfo(
+                    assembly_status=None,
+                    suppression_reason=None,
+                    paired_accession=None,
+                    paired_assembly_status=None,
+                ),
+            ).assembly_status,
+        ):
+            return requested_accession, "paired_gca_suppressed_fallback_original"
         return paired_genbank[0], "paired_to_gca"
     return requested_accession, "unchanged_original"
 
@@ -513,6 +540,7 @@ def get_accession_type(accession: str) -> str:
 def build_accession_preference_table(
     accessions: Iterable[str],
     summary_map: dict[str, set[str]],
+    status_map: dict[str, AssemblyStatusInfo] | None = None,
     prefer_genbank: bool = True,
 ) -> pl.DataFrame:
     """Build a Polars table describing the chosen accession for each request."""
@@ -522,6 +550,7 @@ def build_accession_preference_table(
         final_accession, conversion_status = choose_preferred_accession(
             requested_accession,
             summary_map.get(requested_accession),
+            status_map=status_map,
             prefer_genbank=prefer_genbank,
         )
         rows.append(
@@ -550,6 +579,7 @@ def build_accession_preference_table(
 def apply_accession_preferences(
     selection_frame: pl.DataFrame,
     summary_map: dict[str, set[str]],
+    status_map: dict[str, AssemblyStatusInfo] | None = None,
     prefer_genbank: bool = True,
 ) -> pl.DataFrame:
     """Attach preferred-accession metadata to a selected taxonomy frame."""
@@ -564,6 +594,7 @@ def apply_accession_preferences(
     preference_frame = build_accession_preference_table(
         selection_frame.get_column("ncbi_accession").to_list(),
         summary_map,
+        status_map=status_map,
         prefer_genbank=prefer_genbank,
     )
     return selection_frame.join(

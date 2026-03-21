@@ -140,6 +140,72 @@ def test_choose_preferred_accession_keeps_native_genbank_on_metadata_failure() -
     )
 
 
+def test_choose_preferred_accession_prefers_unsuppressed_gca_over_newer_suppressed() -> None:
+    """Suppression metadata should outrank raw version ordering for GCA matches."""
+
+    discovered_accessions = {
+        "GCF_000001.1",
+        "GCA_000001.2",
+        "GCA_000001.3",
+    }
+    status_map = {
+        "GCA_000001.2": AssemblyStatusInfo(
+            assembly_status="current",
+            suppression_reason=None,
+            paired_accession=None,
+            paired_assembly_status=None,
+        ),
+        "GCA_000001.3": AssemblyStatusInfo(
+            assembly_status="suppressed",
+            suppression_reason="removed by submitter",
+            paired_accession=None,
+            paired_assembly_status=None,
+        ),
+    }
+
+    assert choose_preferred_accession(
+        "GCF_000001.1",
+        discovered_accessions,
+        status_map=status_map,
+    ) == (
+        "GCA_000001.2",
+        "paired_to_gca",
+    )
+
+
+def test_choose_preferred_accession_falls_back_when_all_gca_matches_are_suppressed() -> None:
+    """Fully suppressed GenBank matches should keep the original accession."""
+
+    discovered_accessions = {
+        "GCF_000001.1",
+        "GCA_000001.2",
+        "GCA_000001.3",
+    }
+    status_map = {
+        "GCA_000001.2": AssemblyStatusInfo(
+            assembly_status="suppressed",
+            suppression_reason="removed by submitter",
+            paired_accession=None,
+            paired_assembly_status=None,
+        ),
+        "GCA_000001.3": AssemblyStatusInfo(
+            assembly_status="suppressed",
+            suppression_reason="replaced by newer record",
+            paired_accession=None,
+            paired_assembly_status=None,
+        ),
+    }
+
+    assert choose_preferred_accession(
+        "GCF_000001.1",
+        discovered_accessions,
+        status_map=status_map,
+    ) == (
+        "GCF_000001.1",
+        "paired_gca_suppressed_fallback_original",
+    )
+
+
 def test_build_download_request_accession_defaults_to_fixed_version_requests() -> None:
     """Prefer-GenBank should keep the selected version unless latest-mode is enabled."""
 

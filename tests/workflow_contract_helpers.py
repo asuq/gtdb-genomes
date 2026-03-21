@@ -167,6 +167,12 @@ def install_fake_release_resolution(
             resolved_release=resolved_release,
             bacterial_taxonomy=Path("/tmp") / resolved_release / "taxonomy.tsv.gz",
             archaeal_taxonomy=None,
+            release_manifest_path=Path("/tmp") / "releases.tsv",
+            release_manifest_sha256="0" * 64,
+            bacterial_taxonomy_sha256="1" * 64,
+            archaeal_taxonomy_sha256=None,
+            bacterial_taxonomy_rows=1,
+            archaeal_taxonomy_rows=None,
         )
 
     monkeypatch.setattr(

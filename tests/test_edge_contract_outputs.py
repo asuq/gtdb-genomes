@@ -11,11 +11,13 @@ from gtdb_genomes.download import (
     CommandFailureRecord,
     PreviewError,
 )
+from gtdb_genomes.layout import ACCESSION_MAP_COLUMNS, TAXON_ACCESSION_COLUMNS
 from gtdb_genomes.metadata import (
     AssemblyStatusInfo,
     SummaryLookupResult,
     SUPPRESSED_ASSEMBLY_NOTE,
 )
+from gtdb_genomes.provenance import RuntimeProvenance
 from gtdb_genomes.workflow_execution import (
     AccessionExecution,
     DownloadExecutionResult,
@@ -420,17 +422,7 @@ def test_mixed_real_run_writes_zero_match_taxon_outputs(
     bacillus_manifest = output_dir / "taxa" / "g__Bacillus" / "taxon_accessions.tsv"
     assert bacillus_manifest.exists()
     manifest_header, manifest_rows = parse_tsv(bacillus_manifest)
-    assert manifest_header == [
-        "requested_taxon",
-        "taxon_slug",
-        "lineage",
-        "gtdb_accession",
-        "final_accession",
-        "conversion_status",
-        "output_relpath",
-        "download_status",
-        "duplicate_across_taxa",
-    ]
+    assert manifest_header == list(TAXON_ACCESSION_COLUMNS)
     assert manifest_rows == []
 
 
@@ -607,6 +599,175 @@ def test_shared_preferred_direct_manifest_uses_preferred_download_batch(
         for row in accession_rows
     ]
     assert {row["download_batch"] for row in accession_maps} == {"direct_batch_1"}
+
+
+def test_real_run_records_provenance_and_download_request_accessions(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Successful runs should emit deterministic provenance and request accessions."""
+
+    payload_directory = tmp_path / "shared-preferred-payload"
+    payload_directory.mkdir()
+    (payload_directory / "genome.fna").write_text(">seq\nACGT\n", encoding="ascii")
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.check_required_tools",
+        lambda required_tools: None,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.load_release_taxonomy",
+        lambda resolution: build_shared_preferred_taxonomy_frame(
+            "d__Bacteria;p__Firmicutes;g__Bacillus",
+        ),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_planning.run_summary_lookup_with_retries",
+        lambda *args, **kwargs: SummaryLookupResult(
+            summary_map={
+                "GCF_001881595.2": {"GCF_001881595.2", "GCA_001881595.3"},
+                "GCA_001881595.3": {"GCA_001881595.3"},
+            },
+            status_map={},
+            failures=(),
+        ),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_planning.run_preview_command",
+        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_outputs.build_runtime_provenance",
+        lambda **kwargs: RuntimeProvenance(
+            package_version="1.2.3",
+            git_revision="deadbeef",
+            datasets_version="datasets 2.0",
+            unzip_version="UnZip 6.00",
+            release_manifest_sha256=kwargs["release_manifest_sha256"],
+            bacterial_taxonomy_sha256=kwargs["bacterial_taxonomy_sha256"],
+            archaeal_taxonomy_sha256=kwargs["archaeal_taxonomy_sha256"],
+        ),
+    )
+
+    def fake_execute_accession_plans(
+        plans,
+        args,
+        decision_method: str,
+        run_directories,
+        logger,
+        secrets,
+    ) -> DownloadExecutionResult:
+        """Return one successful direct execution for the paired accessions."""
+
+        del args, run_directories, logger, secrets
+        assert decision_method == "direct"
+        assert {plan.original_accession for plan in plans} == {
+            "GCF_001881595.2",
+            "GCA_001881595.3",
+        }
+        return DownloadExecutionResult(
+            executions={
+                "GCF_001881595.2": AccessionExecution(
+                    original_accession="GCF_001881595.2",
+                    final_accession="GCA_001881595.3",
+                    conversion_status="paired_to_gca",
+                    download_status="downloaded",
+                    download_batch="direct_batch_1",
+                    payload_directory=payload_directory,
+                    failures=(),
+                ),
+                "GCA_001881595.3": AccessionExecution(
+                    original_accession="GCA_001881595.3",
+                    final_accession="GCA_001881595.3",
+                    conversion_status="unchanged_original",
+                    download_status="downloaded",
+                    download_batch="direct_batch_1",
+                    payload_directory=payload_directory,
+                    failures=(),
+                ),
+            },
+            method_used="direct",
+            download_concurrency_used=1,
+            rehydrate_workers_used=0,
+        )
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_execution.execute_accession_plans",
+        fake_execute_accession_plans,
+    )
+
+    def run_case(output_dir: Path, *, version_latest: bool) -> tuple[dict[str, str], dict[str, dict[str, str]], dict[str, dict[str, str]]]:
+        """Run one workflow case and return the parsed output manifests."""
+
+        args = [
+            "--gtdb-release",
+            "80",
+            "--gtdb-taxon",
+            "g__Bacillus",
+            "--outdir",
+            str(output_dir),
+            "--prefer-genbank",
+        ]
+        if version_latest:
+            args.insert(-1, "--version-latest")
+        exit_code = main(args)
+        assert exit_code == 0
+
+        run_summary_header, run_summary_rows = parse_tsv(output_dir / "run_summary.tsv")
+        accession_header, accession_rows = parse_tsv(output_dir / "accession_map.tsv")
+        taxon_header, taxon_rows = parse_tsv(
+            output_dir / "taxa" / "g__Bacillus" / "taxon_accessions.tsv",
+        )
+        return (
+            dict(zip(run_summary_header, run_summary_rows[0], strict=True)),
+            {
+                row_dict["ncbi_accession"]: row_dict
+                for row_dict in (
+                    dict(zip(accession_header, row, strict=True))
+                    for row in accession_rows
+                )
+            },
+            {
+                row_dict["ncbi_accession"]: row_dict
+                for row_dict in (
+                    dict(zip(taxon_header, row, strict=True))
+                    for row in taxon_rows
+                )
+            },
+        )
+
+    fixed_summary, fixed_accessions, fixed_taxon_rows = run_case(
+        tmp_path / "fixed-version",
+        version_latest=False,
+    )
+    fixed_summary_repeat, _, _ = run_case(
+        tmp_path / "fixed-version-repeat",
+        version_latest=False,
+    )
+    latest_summary, latest_accessions, latest_taxon_rows = run_case(
+        tmp_path / "latest-version",
+        version_latest=True,
+    )
+
+    assert fixed_summary["run_id"] == fixed_summary_repeat["run_id"]
+    assert fixed_summary["run_id"] != latest_summary["run_id"]
+    assert fixed_summary["package_version"] == "1.2.3"
+    assert fixed_summary["git_revision"] == "deadbeef"
+    assert fixed_summary["datasets_version"] == "datasets 2.0"
+    assert fixed_summary["unzip_version"] == "UnZip 6.00"
+    assert fixed_summary["release_manifest_sha256"] == "0" * 64
+    assert fixed_summary["bacterial_taxonomy_sha256"] == "1" * 64
+    assert fixed_summary["archaeal_taxonomy_sha256"] == ""
+    assert fixed_summary["version_latest"] == "false"
+
+    assert fixed_accessions["GCF_001881595.2"]["selected_accession"] == "GCA_001881595.3"
+    assert fixed_accessions["GCF_001881595.2"]["download_request_accession"] == "GCA_001881595.3"
+    assert fixed_taxon_rows["GCF_001881595.2"]["selected_accession"] == "GCA_001881595.3"
+    assert fixed_taxon_rows["GCF_001881595.2"]["download_request_accession"] == "GCA_001881595.3"
+
+    assert latest_summary["version_latest"] == "true"
+    assert latest_accessions["GCF_001881595.2"]["download_request_accession"] == "GCA_001881595"
+    assert latest_taxon_rows["GCF_001881595.2"]["download_request_accession"] == "GCA_001881595"
 
 
 def test_direct_fallback_manifest_uses_actual_fallback_download_batch(

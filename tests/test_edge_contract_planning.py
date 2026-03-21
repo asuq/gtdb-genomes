@@ -672,10 +672,11 @@ def test_total_runtime_failure_leaves_final_accession_blank(
     )
 
     assert exit_code == 7
-    accession_map_lines = (output_dir / "accession_map.tsv").read_text().splitlines()
-    assert accession_map_lines[1].split("\t")[6] == ""
-    assert accession_map_lines[1].split("\t")[9] == "failed_no_usable_accession"
-    assert accession_map_lines[1].split("\t")[13] == "failed"
+    accession_header, accession_rows = parse_tsv(output_dir / "accession_map.tsv")
+    accession_map = dict(zip(accession_header, accession_rows[0], strict=True))
+    assert accession_map["final_accession"] == ""
+    assert accession_map["conversion_status"] == "failed_no_usable_accession"
+    assert accession_map["download_status"] == "failed"
     run_summary_header, run_summary_rows = parse_tsv(output_dir / "run_summary.tsv")
     run_summary = dict(zip(run_summary_header, run_summary_rows[0], strict=True))
     assert run_summary["download_concurrency_used"] == "1"

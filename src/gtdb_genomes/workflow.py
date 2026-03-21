@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from gtdb_genomes.download import DEFAULT_REQUESTED_DOWNLOAD_METHOD, PreviewError
 from gtdb_genomes.layout import cleanup_working_directories, initialise_run_directories
 from gtdb_genomes.logging_utils import close_logger, configure_logging, redact_text
+from gtdb_genomes.metadata import MetadataLookupError
 from gtdb_genomes.release_resolver import BundledDataError
 import gtdb_genomes.workflow_execution as workflow_execution
 import gtdb_genomes.workflow_outputs as workflow_outputs
@@ -98,6 +99,10 @@ def run_workflow(args: CliArgs) -> int:
         logger.error("%s", error)
         close_logger(logger)
         return 3
+    except MetadataLookupError as error:
+        logger.error("%s", redact_text(str(error), secrets))
+        close_logger(logger)
+        return 5
     except PreviewError as error:
         logger.error("%s", redact_text(str(error), secrets))
         close_logger(logger)
@@ -142,7 +147,7 @@ def run_workflow(args: CliArgs) -> int:
             logger,
             run_directories,
             started_at,
-            resolution.resolved_release,
+            resolution,
             mapped_frame,
             metadata_failures,
             execution_result,

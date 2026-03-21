@@ -20,7 +20,7 @@ from gtdb_genomes.download import (
     select_download_method,
     write_accession_input_file,
 )
-from gtdb_genomes.logging_utils import redact_command, redact_text
+from gtdb_genomes.logging_utils import redact_command
 from gtdb_genomes.metadata import (
     AssemblyStatusInfo,
     MetadataLookupError,
@@ -237,6 +237,7 @@ def resolve_supported_accession_preferences(
             apply_accession_preferences(
                 supported_selected_frame,
                 {},
+                status_map={},
                 prefer_genbank=args.prefer_genbank,
             ),
             (),
@@ -248,6 +249,7 @@ def resolve_supported_accession_preferences(
             apply_accession_preferences(
                 supported_selected_frame,
                 {},
+                status_map={},
                 prefer_genbank=False,
             ),
             (),
@@ -274,30 +276,62 @@ def resolve_supported_accession_preferences(
             ncbi_api_key=args.ncbi_api_key,
         )
         logger.debug("Running %s", redact_command(metadata_command, secrets))
-        try:
-            summary_lookup = run_summary_lookup_with_retries(
-                supported_accessions,
-                metadata_accession_file,
+        summary_lookup = run_summary_lookup_with_retries(
+            supported_accessions,
+            metadata_accession_file,
+            ncbi_api_key=args.ncbi_api_key,
+        )
+        summary_map = summary_lookup.summary_map
+        status_map = summary_lookup.status_map
+        metadata_failures = summary_lookup.failures
+        logger.info(
+            "Metadata lookup finished with %d preferred mapping(s)",
+            len(summary_map),
+        )
+        candidate_accessions = get_ordered_unique_accessions(
+            accession
+            for discovered_accessions in summary_map.values()
+            for accession in discovered_accessions
+            if accession.startswith("GCA_") and accession not in status_map
+        )
+        if candidate_accessions:
+            logger.info(
+                "Running candidate metadata lookup for %d paired GenBank "
+                "accession(s)",
+                len(candidate_accessions),
+            )
+            candidate_accession_file = write_accession_input_file(
+                Path(metadata_directory) / "paired-gca-accessions.txt",
+                candidate_accessions,
+            )
+            candidate_metadata_command = build_summary_command(
+                candidate_accession_file,
                 ncbi_api_key=args.ncbi_api_key,
             )
-            summary_map = summary_lookup.summary_map
-            status_map = summary_lookup.status_map
-            metadata_failures = summary_lookup.failures
-            logger.info(
-                "Metadata lookup finished with %d preferred mapping(s)",
-                len(summary_map),
+            logger.debug(
+                "Running %s",
+                redact_command(candidate_metadata_command, secrets),
             )
-        except MetadataLookupError as error:
-            metadata_failures = error.failures
-            logger.warning(
-                "Metadata lookup failed; falling back to original accessions: %s",
-                redact_text(str(error), secrets),
-            )
-            summary_map = {}
-            status_map = {}
+            try:
+                candidate_lookup = run_summary_lookup_with_retries(
+                    candidate_accessions,
+                    candidate_accession_file,
+                    ncbi_api_key=args.ncbi_api_key,
+                )
+            except MetadataLookupError as error:
+                raise MetadataLookupError(
+                    str(error),
+                    failures=metadata_failures + error.failures,
+                ) from error
+            metadata_failures = metadata_failures + candidate_lookup.failures
+            status_map = {
+                **status_map,
+                **candidate_lookup.status_map,
+            }
     mapped_frame = apply_accession_preferences(
         supported_selected_frame,
         summary_map,
+        status_map=status_map,
         prefer_genbank=args.prefer_genbank,
     )
     return (

@@ -246,8 +246,7 @@ def handle_zero_match_exit(
     run_summary_rows = [
         build_run_summary_row(
             args,
-            args.gtdb_release,
-            resolution.resolved_release,
+            resolution,
             DEFAULT_REQUESTED_DOWNLOAD_METHOD,
             0,
             0,

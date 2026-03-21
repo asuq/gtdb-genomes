@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
-import uuid
 
 import polars as pl
 
@@ -24,7 +23,14 @@ from gtdb_genomes.layout import (
     write_taxon_accessions,
 )
 from gtdb_genomes.logging_utils import attach_debug_log_handler, redact_text
-from gtdb_genomes.metadata import SUPPRESSED_ASSEMBLY_NOTE
+from gtdb_genomes.metadata import (
+    SUPPRESSED_ASSEMBLY_NOTE,
+    build_download_request_accession,
+)
+from gtdb_genomes.provenance import (
+    build_deterministic_run_id,
+    build_runtime_provenance,
+)
 from gtdb_genomes.selection import build_taxon_slug_map
 from gtdb_genomes.workflow_execution import (
     AccessionExecution,
@@ -34,6 +40,7 @@ from gtdb_genomes.workflow_execution import (
 
 if TYPE_CHECKING:
     from gtdb_genomes.cli import CliArgs
+    from gtdb_genomes.release_resolver import ReleaseResolution
     from gtdb_genomes.workflow_planning import SuppressedAccessionNote
 
 
@@ -55,6 +62,14 @@ class RunSummaryRow(TypedDict):
     rehydrate_workers_used: int
     include: str
     prefer_genbank: str
+    version_latest: str
+    package_version: str
+    git_revision: str
+    datasets_version: str
+    unzip_version: str
+    release_manifest_sha256: str
+    bacterial_taxonomy_sha256: str
+    archaeal_taxonomy_sha256: str
     debug_enabled: str
     requested_taxa_count: int
     matched_rows: int
@@ -90,6 +105,8 @@ class EnrichedOutputRow(TypedDict):
     lineage: str
     gtdb_accession: str
     ncbi_accession: str
+    selected_accession: str
+    download_request_accession: str
     final_accession: str
     accession_type_original: str
     accession_type_final: str
@@ -108,6 +125,9 @@ class PerTaxonOutputRow(TypedDict):
     taxon_slug: str
     lineage: str
     gtdb_accession: str
+    ncbi_accession: str
+    selected_accession: str
+    download_request_accession: str
     final_accession: str
     conversion_status: str
     output_relpath: str
@@ -202,8 +222,7 @@ def build_taxon_summary_rows(
 
 def build_run_summary_row(
     args: CliArgs,
-    requested_release: str,
-    resolved_release: str,
+    resolution: ReleaseResolution,
     method_used: str,
     download_concurrency_used: int,
     rehydrate_workers_used: int,
@@ -216,12 +235,25 @@ def build_run_summary_row(
 ) -> RunSummaryRow:
     """Build the single `run_summary.tsv` row."""
 
+    provenance = build_runtime_provenance(
+        release_manifest_sha256=resolution.release_manifest_sha256,
+        bacterial_taxonomy_sha256=resolution.bacterial_taxonomy_sha256,
+        archaeal_taxonomy_sha256=resolution.archaeal_taxonomy_sha256,
+    )
     return {
-        "run_id": uuid.uuid4().hex,
+        "run_id": build_deterministic_run_id(
+            requested_release=args.gtdb_release,
+            resolved_release=resolution.resolved_release,
+            requested_taxa=args.gtdb_taxa,
+            include=args.include,
+            prefer_genbank=args.prefer_genbank,
+            version_latest=args.version_latest,
+            provenance=provenance,
+        ),
         "started_at": started_at,
         "finished_at": finished_at,
-        "requested_release": requested_release,
-        "resolved_release": resolved_release,
+        "requested_release": args.gtdb_release,
+        "resolved_release": resolution.resolved_release,
         "download_method_requested": DEFAULT_REQUESTED_DOWNLOAD_METHOD,
         "download_method_used": method_used,
         "threads_requested": args.threads,
@@ -229,6 +261,18 @@ def build_run_summary_row(
         "rehydrate_workers_used": rehydrate_workers_used,
         "include": args.include,
         "prefer_genbank": str(args.prefer_genbank).lower(),
+        "version_latest": str(args.version_latest).lower(),
+        "package_version": provenance.package_version,
+        "git_revision": provenance.git_revision,
+        "datasets_version": provenance.datasets_version,
+        "unzip_version": provenance.unzip_version,
+        "release_manifest_sha256": provenance.release_manifest_sha256,
+        "bacterial_taxonomy_sha256": (
+            provenance.bacterial_taxonomy_sha256 or ""
+        ),
+        "archaeal_taxonomy_sha256": (
+            provenance.archaeal_taxonomy_sha256 or ""
+        ),
         "debug_enabled": str(args.debug).lower(),
         "requested_taxa_count": len(args.gtdb_taxa),
         "matched_rows": matched_rows,
@@ -395,6 +439,7 @@ def build_failure_rows(
 
 
 def build_enriched_output_rows(
+    args: CliArgs,
     resolved_release: str,
     mapped_frame: pl.DataFrame,
     execution_result: DownloadExecutionResult,
@@ -417,6 +462,7 @@ def build_enriched_output_rows(
     supported_enriched_rows: list[EnrichedOutputRow] = []
     for row in mapped_frame.rows(named=True):
         execution = executions[row["ncbi_accession"]]
+        selected_accession = row["final_accession"]
         final_accession = execution.final_accession or ""
         unsupported_accession = row["ncbi_accession"] in unsupported_executions
         enriched_rows.append(
@@ -428,6 +474,16 @@ def build_enriched_output_rows(
                 "lineage": row["lineage"],
                 "gtdb_accession": row["gtdb_accession"],
                 "ncbi_accession": row["ncbi_accession"],
+                "selected_accession": selected_accession,
+                "download_request_accession": (
+                    build_download_request_accession(
+                        selected_accession,
+                        prefer_genbank=args.prefer_genbank,
+                        version_latest=args.version_latest,
+                    )
+                    if selected_accession
+                    else ""
+                ),
                 "final_accession": final_accession,
                 "accession_type_original": row["accession_type_original"],
                 "accession_type_final": (
@@ -496,6 +552,9 @@ def build_enriched_output_rows(
                 "taxon_slug": row["taxon_slug"],
                 "lineage": row["lineage"],
                 "gtdb_accession": row["gtdb_accession"],
+                "ncbi_accession": row["ncbi_accession"],
+                "selected_accession": row["selected_accession"],
+                "download_request_accession": row["download_request_accession"],
                 "final_accession": row["final_accession"],
                 "conversion_status": row["conversion_status"],
                 "output_relpath": row["output_relpath"],
@@ -538,7 +597,7 @@ def materialise_real_run_outputs(
     logger: logging.Logger,
     run_directories: RunDirectories,
     started_at: str,
-    resolved_release: str,
+    resolution: ReleaseResolution,
     mapped_frame: pl.DataFrame,
     metadata_failures: tuple[CommandFailureRecord, ...],
     execution_result: DownloadExecutionResult,
@@ -551,7 +610,8 @@ def materialise_real_run_outputs(
     logger.info("Writing output manifests to %s", run_directories.output_root)
     enriched_rows, supported_enriched_rows, per_taxon_rows, duplicate_counts = (
         build_enriched_output_rows(
-            resolved_release,
+            args,
+            resolution.resolved_release,
             mapped_frame,
             execution_result,
             unsupported_executions,
@@ -585,8 +645,7 @@ def materialise_real_run_outputs(
     run_summary_rows = [
         build_run_summary_row(
             args,
-            args.gtdb_release,
-            resolved_release,
+            resolution,
             execution_result.method_used,
             execution_result.download_concurrency_used,
             execution_result.rehydrate_workers_used,
@@ -610,6 +669,9 @@ def materialise_real_run_outputs(
                 "taxonomy_file": row["taxonomy_file"],
                 "lineage": row["lineage"],
                 "gtdb_accession": row["gtdb_accession"],
+                "ncbi_accession": row["ncbi_accession"],
+                "selected_accession": row["selected_accession"],
+                "download_request_accession": row["download_request_accession"],
                 "final_accession": row["final_accession"],
                 "accession_type_original": row["accession_type_original"],
                 "accession_type_final": row["accession_type_final"],
