@@ -3098,3 +3098,132 @@ PY`
   - the README assertion was written against wrapped Markdown text, so the test
     checks the key phrases separately instead of relying on one long
     single-line substring
+
+### Commit `9740210` - `fix(workflow): harden planning and runtime logging`
+
+- Implemented:
+  - removed the fixed `CliArgs.download_method` state and replaced internal
+    default-method usage with one `DEFAULT_REQUESTED_DOWNLOAD_METHOD` constant
+  - changed metadata summary parsing so assembly status is keyed only by the
+    summary record's primary accession, which makes paired `GCF_*` and `GCA_*`
+    requests order-independent
+  - changed suppressed-assembly note generation so warnings follow the actual
+    selected accession when the workflow has status data for that selected
+    revision
+  - skipped metadata lookup entirely when `--prefer-genbank` is disabled,
+    instead of running the default lookup path and then discarding it
+  - hardened incompatible `datasets` preview and summary output handling with
+    explicit stage-specific errors
+  - moved real-run debug logging to a buffered-then-attached flow so
+    `debug.log` now captures release resolution, taxonomy selection, metadata
+    lookup, preview planning, and warnings that happen before output files are
+    created
+  - changed working-directory cleanup to warn without overriding the already
+    computed workflow exit code
+  - replaced mutable output-row dict use with typed row shapes in
+    `workflow_outputs.py`
+- Why:
+  - the old status mapping could attach one assembly's suppression state to a
+    different accession when paired records appeared in a different summary
+    order, which made suppression warnings non-deterministic
+  - the default non-GenBank path did unnecessary network work and made the
+    planning phase harder to reason about
+  - real-run debug logging previously missed the most important planning steps
+    because the file handler only appeared after the output tree existed
+  - cleanup errors are secondary failures and should not replace the real run
+    outcome after manifests are already written
+- Files:
+  - `src/gtdb_genomes/cli.py`
+  - `src/gtdb_genomes/download.py`
+  - `src/gtdb_genomes/layout.py`
+  - `src/gtdb_genomes/logging_utils.py`
+  - `src/gtdb_genomes/metadata.py`
+  - `src/gtdb_genomes/workflow.py`
+  - `src/gtdb_genomes/workflow_outputs.py`
+  - `src/gtdb_genomes/workflow_planning.py`
+  - `src/gtdb_genomes/workflow_selection.py`
+  - `tests/test_cli.py`
+  - `tests/test_cli_integration.py`
+  - `tests/test_download.py`
+  - `tests/test_logging.py`
+  - `tests/test_metadata.py`
+  - `tests/test_workflow_planning.py`
+- Checks run:
+  - `mamba run -n gtdb-genome uv run pytest -q`
+- Match to requested change:
+  - yes
+- Deviations:
+  - none
+
+### Commit `7f64ec4` - `refactor(workflow): split execution and contract tests`
+
+- Implemented:
+  - split the oversized workflow execution module into focused internal modules
+    for models, payload resolution, direct execution, and dehydrate fallback,
+    while keeping `workflow_execution.py` as the public facade
+  - removed `AccessionPlan.selected_accession` from the execution model
+  - split the monolithic edge-contract suite into behaviour-focused modules for
+    entrypoints, planning, payloads, execution, and output manifests
+  - moved shared contract-test builders and logger helpers into
+    `tests/workflow_contract_helpers.py`
+  - removed the old `tests/test_edge_contract.py` monolith
+- Why:
+  - the execution path had grown large enough that fixing one area required
+    keeping too much unrelated state in view at once
+  - the old edge-contract file mixed entrypoint, planning, extraction,
+    execution, and manifest behaviour in one place, which made regression
+    ownership and navigation slower than necessary
+  - removing `selected_accession` from `AccessionPlan` keeps the planning
+    result minimal and avoids carrying duplicate state into execution
+- Files:
+  - `src/gtdb_genomes/workflow_execution.py`
+  - `src/gtdb_genomes/workflow_execution_dehydrate.py`
+  - `src/gtdb_genomes/workflow_execution_direct.py`
+  - `src/gtdb_genomes/workflow_execution_models.py`
+  - `src/gtdb_genomes/workflow_execution_payloads.py`
+  - `tests/__init__.py`
+  - `tests/test_edge_contract.py`
+  - `tests/test_edge_contract_entrypoints.py`
+  - `tests/test_edge_contract_execution.py`
+  - `tests/test_edge_contract_outputs.py`
+  - `tests/test_edge_contract_payloads.py`
+  - `tests/test_edge_contract_planning.py`
+  - `tests/workflow_contract_helpers.py`
+- Checks run:
+  - `mamba run -n gtdb-genome uv run pytest -q tests/test_edge_contract_*.py`
+  - `mamba run -n gtdb-genome uv run pytest -q`
+- Match to requested change:
+  - yes
+- Deviations:
+  - helper exports such as payload-resolution functions remain available
+    through the public execution facade so the existing test surface and call
+    sites do not need a second round of churn in this pass
+
+### Commit `b1792e9` - `docs(contract): consolidate usage details`
+
+- Implemented:
+  - made `docs/usage-details.md` the canonical detailed runtime contract
+  - trimmed `README.md` so it keeps the quick-start and high-level command
+    contract instead of duplicating the long-form runtime details
+  - clarified in both docs and tests that `--threads` does not increase direct
+    download concurrency in the current workflow
+  - replaced large prose-fragile entrypoint assertions with small reusable
+    helpers that check the presence or absence of specific contract snippets
+- Why:
+  - the README and usage-details document had overlapping contract text, which
+    made future behavioural edits require duplicated doc maintenance
+  - the `--threads` wording needed to match the real behaviour after this pass
+    deliberately kept direct downloads serial
+  - prose-fragile assertions were creating maintenance noise without adding
+    much signal when the documentation was merely rewrapped or reorganised
+- Files:
+  - `README.md`
+  - `docs/usage-details.md`
+  - `tests/test_entrypoints.py`
+- Checks run:
+  - `mamba run -n gtdb-genome uv run pytest -q tests/test_entrypoints.py`
+  - `mamba run -n gtdb-genome uv run pytest -q`
+- Match to requested change:
+  - yes
+- Deviations:
+  - none
