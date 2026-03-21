@@ -1,11 +1,11 @@
-resolved_release	aliases	bacterial_taxonomy	archaeal_taxonomy	is_latest
-80.0	80,80.0,release80,release80/80.0	bac_taxonomy_r80.tsv.gz		false
-83.0	83,83.0,release83,release83/83.0	bac_taxonomy_r83.tsv.gz		false
-86.0	86,86.0,release86,release86/86.0	bac_taxonomy_r86.tsv.gz	arc_taxonomy_r86.tsv.gz	false
-89.0	89,89.0,release89,release89/89.0	bac120_taxonomy_r89.tsv.gz	ar122_taxonomy_r89.tsv.gz	false
-95.0	95,95.0,release95,release95/95.0	bac120_taxonomy_r95.tsv.gz	ar122_taxonomy_r95.tsv.gz	false
-202.0	202,202.0,release202,release202/202.0	bac120_taxonomy_r202.tsv.gz	ar122_taxonomy_r202.tsv.gz	false
-207.0	207,207.0,release207,release207/207.0	bac120_taxonomy_r207.tsv.gz	ar53_taxonomy_r207.tsv.gz	false
-214.0	214,214.0,release214,release214/214.0	bac120_taxonomy_r214.tsv.gz	ar53_taxonomy_r214.tsv.gz	false
-220.0	220,220.0,release220,release220/220.0	bac120_taxonomy_r220.tsv.gz	ar53_taxonomy_r220.tsv.gz	false
-226.0	226,226.0,release226,release226/226.0,latest	bac120_taxonomy_r226.tsv.gz	ar53_taxonomy_r226.tsv.gz	true
+resolved_release	aliases	bacterial_taxonomy	archaeal_taxonomy	is_latest	source_root_url	checksum_filename	bacterial_source_name	archaeal_source_name
+80.0	80,80.0,release80,release80/80.0	bac_taxonomy_r80.tsv.gz		false	https://data.ace.uq.edu.au/public/gtdb/data/releases/release80/80.0/	MD5SUM	bac_taxonomy_r80.tsv	
+83.0	83,83.0,release83,release83/83.0	bac_taxonomy_r83.tsv.gz		false	https://data.ace.uq.edu.au/public/gtdb/data/releases/release83/83.0/	MD5SUM	bac_taxonomy_r83.tsv	
+86.0	86,86.0,release86,release86/86.0	bac_taxonomy_r86.tsv.gz	arc_taxonomy_r86.tsv.gz	false	https://data.ace.uq.edu.au/public/gtdb/data/releases/release86/86.0/	MD5SUM	bac_taxonomy_r86.tsv	arc_taxonomy_r86.tsv
+89.0	89,89.0,release89,release89/89.0	bac120_taxonomy_r89.tsv.gz	ar122_taxonomy_r89.tsv.gz	false	https://data.ace.uq.edu.au/public/gtdb/data/releases/release89/89.0/	MD5SUM	bac120_taxonomy_r89.tsv	ar122_taxonomy_r89.tsv
+95.0	95,95.0,release95,release95/95.0	bac120_taxonomy_r95.tsv.gz	ar122_taxonomy_r95.tsv.gz	false	https://data.ace.uq.edu.au/public/gtdb/data/releases/release95/95.0/	MD5SUM	bac120_taxonomy_r95.tsv.gz	ar122_taxonomy_r95.tsv.gz
+202.0	202,202.0,release202,release202/202.0	bac120_taxonomy_r202.tsv.gz	ar122_taxonomy_r202.tsv.gz	false	https://data.ace.uq.edu.au/public/gtdb/data/releases/release202/202.0/	MD5SUM	bac120_taxonomy_r202.tsv.gz	ar122_taxonomy_r202.tsv.gz
+207.0	207,207.0,release207,release207/207.0	bac120_taxonomy_r207.tsv.gz	ar53_taxonomy_r207.tsv.gz	false	https://data.ace.uq.edu.au/public/gtdb/data/releases/release207/207.0/	MD5SUM.txt	bac120_taxonomy_r207.tsv.gz	ar53_taxonomy_r207.tsv.gz
+214.0	214,214.0,release214,release214/214.0	bac120_taxonomy_r214.tsv.gz	ar53_taxonomy_r214.tsv.gz	false	https://data.ace.uq.edu.au/public/gtdb/data/releases/release214/214.0/	MD5SUM.txt	bac120_taxonomy_r214.tsv.gz	ar53_taxonomy_r214.tsv.gz
+220.0	220,220.0,release220,release220/220.0	bac120_taxonomy_r220.tsv.gz	ar53_taxonomy_r220.tsv.gz	false	https://data.ace.uq.edu.au/public/gtdb/data/releases/release220/220.0/	MD5SUM.txt	bac120_taxonomy_r220.tsv.gz	ar53_taxonomy_r220.tsv.gz
+226.0	226,226.0,release226,release226/226.0,latest	bac120_taxonomy_r226.tsv.gz	ar53_taxonomy_r226.tsv.gz	true	https://data.ace.uq.edu.au/public/gtdb/data/releases/release226/226.0/	MD5SUM.txt	bac120_taxonomy_r226.tsv.gz	ar53_taxonomy_r226.tsv.gz

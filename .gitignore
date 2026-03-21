@@ -78,7 +78,8 @@ Thumbs.db
 # Data
 data/*
 !data/gtdb_taxonomy/
-!data/gtdb_taxonomy/**
+data/gtdb_taxonomy/*
+!data/gtdb_taxonomy/releases.tsv
 results/
 outputs/
 
