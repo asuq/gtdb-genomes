@@ -380,6 +380,9 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
             "LOCAL_LAUNCHER_MODE=module",
             "A1` to `A9`: `uv`, `datasets`, and `unzip`",
             "B1` to `B6`: `uv`, `datasets`, and `unzip`",
+            "--gtdb-release 226",
+            "226 / s__Thermoflexus hugenholtzii",
+            "226 / g__Methanobrevibacter",
             "verifies each source file against the",
             "REMOTE_TEST_ROOT",
             "case-results.tsv",
@@ -393,6 +396,8 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
         (
             "--download-method",
             "REAL_DATA_C1_THREADS",
+            "latest / s__Thermoflexus hugenholtzii",
+            "latest / g__Methanobrevibacter",
         ),
     )
 

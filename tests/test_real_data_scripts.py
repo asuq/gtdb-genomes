@@ -208,7 +208,7 @@ def test_real_data_prepare_case_command_records_faulthandler_and_safe_debug(
         "export REAL_DATA_PYTHON_FAULTHANDLER=1\n"
         "export REAL_DATA_DEBUG_SAFE=1\n"
         "real_data_prepare_case_command "
-        "gtdb-genomes --gtdb-release latest "
+        "gtdb-genomes --gtdb-release 226 "
         "--gtdb-taxon 's__Thermoflexus hugenholtzii' "
         "--threads 2 --include genome\n"
         "real_data_write_command_file "
@@ -493,6 +493,62 @@ def test_remote_check_dehydrate_suppressed_partial_result_accepts_suppressed_onl
     result = run_bash(script)
 
     assert result.returncode == 0
+
+
+def test_real_data_runner_cases_pin_latest_smoke_to_release_226() -> None:
+    """The live validation cases should not depend on the moving `latest` alias."""
+
+    local_script = Path("bin/run-real-data-tests-local.sh").read_text(
+        encoding="utf-8",
+    )
+    remote_script = Path("bin/run-real-data-tests-remote.sh").read_text(
+        encoding="utf-8",
+    )
+
+    assert "--gtdb-release 226" in local_script
+    assert "--gtdb-release 226" in remote_script
+    assert "--gtdb-release latest" not in local_script
+    assert "--gtdb-release latest" not in remote_script
+
+
+def test_remote_check_dehydrate_suppressed_partial_result_requires_exact_accession_match(
+    tmp_path: Path,
+) -> None:
+    """Suppression-note matching should reject accession-prefix false positives."""
+
+    output_root = tmp_path / "c5-output"
+    output_root.mkdir()
+    (output_root / "run_summary.tsv").write_text(
+        "run_id\texit_code\tdownload_method_used\tsuccessful_accessions\tfailed_accessions\n"
+        "run1\t6\tdehydrate\t1024\t1\n",
+        encoding="utf-8",
+    )
+    (output_root / "accession_map.tsv").write_text(
+        "requested_taxon\tncbi_accession\tdownload_status\n"
+        "g__Bacteroides\tGCF_000001.1\tdownloaded\n"
+        "g__Bacteroides\tGCF_003670205.1\tfailed\n",
+        encoding="utf-8",
+    )
+    (output_root / "download_failures.tsv").write_text(
+        "requested_taxon\tattempted_accession\terror_message_redacted\n"
+        "g__Bacteroides\tGCF_003670205.10\tNCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\n",
+        encoding="utf-8",
+    )
+    function_text = extract_bash_function(
+        Path("bin/run-real-data-tests-remote.sh"),
+        "remote_check_dehydrate_suppressed_partial_result",
+    )
+    script = (
+        f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        f"{function_text}\n"
+        "remote_check_dehydrate_suppressed_partial_result "
+        f"{shlex.quote(str(output_root))}\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode != 0
+    assert "lacks suppression note" in result.stderr
 
 
 def test_remote_check_dehydrate_suppressed_partial_result_rejects_generic_partial_failures(

@@ -14,7 +14,7 @@ The bundled release set currently covers:
 - `80`, `83`: early bacterial-only legacy releases
 - `86`: first dual-table release with `bac_taxonomy_*` and `arc_taxonomy_*`
 - `89`, `95`, `202`: `bac120` + `ar122`
-- `207`, `214`, `220`, `226/latest`: `bac120` + `ar53`
+- `207`, `214`, `220`, `226`: `bac120` + `ar53`
 
 ## Real-Data Anchors
 
@@ -27,7 +27,7 @@ These case anchors were checked against the bundled taxonomy data:
 - `95 / g__Thermoflexus + s__Thermoflexus hugenholtzii`: duplicate-across-taxa
 - `202 / g__Bacteroides`: 1025 genomes, suitable for `auto` -> dehydrate
 - `207 / g__Methanobrevibacter`: 47 genomes
-- `latest / s__Thermoflexus hugenholtzii`: four genomes
+- `226 / s__Thermoflexus hugenholtzii`: four genomes
 
 ## Runner Scripts
 
@@ -245,7 +245,7 @@ the direct path:
 
 ```bash
 gtdb-genomes \
-  --gtdb-release latest \
+  --gtdb-release 226 \
   --gtdb-taxon "s__Thermoflexus hugenholtzii" \
   --threads 2 \
   --include genome \
@@ -355,7 +355,7 @@ Review these paths under the selected `REMOTE_TEST_ROOT`:
 - `A6`: `202 / g__Bacteroides`
 - `A7`: `207 / g__Methanobrevibacter`
 - `A8`: `release220/220.0 / s__Thermoflexus hugenholtzii`
-- `A9`: `latest / g__Methanobrevibacter`
+- `A9`: `226 / g__Methanobrevibacter`
 
 Acceptance:
 
@@ -389,7 +389,7 @@ Acceptance highlights:
 
 ### Remote packaged-runtime runs
 
-- `C1`: `latest / s__Thermoflexus hugenholtzii`
+- `C1`: `226 / s__Thermoflexus hugenholtzii`
 - `C2`: `89 / s__Thermoflexus hugenholtzii`
 - `C3`: `207 / g__Methanobrevibacter`
 - `C4`: `80 / g__Acholeplasma_C`
@@ -450,6 +450,7 @@ Interpretation:
 - `5`: preflight or environment failure
 - `6`: partial success, must be audited
 - `7`: matches existed but no usable genomes were produced
+- `8`: local output materialisation failed after planning or download
 
 When `A6` or any `B*` case fails with DNS or connection errors before download
 work starts, treat that as an external environment problem rather than a

@@ -150,7 +150,7 @@ remote_check_dehydrate_suppressed_partial_result() {
             }
             attempted_index > 0 &&
             message_index > 0 &&
-            $attempted_index ~ accession &&
+            $attempted_index == accession &&
             $message_index ~ /NCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable\./ {
                 found = 1
             }
@@ -180,7 +180,7 @@ run_remote_case() {
                 "${REMOTE_TEST_ROOT}" "${case_id}" 0 present "" \
                 remote_check_direct_success \
                 gtdb-genomes \
-                --gtdb-release latest \
+                --gtdb-release 226 \
                 --gtdb-taxon "s__Thermoflexus hugenholtzii" \
                 --threads 2 \
                 --include genome
