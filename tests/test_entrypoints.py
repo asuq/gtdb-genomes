@@ -230,3 +230,33 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
             "REAL_DATA_C1_THREADS",
         ),
     )
+
+
+def test_ci_workflow_runs_expected_validation_suites() -> None:
+    """The main CI workflow should run the intended A, B, and C suites."""
+
+    ci_text = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+
+    assert_contains_all(
+        ci_text,
+        (
+            "validation-a:",
+            "validation-b:",
+            "validation-c:",
+            "uses: mamba-org/setup-micromamba@v2",
+            "environment-name: gtdb-genome",
+            "bin/run-real-data-tests-local.sh A1 A2 A3 A4 A5 A6 A7 A8 A9",
+            "bin/run-real-data-tests-local.sh B1 B2 B3 B4 B5 B6",
+            "bin/run-real-data-tests-remote.sh C1 C2 C3 C4 C6",
+            "uv build",
+            "python -m pip install --force-reinstall dist/*.whl",
+        ),
+    )
+    assert_not_contains_any(
+        ci_text,
+        (
+            "bin/run-real-data-tests-remote.sh C5",
+            "bin/run-real-data-tests-remote.sh C7",
+            "LOCAL_LAUNCHER_MODE: module",
+        ),
+    )
