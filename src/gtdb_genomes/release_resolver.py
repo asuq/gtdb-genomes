@@ -8,6 +8,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from gtdb_genomes.taxonomy_bundle import BOOTSTRAP_COMMAND
+
 
 @dataclass(frozen=True, slots=True)
 class BundledDataError(Exception):
@@ -304,7 +306,10 @@ def validate_taxonomy_file(path: Path | None) -> None:
     if path is None:
         return
     if not path.exists():
-        raise BundledDataError(f"Bundled taxonomy file is missing: {path}")
+        raise BundledDataError(
+            f"Bundled taxonomy file is missing: {path}. For a source checkout, "
+            f"run `{BOOTSTRAP_COMMAND}` first.",
+        )
     if not path.is_file():
         raise BundledDataError(f"Bundled taxonomy path is not a file: {path}")
     try:

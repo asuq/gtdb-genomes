@@ -116,18 +116,25 @@ def test_load_release_manifest_rejects_duplicate_aliases(tmp_path: Path) -> None
         load_release_manifest(get_release_manifest_path(data_root))
 
 
-def test_resolve_and_validate_release_uses_bundled_taxonomy_files() -> None:
-    """A known release should validate against the bundled payload."""
+def test_resolve_and_validate_release_uses_local_taxonomy_files(
+    tmp_path: Path,
+) -> None:
+    """A known release should validate when its local payload files exist."""
 
-    resolution = resolve_and_validate_release("95")
+    data_root = tmp_path / "gtdb_taxonomy"
+    write_manifest(
+        get_release_manifest_path(data_root),
+        "95.0\t95,95.0\tbac.tsv.gz\tar.tsv.gz\ttrue",
+    )
+    release_dir = data_root / "95.0"
+    write_gzip_text(release_dir / "bac.tsv.gz", "RS_GCF_000001.1\tlineage\n")
+    write_gzip_text(release_dir / "ar.tsv.gz", "RS_GCF_000002.1\tlineage\n")
+
+    resolution = resolve_and_validate_release("95", data_root=data_root)
 
     assert resolution.resolved_release == "95.0"
-    assert resolution.bacterial_taxonomy is not None
-    assert resolution.bacterial_taxonomy.is_file()
-    assert resolution.bacterial_taxonomy.name.endswith(".tsv.gz")
-    assert resolution.archaeal_taxonomy is not None
-    assert resolution.archaeal_taxonomy.is_file()
-    assert resolution.archaeal_taxonomy.name.endswith(".tsv.gz")
+    assert resolution.bacterial_taxonomy == release_dir / "bac.tsv.gz"
+    assert resolution.archaeal_taxonomy == release_dir / "ar.tsv.gz"
 
 
 def test_load_release_taxonomy_reads_gzipped_tables_and_keeps_logical_names(
@@ -161,15 +168,55 @@ def test_load_release_taxonomy_reads_gzipped_tables_and_keeps_logical_names(
     ]
 
 
-def test_legacy_release_contains_real_uba_accessions() -> None:
-    """Legacy bundled releases should retain unsupported UBA accession rows."""
+def test_load_release_taxonomy_keeps_legacy_uba_accessions(tmp_path: Path) -> None:
+    """Legacy UBA rows should stay intact in loaded taxonomy tables."""
 
-    resolution = resolve_and_validate_release("80")
-    taxonomy_frame = load_release_taxonomy(resolution)
+    data_root = tmp_path / "gtdb_taxonomy"
+    write_manifest(
+        get_release_manifest_path(data_root),
+        "80.0\t80,80.0\tbac.tsv.gz\t\ttrue",
+    )
+    write_gzip_text(
+        data_root / "80.0" / "bac.tsv.gz",
+        "UBA0001\td__Bacteria;g__Legacy\n",
+    )
+
+    taxonomy_frame = load_release_taxonomy(
+        resolve_and_validate_release("80", data_root=data_root),
+    )
 
     assert taxonomy_frame.filter(
         taxonomy_frame.get_column("ncbi_accession").str.starts_with("UBA"),
     ).height > 0
+
+
+def test_load_release_manifest_accepts_extra_build_columns(tmp_path: Path) -> None:
+    """Runtime manifest loading should ignore named build-only metadata columns."""
+
+    data_root = tmp_path / "gtdb_taxonomy"
+    write_manifest_text(
+        get_release_manifest_path(data_root),
+        "\n".join(
+            [
+                (
+                    "resolved_release\taliases\tbacterial_taxonomy\t"
+                    "archaeal_taxonomy\tis_latest\tsource_root_url\t"
+                    "checksum_filename\tbacterial_source_name\t"
+                    "archaeal_source_name"
+                ),
+                (
+                    "95.0\t95,95.0\tbac.tsv.gz\tar.tsv.gz\ttrue\t"
+                    "https://example.invalid/release95/95.0/\tMD5SUM\t"
+                    "bac.tsv.gz\tar.tsv.gz"
+                ),
+            ],
+        )
+        + "\n",
+    )
+
+    entries = load_release_manifest(get_release_manifest_path(data_root))
+
+    assert entries[0].resolved_release == "95.0"
 
 
 def test_load_release_taxonomy_raises_for_invalid_gzip_payload(
