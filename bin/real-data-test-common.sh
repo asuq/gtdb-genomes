@@ -264,13 +264,17 @@ real_data_tsv_value() {
     awk -F '\t' -v column_name="${column_name}" '
         NR == 1 {
             for (field_index = 1; field_index <= NF; field_index += 1) {
-                if ($field_index == column_name) {
+                header_value = $field_index
+                sub(/\r$/, "", header_value)
+                if (header_value == column_name) {
                     column_index = field_index
                 }
             }
         }
         NR == 2 && column_index > 0 {
-            print $column_index
+            value = $column_index
+            sub(/\r$/, "", value)
+            print value
             exit 0
         }
     ' "${tsv_path}"
@@ -360,13 +364,19 @@ real_data_assert_any_row_column_matches() {
     if ! awk -F '\t' -v column_name="${column_name}" -v pattern="${pattern}" '
         NR == 1 {
             for (field_index = 1; field_index <= NF; field_index += 1) {
-                if ($field_index == column_name) {
+                header_value = $field_index
+                sub(/\r$/, "", header_value)
+                if (header_value == column_name) {
                     column_index = field_index
                 }
             }
         }
-        NR > 1 && column_index > 0 && $column_index ~ pattern {
-            found = 1
+        NR > 1 && column_index > 0 {
+            value = $column_index
+            sub(/\r$/, "", value)
+            if (value ~ pattern) {
+                found = 1
+            }
         }
         END {
             exit(found ? 0 : 1)

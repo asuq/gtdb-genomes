@@ -323,6 +323,57 @@ def test_real_data_assert_any_taxon_manifest_row_column_matches_finds_true_row(
     assert result.returncode == 0
 
 
+def test_real_data_assert_any_taxon_manifest_row_column_matches_handles_crlf(
+    tmp_path: Path,
+) -> None:
+    """Taxon manifest matching should strip CRLF from the last TSV column."""
+
+    output_root = tmp_path / "output"
+    manifest_path = output_root / "taxa" / "g__Thermoflexus" / "taxon_accessions.tsv"
+    manifest_path.parent.mkdir(parents=True)
+    manifest_path.write_bytes(
+        (
+            "requested_taxon\ttaxon_slug\tlineage\tgtdb_accession\tfinal_accession\t"
+            "conversion_status\toutput_relpath\tdownload_status\tduplicate_across_taxa\r\n"
+            "g__Thermoflexus\tg__Thermoflexus\tlineage\tRS_GCF_000001.1\t"
+            "GCF_000001.1\tsuccess\ttaxa/g__Thermoflexus/GCF_000001.1\t"
+            "downloaded\ttrue\r\n"
+        ).encode("ascii")
+    )
+    script = (
+        f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        "real_data_assert_any_taxon_manifest_row_column_matches "
+        f"{shlex.quote(str(output_root))} "
+        "duplicate_across_taxa '^true$' "
+        "'duplicate-across-taxa flag'\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0
+
+
+def test_real_data_tsv_value_strips_crlf_from_last_column(tmp_path: Path) -> None:
+    """TSV value extraction should normalise CRLF line endings."""
+
+    tsv_path = tmp_path / "run_summary.tsv"
+    tsv_path.write_bytes(
+        (
+            "run_id\texit_code\r\n"
+            "run1\t0\r\n"
+        ).encode("ascii")
+    )
+    script = (
+        f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        f"real_data_tsv_value {shlex.quote(str(tsv_path))} exit_code\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0
+    assert result.stdout == "0\n"
+
+
 def test_real_data_record_output_evidence_copies_debug_log(tmp_path: Path) -> None:
     """Evidence capture should copy `debug.log` when a run writes one."""
 
