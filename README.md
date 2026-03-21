@@ -63,8 +63,6 @@ gtdb-genomes \
 Prefer paired GenBank accessions, keep the exact selected version, and request
 extra annotation:
 
-taxa can be selected at any GTDB rank
-
 ```bash
 gtdb-genomes \
   --gtdb-taxon "p__Pseudomonadota" "c__Alphaproteobacteria" \
