@@ -223,7 +223,8 @@ def test_module_entrypoint_help_runs() -> None:
     assert "--gtdb-release" in result.stdout
     assert "--gtdb-taxon" in result.stdout
     assert "--outdir" in result.stdout
-    assert "--version-fixed" in result.stdout
+    assert "--version-latest" in result.stdout
+    assert "--version-fixed" not in result.stdout
     assert "gtdb-genomes" in result.stdout
 
 
@@ -240,7 +241,8 @@ def test_source_checkout_cli_module_help_runs() -> None:
 
     assert result.returncode == 0
     assert "--gtdb-release" in result.stdout
-    assert "--version-fixed" in result.stdout
+    assert "--version-latest" in result.stdout
+    assert "--version-fixed" not in result.stdout
     assert "gtdb-genomes" in result.stdout
 
 
@@ -259,6 +261,8 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "defaults to `latest`",
             "uv run python -m gtdb_genomes.bootstrap_taxonomy",
             "refresh_taxonomy_manifest",
+            "--version-latest",
+            "keep the exact selected version",
             "--prefer-genbank",
             "--threads",
             "serial in the current workflow",
@@ -290,6 +294,8 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "attempted_accession",
             "Defaults to `latest`",
             "refresh_taxonomy_manifest",
+            "--version-latest",
+            "exact selected versioned accession",
             "MD5SUM",
             "--threads",
         ),

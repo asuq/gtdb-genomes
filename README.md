@@ -59,7 +59,8 @@ In short:
 - `--gtdb-release` is optional, accepts bundled release aliases, and defaults to `latest`
 - `--gtdb-taxon` is repeatable and matches exact GTDB lineage tokens
 - `--outdir` must be empty or absent
-- `--prefer-genbank` optionally prefers paired GenBank accessions
+- `--prefer-genbank` optionally prefers paired GenBank accessions and keeps the exact selected version by default
+- `--version-latest` opts back into requesting the latest revision in the selected accession family
 - `--threads` configures supported workflow workers, but direct downloads stay
   serial in the current workflow. See [docs/usage-details.md](docs/usage-details.md)
   for the detailed contract.
@@ -75,7 +76,8 @@ gtdb-genomes \
   --outdir results/escherichia
 ```
 
-Prefer paired GenBank accessions and request extra annotation:
+Prefer paired GenBank accessions, keep the exact selected version, and request
+extra annotation:
 
 ```bash
 gtdb-genomes \
@@ -87,16 +89,15 @@ gtdb-genomes \
   --outdir results/methanobrevibacter
 ```
 
-Pin the exact selected GenBank version instead of requesting the latest
-revision:
+Opt into the latest available revision within the selected GenBank family:
 
 ```bash
 gtdb-genomes \
   --gtdb-release latest \
   --gtdb-taxon "s__Methanobrevibacter smithii" \
   --prefer-genbank \
-  --version-fixed \
-  --outdir results/methanobrevibacter-fixed
+  --version-latest \
+  --outdir results/methanobrevibacter-latest
 ```
 
 Supported dry-run with automatic planning:

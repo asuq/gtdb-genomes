@@ -40,14 +40,13 @@ gtdb-genomes \
 - `--prefer-genbank`: Disabled by default. When enabled, a requested `GCF_*`
   accession triggers NCBI metadata lookup and prefers a `GCA_*` accession only
   when it shares the same numeric assembly identifier. If several matching
-  `GCA_*` versions exist, the highest version is selected. Unless
-  `--version-fixed` is also set, the download request then drops the version
-  suffix and asks `datasets` for the latest available revision in the chosen
-  family, which may differ from the RefSeq version.
+  `GCA_*` versions exist, the highest version is selected. The download request
+  then keeps that exact selected versioned accession by default.
 
-- `--version-fixed`: Disabled by default. Requires `--prefer-genbank`. Keeps
-  the exact selected versioned accession instead of requesting the latest
-  available revision in that family.
+- `--version-latest`: Disabled by default. Requires `--prefer-genbank`. Drops
+  the version suffix from the selected accession and asks `datasets` for the
+  latest available revision in that accession family, which may differ from the
+  originally selected RefSeq or GenBank version.
 
 - download strategy is automatic only.
 
@@ -308,8 +307,7 @@ Fixed TSV columns:
     `attempted_accession`, `final_accession`, `stage`, `attempt_index`,
     `max_attempts`, `error_type`, `error_message_redacted`, `final_status`
     `attempted_accession` records the exact token passed to `datasets`, which
-    may be an unversioned accession stem when `--prefer-genbank` latest-mode is
-    active.
+    may be an unversioned accession stem when `--version-latest` is active.
 - `OUTPUT/taxa/<taxon_slug>/taxon_accessions.tsv`
   - `requested_taxon`, `taxon_slug`, `lineage`, `gtdb_accession`,
     `final_accession`, `conversion_status`, `output_relpath`,
