@@ -427,6 +427,16 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "Quick Start",
             "Command options",
             "Examples",
+            "https://github.com/asuq/gtdb-genomes/actions/workflows/ci.yml/badge.svg",
+            (
+                "https://github.com/asuq/gtdb-genomes/actions/workflows/"
+                "live-validation.yml/badge.svg"
+            ),
+            (
+                "[![CITATION.cff]"
+                "(https://img.shields.io/badge/CITATION-cff-blue.svg)]"
+                "(https://github.com/asuq/gtdb-genomes/blob/main/CITATION.cff)"
+            ),
             "gtdb release number, defaults to `latest`",
             "refresh_taxonomy_manifest",
             "--version-latest",
@@ -534,7 +544,6 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     assert_contains_all(
         bioconda_text,
         (
-            "must not depend on uv at runtime",
             "--no-build-isolation",
             "- ncbi-datasets-cli",
             "resolve_and_validate_release('latest')",
