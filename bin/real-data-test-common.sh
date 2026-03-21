@@ -281,6 +281,27 @@ real_data_tsv_value() {
 }
 
 
+real_data_tsv_has_column() {
+    local tsv_path=$1
+    local column_name=$2
+
+    awk -F '\t' -v column_name="${column_name}" '
+        NR == 1 {
+            for (field_index = 1; field_index <= NF; field_index += 1) {
+                header_value = $field_index
+                sub(/\r$/, "", header_value)
+                if (header_value == column_name) {
+                    found = 1
+                }
+            }
+        }
+        END {
+            exit(found ? 0 : 1)
+        }
+    ' "${tsv_path}"
+}
+
+
 real_data_unique_tsv_values_for_match() {
     local tsv_path=$1
     local select_column_name=$2
@@ -320,6 +341,59 @@ real_data_unique_tsv_values_for_match() {
         }
     ' "${tsv_path}" | sort -u
     return "${PIPESTATUS[0]}"
+}
+
+
+real_data_tsv_any_row_matches_exact_token_and_substring() {
+    local tsv_path=$1
+    local value_column_name=$2
+    local expected_token=$3
+    local message_column_name=$4
+    local required_substring=$5
+
+    awk -F '\t' \
+        -v value_column_name="${value_column_name}" \
+        -v expected_token="${expected_token}" \
+        -v message_column_name="${message_column_name}" \
+        -v required_substring="${required_substring}" '
+        NR == 1 {
+            for (field_index = 1; field_index <= NF; field_index += 1) {
+                header_value = $field_index
+                sub(/\r$/, "", header_value)
+                if (header_value == value_column_name) {
+                    value_index = field_index
+                }
+                if (header_value == message_column_name) {
+                    message_index = field_index
+                }
+            }
+            next
+        }
+        value_index > 0 && message_index > 0 {
+            value_text = $value_index
+            message_text = $message_index
+            sub(/\r$/, "", value_text)
+            sub(/\r$/, "", message_text)
+            if (index(message_text, required_substring) == 0) {
+                next
+            }
+            token_count = split(value_text, tokens, ";")
+            for (token_index = 1; token_index <= token_count; token_index += 1) {
+                token = tokens[token_index]
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", token)
+                if (token == expected_token) {
+                    found = 1
+                    exit 0
+                }
+            }
+        }
+        END {
+            if (value_index == 0 || message_index == 0) {
+                exit 2
+            }
+            exit(found ? 0 : 1)
+        }
+    ' "${tsv_path}"
 }
 
 

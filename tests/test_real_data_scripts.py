@@ -439,7 +439,7 @@ def test_remote_runner_uses_shared_defaults() -> None:
     assert "get_release_manifest_path" not in remote_script
 
 
-def test_local_runner_keeps_only_c5_and_c7_as_api_key_required_cases() -> None:
+def test_local_runner_keeps_only_c7_as_api_key_required_case() -> None:
     """The local and remote runners should not hard-require the key for CI cases."""
 
     local_script = Path("bin/run-real-data-tests-local.sh").read_text(
@@ -524,6 +524,47 @@ def test_remote_check_dehydrate_suppressed_partial_result_accepts_suppressed_onl
     assert result.returncode == 0
 
 
+def test_remote_check_dehydrate_suppressed_partial_result_accepts_collapsed_download_request_failures(
+    tmp_path: Path,
+) -> None:
+    """C5 should accept one shared suppression failure for multiple requests."""
+
+    output_root = tmp_path / "c5-output"
+    output_root.mkdir()
+    (output_root / "run_summary.tsv").write_text(
+        "run_id\texit_code\tdownload_method_used\tsuccessful_accessions\tfailed_accessions\n"
+        "run1\t6\tdehydrate\t1024\t2\n",
+        encoding="utf-8",
+    )
+    (output_root / "accession_map.tsv").write_text(
+        "requested_taxon\tncbi_accession\tdownload_request_accession\tdownload_status\n"
+        "g__Bacteroides\tGCF_000001.1\tGCF_000001.1\tdownloaded\n"
+        "g__Bacteroides\tGCF_003670205.1\tGCA_003670205\tfailed\n"
+        "g__Bacteroides\tGCF_003670206.1\tGCA_003670206\tfailed\n",
+        encoding="utf-8",
+    )
+    (output_root / "download_failures.tsv").write_text(
+        "requested_taxon\tattempted_accession\terror_message_redacted\n"
+        "g__Bacteroides\tGCA_003670205;GCA_003670206\t"
+        "NCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\n",
+        encoding="utf-8",
+    )
+    function_text = extract_bash_function(
+        Path("bin/run-real-data-tests-remote.sh"),
+        "remote_check_dehydrate_suppressed_partial_result",
+    )
+    script = (
+        f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        f"{function_text}\n"
+        "remote_check_dehydrate_suppressed_partial_result "
+        f"{shlex.quote(str(output_root))}\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0
+
+
 def test_remote_check_dehydrate_suppressed_partial_result_accepts_crlf_tsvs(
     tmp_path: Path,
 ) -> None:
@@ -582,7 +623,7 @@ def test_real_data_runner_cases_pin_latest_smoke_to_release_226() -> None:
     assert "--gtdb-release latest" not in remote_script
 
 
-def test_remote_check_dehydrate_suppressed_partial_result_requires_exact_accession_match(
+def test_remote_check_dehydrate_suppressed_partial_result_requires_exact_download_request_token_match(
     tmp_path: Path,
 ) -> None:
     """Suppression-note matching should reject accession-prefix false positives."""
@@ -595,14 +636,14 @@ def test_remote_check_dehydrate_suppressed_partial_result_requires_exact_accessi
         encoding="utf-8",
     )
     (output_root / "accession_map.tsv").write_text(
-        "requested_taxon\tncbi_accession\tdownload_status\n"
-        "g__Bacteroides\tGCF_000001.1\tdownloaded\n"
-        "g__Bacteroides\tGCF_003670205.1\tfailed\n",
+        "requested_taxon\tncbi_accession\tdownload_request_accession\tdownload_status\n"
+        "g__Bacteroides\tGCF_000001.1\tGCF_000001.1\tdownloaded\n"
+        "g__Bacteroides\tGCF_003670205.1\tGCA_003670205\tfailed\n",
         encoding="utf-8",
     )
     (output_root / "download_failures.tsv").write_text(
         "requested_taxon\tattempted_accession\terror_message_redacted\n"
-        "g__Bacteroides\tGCF_003670205.10\tNCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\n",
+        "g__Bacteroides\tGCA_0036702050\tNCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\n",
         encoding="utf-8",
     )
     function_text = extract_bash_function(

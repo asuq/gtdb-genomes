@@ -65,8 +65,10 @@ remote_check_dehydrate_result() {
 remote_check_dehydrate_suppressed_partial_result() {
     local output_root=$1
     local exit_code=""
+    local failed_accession_column="download_request_accession"
     local failed_accessions=()
     local accession=""
+    local suppression_note="NCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable."
 
     real_data_assert_run_summary_matches \
         "${output_root}" \
@@ -106,6 +108,19 @@ remote_check_dehydrate_suppressed_partial_result() {
         return 1
     fi
 
+    if ! real_data_tsv_has_column \
+        "${output_root}/accession_map.tsv" \
+        "${failed_accession_column}"; then
+        failed_accession_column="ncbi_accession"
+    fi
+    if ! real_data_tsv_has_column \
+        "${output_root}/accession_map.tsv" \
+        "${failed_accession_column}"; then
+        real_data_fail_message \
+            "remote dehydrate suppressed partial: accession_map.tsv is missing download-request and original accession columns"
+        return 1
+    fi
+
     while IFS= read -r accession; do
         if [ -n "${accession}" ]; then
             failed_accessions+=("${accession}")
@@ -113,7 +128,7 @@ remote_check_dehydrate_suppressed_partial_result() {
     done < <(
         real_data_unique_tsv_values_for_match \
             "${output_root}/accession_map.tsv" \
-            "ncbi_accession" \
+            "${failed_accession_column}" \
             "download_status" \
             "failed"
     )
@@ -125,36 +140,12 @@ remote_check_dehydrate_suppressed_partial_result() {
     fi
 
     for accession in "${failed_accessions[@]}"; do
-        if ! awk \
-            -F '\t' \
-            -v accession="${accession}" \
-            -v suppression_note="NCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable." '
-            NR == 1 {
-                for (field_index = 1; field_index <= NF; field_index += 1) {
-                    header_value = $field_index
-                    sub(/\r$/, "", header_value)
-                    if (header_value == "attempted_accession") {
-                        attempted_index = field_index
-                    }
-                    if (header_value == "error_message_redacted") {
-                        message_index = field_index
-                    }
-                }
-                next
-            }
-            attempted_index > 0 && message_index > 0 {
-                attempted_value = $attempted_index
-                message_value = $message_index
-                sub(/\r$/, "", attempted_value)
-                sub(/\r$/, "", message_value)
-                if (attempted_value == accession && index(message_value, suppression_note) > 0) {
-                    found = 1
-                }
-            }
-            END {
-                exit(found ? 0 : 1)
-            }
-        ' "${output_root}/download_failures.tsv"; then
+        if ! real_data_tsv_any_row_matches_exact_token_and_substring \
+            "${output_root}/download_failures.tsv" \
+            "attempted_accession" \
+            "${accession}" \
+            "error_message_redacted" \
+            "${suppression_note}"; then
             real_data_fail_message \
                 "remote dehydrate suppressed partial: failed accession ${accession} lacks suppression note"
             return 1
