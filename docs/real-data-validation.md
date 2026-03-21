@@ -63,7 +63,7 @@ bin/run-real-data-tests-remote.sh C1 C4 C5
 ## Local Prerequisites
 
 Local validation assumes source-checkout execution through a prepared and
-synced local project environment.
+synced local project environment with generated GTDB taxonomy payloads.
 
 The local runner defaults to:
 
@@ -79,6 +79,18 @@ Required commands by case family:
 
 - `A1` to `A9`: `uv`, `datasets`, and `unzip`
 - `B1` to `B6`: `uv`, `datasets`, and `unzip`
+
+Required bootstrap step:
+
+```bash
+uv run python -m gtdb_genomes.bootstrap_taxonomy
+```
+
+This downloads the GTDB taxonomy payloads from the pinned UQ mirror metadata in
+`data/gtdb_taxonomy/releases.tsv`, verifies each source file against the
+release `MD5SUM` or `MD5SUM.txt` listing, and materialises the local
+`data/gtdb_taxonomy/<release>/*.tsv.gz` runtime layout used by the source
+checkout.
 
 Optional environment:
 
@@ -151,6 +163,10 @@ The main GitHub Actions CI workflow runs:
 - `A1` to `A9`
 - `B1` to `B6`
 - `C1`, `C2`, `C3`, `C4`, and `C6`
+
+Before `pytest`, `A`, `B`, and `C`, CI runs:
+
+- `uv run python -m gtdb_genomes.bootstrap_taxonomy`
 
 The CI workflow excludes:
 

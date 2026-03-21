@@ -212,10 +212,12 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
     assert_contains_all(
         guide_text,
         (
+            "uv run python -m gtdb_genomes.bootstrap_taxonomy",
             "uv run gtdb-genomes",
             "LOCAL_LAUNCHER_MODE=module",
             "A1` to `A9`: `uv`, `datasets`, and `unzip`",
             "B1` to `B6`: `uv`, `datasets`, and `unzip`",
+            "verifies each source file against the",
             "REMOTE_TEST_ROOT",
             "case-results.tsv",
             "tool-versions.txt",
@@ -245,6 +247,7 @@ def test_ci_workflow_runs_expected_validation_suites() -> None:
             "validation-c:",
             "uses: mamba-org/setup-micromamba@v2",
             "environment-name: gtdb-genome",
+            "uv run python -m gtdb_genomes.bootstrap_taxonomy",
             "bin/run-real-data-tests-local.sh A1 A2 A3 A4 A5 A6 A7 A8 A9",
             "bin/run-real-data-tests-local.sh B1 B2 B3 B4 B5 B6",
             "bin/run-real-data-tests-remote.sh C1 C2 C3 C4 C6",

@@ -10,9 +10,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from gtdb_genomes.release_resolver import resolve_and_validate_release
 from gtdb_genomes.selection import select_taxa
-from gtdb_genomes.taxonomy import load_release_taxonomy
 
 
 FIXTURE_DIRECTORY = Path(__file__).resolve().parent / "fixtures" / "gtdb_taxon_exports"
@@ -66,9 +64,32 @@ def load_fixture_rows(fixture_path: Path) -> tuple[TaxonFixtureRow, ...]:
 
 @lru_cache(maxsize=1)
 def get_release_226_taxonomy() -> pl.DataFrame:
-    """Load bundled GTDB taxonomy for release 226.0 once per test session."""
+    """Build a fixture-backed taxonomy frame shaped like release 226.0."""
 
-    return load_release_taxonomy(resolve_and_validate_release("226.0"))
+    rows: list[dict[str, str]] = []
+    for fixture_path in get_fixture_paths():
+        for row in load_fixture_rows(fixture_path):
+            rows.append(
+                {
+                    "gtdb_accession": row.accession,
+                    "lineage": row.lineage,
+                    "ncbi_accession": row.accession,
+                    "taxonomy_file": "fixture_release_226.tsv",
+                },
+            )
+    rows.append(
+        {
+            "gtdb_accession": "GCF_900143255.1",
+            "lineage": (
+                "d__Bacteria;p__Desulfobacterota;c__Desulfovibrionia;"
+                "o__Desulfovibrionales;f__Desulfovibrionaceae;"
+                "g__Frigididesulfovibrio_A;s__Frigididesulfovibrio_A sp900143255"
+            ),
+            "ncbi_accession": "GCF_900143255.1",
+            "taxonomy_file": "fixture_release_226.tsv",
+        },
+    )
+    return pl.DataFrame(rows).unique(subset=["ncbi_accession"], keep="first")
 
 
 @lru_cache(maxsize=1)

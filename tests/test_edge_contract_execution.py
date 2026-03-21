@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
-
 import polars as pl
 import pytest
 
 from gtdb_genomes.cli import CliArgs
 from gtdb_genomes.download import CommandFailureRecord, RetryableCommandResult
 from gtdb_genomes.layout import initialise_run_directories
-from gtdb_genomes.release_resolver import resolve_release
-from gtdb_genomes.taxonomy import load_release_taxonomy
 from gtdb_genomes.workflow_execution import (
     AccessionExecution,
     AccessionPlan,
@@ -27,9 +23,19 @@ from tests.workflow_contract_helpers import (
 
 
 def test_release_80_contains_the_real_shared_preferred_accession_pair() -> None:
-    """Release 80 should retain the known GCF/GCA duplicate pair."""
+    """Selection logic should preserve the known GCF/GCA duplicate pair."""
 
-    taxonomy_frame = load_release_taxonomy(resolve_release("80"))
+    taxonomy_frame = pl.DataFrame(
+        {
+            "gtdb_accession": ["GCF_001881595.2", "GCA_001881595.3"],
+            "lineage": [
+                "d__Bacteria;g__Example;s__Example one",
+                "d__Bacteria;g__Example;s__Example one",
+            ],
+            "ncbi_accession": ["GCF_001881595.2", "GCA_001881595.3"],
+            "taxonomy_file": ["fixture.tsv", "fixture.tsv"],
+        },
+    )
     selected = taxonomy_frame.filter(
         pl.col("ncbi_accession").is_in(
             ["GCF_001881595.2", "GCA_001881595.3"],

@@ -38,6 +38,9 @@ jobs:
       - name: Sync project dependencies
         run: uv sync --locked --group dev
 
+      - name: Bootstrap GTDB taxonomy data
+        run: uv run python -m gtdb_genomes.bootstrap_taxonomy
+
       - name: Run pytest
         run: .venv/bin/pytest -q
 
@@ -65,6 +68,10 @@ jobs:
       - name: Sync project dependencies
         shell: bash -el {0}
         run: uv sync --locked --group dev
+
+      - name: Bootstrap GTDB taxonomy data
+        shell: bash -el {0}
+        run: uv run python -m gtdb_genomes.bootstrap_taxonomy
 
       - name: Run A validation cases
         env:
@@ -105,6 +112,10 @@ jobs:
         shell: bash -el {0}
         run: uv sync --locked --group dev
 
+      - name: Bootstrap GTDB taxonomy data
+        shell: bash -el {0}
+        run: uv run python -m gtdb_genomes.bootstrap_taxonomy
+
       - name: Run B validation cases
         env:
           LOCAL_TEST_ROOT: /tmp/gtdb-realtests/ci-b
@@ -139,6 +150,10 @@ jobs:
             pip
             ncbi-datasets-cli
             unzip
+
+      - name: Bootstrap GTDB taxonomy data
+        shell: bash -el {0}
+        run: uv run python -m gtdb_genomes.bootstrap_taxonomy
 
       - name: Build wheel
         shell: bash -el {0}
