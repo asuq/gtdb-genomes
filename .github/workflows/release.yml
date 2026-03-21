@@ -54,36 +54,32 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Download built distribution
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: release-dist
           path: dist
 
-      - name: Set up micromamba
-        uses: mamba-org/setup-micromamba@v2
-        with:
-          environment-name: gtdb-genome-release
-          init-shell: bash
-          cache-downloads: true
-          cache-environment: false
-          create-args: >-
-            python=3.12
-            pip
-            ncbi-datasets-cli=18.21.0
-            unzip=6.0
+      - name: Install micromamba
+        run: bash bin/install-micromamba-ci.sh
+
+      - name: Create runtime environment
+        run: >-
+          micromamba create -y -n gtdb-genome-release python=3.12 pip
+          ncbi-datasets-cli=18.21.0 unzip=6.0
 
       - name: Install built wheel into clean runtime
-        shell: bash -el {0}
-        run: python -m pip install --force-reinstall dist/*.whl
+        run: >-
+          micromamba run -n gtdb-genome-release
+          python -m pip install --force-reinstall dist/*.whl
 
       - name: Confirm runtime has no uv on PATH
-        shell: bash -el {0}
-        run: python -c "import shutil; assert shutil.which('uv') is None"
+        run: >-
+          micromamba run -n gtdb-genome-release
+          python -c "import shutil; assert shutil.which('uv') is None"
 
       - name: Verify installed bundled taxonomy
-        shell: bash -el {0}
         run: |
-          python - <<'PY'
+          micromamba run -n gtdb-genome-release python - <<'PY'
           from gtdb_genomes.release_resolver import resolve_and_validate_release
           from gtdb_genomes.taxonomy import load_release_taxonomy
 
@@ -96,8 +92,9 @@ jobs:
       - name: Run release validation cases
         env:
           REMOTE_TEST_ROOT: /tmp/gtdb-realtests/release
-        shell: bash -el {0}
-        run: bin/run-real-data-tests-remote.sh C1 C2 C3 C4 C5 C6
+        run: >-
+          micromamba run -n gtdb-genome-release
+          bash bin/run-real-data-tests-remote.sh C1 C2 C3 C4 C5 C6
 
   publish:
     name: Publish release
@@ -108,14 +105,20 @@ jobs:
       contents: write
     steps:
       - name: Download built distribution
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: release-dist
           path: dist
 
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          files: dist/*
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" dist/* --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" dist/* \
+              --title "${GITHUB_REF_NAME}" \
+              --notes "" \
+              --verify-tag
+          fi

@@ -585,18 +585,21 @@ def test_ci_workflow_runs_expected_validation_suites() -> None:
             "validation-b:",
             "validation-c-build:",
             "validation-c-runtime:",
-            "uses: mamba-org/setup-micromamba@v2",
-            "environment-name: gtdb-genome",
+            "bash bin/install-micromamba-ci.sh",
+            "micromamba create -y -n gtdb-genome",
+            "python=3.12 uv pip",
             "- \"3.13\"",
             "- \"3.14\"",
             "ncbi-datasets-cli=18.21.0",
             "unzip=6.0",
+            "micromamba run -n gtdb-genome",
             "uv run python -m gtdb_genomes.bootstrap_taxonomy",
             "bin/run-real-data-tests-local.sh A1 A2 A3 A4 A5 A6 A7 A8 A9",
             "bin/run-real-data-tests-local.sh B1 B2 B3 B4 B5 B6",
             "bin/run-real-data-tests-remote.sh C1 C2 C3 C4 C5 C6",
             "uv build",
-            "actions/download-artifact@v5",
+            "actions/download-artifact@v7",
+            "micromamba run -n gtdb-genome-runtime",
             "python -m pip install --force-reinstall dist/*.whl",
             "shutil.which('uv') is None",
             "load_release_taxonomy(resolution)",
@@ -607,6 +610,29 @@ def test_ci_workflow_runs_expected_validation_suites() -> None:
         (
             "bin/run-real-data-tests-remote.sh C7",
             "LOCAL_LAUNCHER_MODE: module",
+            "mamba-org/setup-micromamba@v2",
+            "actions/download-artifact@v5",
+        ),
+    )
+
+
+def test_ci_micromamba_helper_is_pinned() -> None:
+    """The shared micromamba installer should stay pinned and verified."""
+
+    helper_text = Path("bin/install-micromamba-ci.sh").read_text(
+        encoding="utf-8",
+    )
+
+    assert_contains_all(
+        helper_text,
+        (
+            'MICROMAMBA_VERSION="2.3.3-0"',
+            'MICROMAMBA_SHA256="9496f94a8b78c536573c93d946ec9bba74bd9ff79ee55aaa4b546e30db8f511b"',
+            "micromamba-linux-64",
+            "GITHUB_PATH",
+            "GITHUB_ENV",
+            "MAMBA_ROOT_PREFIX",
+            "sha256sum -c -",
         ),
     )
 
@@ -628,12 +654,28 @@ def test_release_workflow_enforces_build_then_clean_runtime() -> None:
             "tags:",
             "uv build",
             "actions/upload-artifact@v6",
-            "actions/download-artifact@v5",
+            "actions/download-artifact@v7",
+            "bash bin/install-micromamba-ci.sh",
+            "micromamba create -y -n gtdb-genome-release",
+            "python=3.12 pip",
+            "micromamba run -n gtdb-genome-release",
             "python -m pip install --force-reinstall dist/*.whl",
             "shutil.which('uv') is None",
             "load_release_taxonomy(resolution)",
             "bin/run-real-data-tests-remote.sh C1 C2 C3 C4 C5 C6",
             "publish:",
+            "gh release view",
+            "gh release upload",
+            "--clobber",
+            "gh release create",
+            "--verify-tag",
+        ),
+    )
+    assert_not_contains_any(
+        release_text,
+        (
+            "mamba-org/setup-micromamba@v2",
+            "actions/download-artifact@v5",
             "softprops/action-gh-release@v2",
         ),
     )
@@ -650,11 +692,21 @@ def test_live_validation_workflow_bootstraps_before_b1() -> None:
         live_text,
         (
             "validation-live:",
+            "bash bin/install-micromamba-ci.sh",
+            "micromamba create -y -n ci-live",
+            "python=3.12 uv",
+            "micromamba run -n ci-live",
             "uv sync --locked --group dev",
             "uv run python -m gtdb_genomes.bootstrap_taxonomy",
             "bin/run-real-data-tests-local.sh B1",
             "LOCAL_LAUNCHER_MODE: module",
             "ncbi-datasets-cli=18.21.0",
             "unzip=6.0",
+        ),
+    )
+    assert_not_contains_any(
+        live_text,
+        (
+            "mamba-org/setup-micromamba@v2",
         ),
     )

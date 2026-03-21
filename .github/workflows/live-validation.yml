@@ -22,33 +22,29 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
 
-      - name: Set up micromamba
-        uses: mamba-org/setup-micromamba@v2
-        with:
-          environment-name: ci-live
-          init-shell: bash
-          cache-downloads: true
-          cache-environment: false
-          create-args: >-
-            python=3.12
-            uv
-            ncbi-datasets-cli=18.21.0
-            unzip=6.0
+      - name: Install micromamba
+        run: bash bin/install-micromamba-ci.sh
+
+      - name: Create live validation environment
+        run: >-
+          micromamba create -y -n ci-live python=3.12 uv
+          ncbi-datasets-cli=18.21.0 unzip=6.0
 
       - name: Sync project dependencies
-        shell: bash -el {0}
-        run: uv sync --locked --group dev
+        run: micromamba run -n ci-live uv sync --locked --group dev
 
       - name: Bootstrap GTDB taxonomy data
-        shell: bash -el {0}
-        run: uv run python -m gtdb_genomes.bootstrap_taxonomy
+        run: >-
+          micromamba run -n ci-live
+          uv run python -m gtdb_genomes.bootstrap_taxonomy
 
       - name: Run live validation case B1
-        shell: bash -el {0}
         env:
           LOCAL_LAUNCHER_MODE: module
           LOCAL_TEST_ROOT: /tmp/gtdb-realtests/ci-live
-        run: bin/run-real-data-tests-local.sh B1
+        run: >-
+          micromamba run -n ci-live
+          bash bin/run-real-data-tests-local.sh B1
 
       - name: Upload live validation evidence
         if: always()
