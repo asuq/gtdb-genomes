@@ -9,11 +9,6 @@
 
 The detailed runtime contract, output layout, retry rules, and bundled-data notes live in [docs/usage-details.md](docs/usage-details.md).
 
-## Quick Start
-
-```bash
-gtdb-genomes --gtdb-taxon g__Escherichia --outdir results
-```
 
 ## Installation
 
@@ -35,20 +30,30 @@ checkout. Built wheels, sdists, and Conda packages already include that
 generated payload and do not need a post-install bootstrap step.
 
 
+## Quick Start
+
+```bash
+gtdb-genomes --gtdb-taxon g__Escherichia --outdir results
+```
+
+
 ## Command options
 
 See [docs/usage-details.md](docs/usage-details.md) for the full CLI contract.
 In short:
 
+### Required:
 - `--gtdb-taxon`: repeatable, matches exact GTDB lineage strings
 - `--outdir`:  must be empty or absent
-- `--gtdb-release`: (optional) gtdb release number, defaults to `latest`
-- `--prefer-genbank`: (optional) prefers paired GenBank accessions and keeps the exact selected version by default
-- `--version-latest`: (optional) paired with `--prefer-genbank`, opts into the latest available revision within the selected GenBank family, e.g. `GCA_000005845.2` -> `GCA_000005845.3` if the latter is available
-- `--threads`: (optional) number of threads to run, defaults to 8
-- `--include`: (optional) downloads extra annotation files from NCBI, e.g. `genome,gff3,protein`, see [NCBI datasets docuemntation](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/how-tos/genomes/download-genome/#choosing-which-data-files-to-include-in-the-data-package)
-- `--ncbi-api-key`: (optional) NCBI API key, passed only to the `datasets` command
-- `--dry-run`: (optional) supported with automatic planning, prints the planned download list without downloading
+
+### Optional:
+- `--gtdb-release`: gtdb release number, defaults to `latest`
+- `--prefer-genbank`: prefers paired GenBank accessions and keeps the exact selected version by default
+- `--version-latest`: paired with `--prefer-genbank`, opts into the latest available revision within the selected GenBank family, e.g. `GCA_000005845.2` -> `GCA_000005845.3` if the latter is available
+- `--threads`: number of threads to run, defaults to 8
+- `--include`: downloads extra annotation files from NCBI, e.g. `genome,gff3,protein`, see [NCBI datasets docuemntation](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/how-tos/genomes/download-genome/#choosing-which-data-files-to-include-in-the-data-package)
+- `--ncbi-api-key`: NCBI API key, passed only to the `datasets` command
+- `--dry-run`: supported with automatic planning, prints the planned download list without downloading
 
 ## Examples
 
