@@ -428,7 +428,9 @@ def test_local_runner_keeps_only_c5_and_c7_as_api_key_required_cases() -> None:
     assert "B6)\n            real_data_require_ncbi_api_key" not in local_script
     assert "C2)\n            real_data_require_ncbi_api_key" not in remote_script
     assert "C3)\n            real_data_require_ncbi_api_key" not in remote_script
-    assert "C5)\n            real_data_require_ncbi_api_key" in remote_script
+    c5_block = remote_script.split("C5)", 1)[1].split("C6)", 1)[0]
+    assert "real_data_append_optional_ncbi_api_key" in c5_block
+    assert "real_data_require_ncbi_api_key" not in c5_block
     assert "C7)\n            real_data_require_ncbi_api_key" in remote_script
 
 

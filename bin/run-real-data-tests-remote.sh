@@ -232,17 +232,22 @@ run_remote_case() {
                 --include genome
             ;;
         C5)
-            real_data_require_ncbi_api_key
+            base_command=(
+                gtdb-genomes
+                --gtdb-release 202
+                --gtdb-taxon g__Bacteroides
+                --prefer-genbank
+                --threads 12
+                --include genome
+            )
+            command=()
+            while IFS= read -r -d '' argument; do
+                command+=("${argument}")
+            done < <(real_data_append_optional_ncbi_api_key "${base_command[@]}")
             real_data_run_case \
                 "${REMOTE_TEST_ROOT}" "${case_id}" '0|6' present "" \
                 remote_check_dehydrate_suppressed_partial_result \
-                gtdb-genomes \
-                --gtdb-release 202 \
-                --gtdb-taxon g__Bacteroides \
-                --prefer-genbank \
-                --threads 12 \
-                --include genome \
-                --ncbi-api-key "${NCBI_API_KEY}"
+                "${command[@]}"
             ;;
         C6)
             real_data_run_case \

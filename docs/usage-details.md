@@ -106,14 +106,14 @@ gtdb-genomes \
 
   - resolve the bundled GTDB release
   - read bundled GTDB taxonomy TSVs and the local release manifest
-  - check `unzip` early so real-run archive requirements fail fast
+  - preflight `unzip` early so real-run archive requirements fail fast
   - perform NCBI metadata lookup when `--prefer-genbank` is enabled and the
     selected rows include supported non-`UBA*` accessions
   - run `datasets --preview` when the selected rows include supported
     non-`UBA*` accessions
 
   Zero-match runs and unsupported-`UBA*`-only runs still avoid NCBI calls, but
-  dry-runs now preflight `unzip` before they exit.
+  dry-runs still preflight `unzip` before they exit.
 
 ## API Key Handling
 

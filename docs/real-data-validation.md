@@ -57,7 +57,7 @@ bin/run-real-data-tests-local.sh A1 A6 B4
 bin/run-real-data-tests-server.sh
 bin/run-real-data-tests-server.sh full
 bin/run-real-data-tests-remote.sh
-bin/run-real-data-tests-remote.sh C1 C4 C5
+bin/run-real-data-tests-remote.sh C1 C4 C5 C6
 ```
 
 ## Local Prerequisites
@@ -106,9 +106,9 @@ The local runner uses:
 
 Local environment notes:
 
-- Dry-runs now check `unzip` early so real-run archive requirements fail fast.
+- Dry-runs preflight `unzip` early so real-run archive requirements fail fast.
 - zero-match and unsupported-`UBA*`-only dry-runs remain valid without NCBI
-  access, but dry-runs now check `unzip` early
+  access
 - the documented `A*` release-coverage dry-runs and all `B*` cases require
   outbound DNS and network access to
   `api.ncbi.nlm.nih.gov`
@@ -123,7 +123,7 @@ Remote validation assumes:
 - `mamba`
 - a clean runtime environment
 - installed package wheel
-- no `uv` in the remote runtime path
+- no `uv` on `PATH`
 
 Suggested remote setup:
 
@@ -147,11 +147,11 @@ The remote runner uses:
 
 Required environment:
 
-- `NCBI_API_KEY` for `C5` and `C7`
+- `NCBI_API_KEY` for `C7`
 
 Optional environment:
 
-- `NCBI_API_KEY` for `C2` and `C3`
+- `NCBI_API_KEY` for `C2`, `C3`, and `C5`
 
 The remote runner passes `NCBI_API_KEY` to the installed command as
 `--ncbi-api-key` when it is provided.
@@ -162,17 +162,26 @@ The main GitHub Actions CI workflow runs:
 
 - `A1` to `A9`
 - `B1` to `B6`
-- `C1`, `C2`, `C3`, `C4`, and `C6`
+- `C1`, `C2`, `C3`, `C4`, `C5`, and `C6`
+
+The pytest matrix covers Python `3.12`, `3.13`, and `3.14`.
 
 Before `pytest`, `A`, `B`, `C`, and the separate live-validation source-checkout
 runner, GitHub Actions runs:
 
 - `uv run python -m gtdb_genomes.bootstrap_taxonomy`
 
+The packaged-runtime `C` coverage is split into separate build and runtime
+jobs. The build job uses `uv` to bootstrap and build the wheel, while the
+runtime job installs that wheel into a clean mamba environment with no `uv` on
+`PATH` before running the remote cases.
+
 The CI workflow excludes:
 
-- `C5`
 - `C7`
+
+The dedicated release workflow uses the same build-and-clean-runtime split and
+reuses `C5` as part of the packaged-runtime validation gate.
 
 ## Remote Server Quickstart
 
@@ -238,10 +247,9 @@ gtdb-genomes \
   --outdir /tmp/gtdb-realtests/remote-smoke-c6
 ```
 
-Then run a `C1` live smoke test. This confirms that the
-installed command can perform a real download on the server and does not
-require `NCBI_API_KEY`. Automatic strategy selection should keep this case on
-the direct path:
+Then run a `C1` live smoke test. This confirms that the installed command can
+perform a real download on the server and does not require `NCBI_API_KEY`.
+Automatic strategy selection should keep this case on the direct path:
 
 ```bash
 gtdb-genomes \

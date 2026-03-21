@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import gzip
+import hashlib
+import json
 import os
 import shutil
 import subprocess
@@ -34,15 +37,23 @@ def copy_project_for_build_fixture(destination_root: Path) -> Path:
             "dist",
         ),
     )
-    taxonomy_root = fixture_root / "data" / "gtdb_taxonomy"
-    for child_path in taxonomy_root.iterdir():
-        if child_path.name == "releases.tsv":
-            continue
-        if child_path.is_dir():
-            shutil.rmtree(child_path)
-            continue
-        child_path.unlink()
     return fixture_root
+
+
+def write_taxonomy_payload(
+    payload_path: Path,
+    taxonomy_text: str,
+) -> tuple[str, str]:
+    """Write one compressed taxonomy payload and return its integrity data."""
+
+    payload_path.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(payload_path, "wb") as handle:
+        handle.write(taxonomy_text.encode("utf-8"))
+    sha256 = hashlib.sha256(payload_path.read_bytes()).hexdigest()
+    row_count = str(
+        sum(1 for line in taxonomy_text.splitlines() if line.strip()),
+    )
+    return sha256, row_count
 
 
 def build_fixture_project(
@@ -100,6 +111,13 @@ def archive_members_with_fragment(archive_path: Path, fragment: str) -> set[str]
             for member_name in handle.getnames()
             if fragment in member_name
         }
+
+
+def read_wheel_member_text(wheel_path: Path, member_name: str) -> str:
+    """Return one wheel member decoded as UTF-8 text."""
+
+    with zipfile.ZipFile(wheel_path) as handle:
+        return handle.read(member_name).decode("utf-8")
 
 
 def assert_contains_all(text: str, snippets: tuple[str, ...]) -> None:
@@ -168,11 +186,30 @@ def test_uv_build_includes_generated_taxonomy_payloads_in_sdist_and_wheel(
 
     fixture_root = copy_project_for_build_fixture(tmp_path)
     taxonomy_root = fixture_root / "data" / "gtdb_taxonomy" / "999.0"
-    taxonomy_root.mkdir(parents=True, exist_ok=True)
     bacterial_payload = taxonomy_root / "bac120_taxonomy_r999.tsv.gz"
     archaeal_payload = taxonomy_root / "ar53_taxonomy_r999.tsv.gz"
-    bacterial_payload.write_bytes(b"synthetic bacterial taxonomy payload\n")
-    archaeal_payload.write_bytes(b"synthetic archaeal taxonomy payload\n")
+    bacterial_sha256, bacterial_rows = write_taxonomy_payload(
+        bacterial_payload,
+        "GB_GCA_999999.1\td__Bacteria;g__Syntheticus\n",
+    )
+    archaeal_sha256, archaeal_rows = write_taxonomy_payload(
+        archaeal_payload,
+        "GB_GCA_999998.1\td__Archaea;g__Syntheticus\n",
+    )
+    (fixture_root / "data" / "gtdb_taxonomy" / "releases.tsv").write_text(
+        (
+            "resolved_release\taliases\tbacterial_taxonomy\tarchaeal_taxonomy\t"
+            "bacterial_taxonomy_sha256\tarchaeal_taxonomy_sha256\t"
+            "bacterial_taxonomy_rows\tarchaeal_taxonomy_rows\tis_latest\t"
+            "source_root_url\tchecksum_filename\n"
+            "999.0\t999,999.0,latest\tbac120_taxonomy_r999.tsv.gz\t"
+            "ar53_taxonomy_r999.tsv.gz\t"
+            f"{bacterial_sha256}\t{archaeal_sha256}\t"
+            f"{bacterial_rows}\t{archaeal_rows}\ttrue\t"
+            "https://example.org/999\tMD5SUM.txt\n"
+        ),
+        encoding="utf-8",
+    )
 
     dist_root = tmp_path / "dist"
     build_result = build_fixture_project(fixture_root, dist_root)
@@ -206,6 +243,113 @@ def test_uv_build_includes_generated_taxonomy_payloads_in_sdist_and_wheel(
         "gtdb_genomes/data/gtdb_taxonomy/999.0/ar53_taxonomy_r999.tsv.gz"
         in wheel_members
     )
+    build_info = json.loads(
+        read_wheel_member_text(wheel_path, "gtdb_genomes/_build_info.json"),
+    )
+    assert build_info["package_version"] == "0.1.0"
+    assert "git_revision" in build_info
+
+
+def test_uv_build_rejects_manifest_only_source_fixture(tmp_path: Path) -> None:
+    """A source build should fail clearly when the payload is not bootstrapped."""
+
+    fixture_root = copy_project_for_build_fixture(tmp_path)
+
+    dist_root = tmp_path / "dist"
+    build_result = build_fixture_project(fixture_root, dist_root)
+
+    assert build_result.returncode != 0
+    assert "Bundled GTDB taxonomy payload is not ready for packaging." in (
+        build_result.stderr
+    )
+    assert "bootstrap_taxonomy" in build_result.stderr
+
+
+def test_clean_runtime_wheel_install_validates_bundled_latest_release(
+    tmp_path: Path,
+) -> None:
+    """A built wheel should validate bundled data without `uv` on `PATH`."""
+
+    fixture_root = copy_project_for_build_fixture(tmp_path)
+    taxonomy_root = fixture_root / "data" / "gtdb_taxonomy" / "999.0"
+    bacterial_payload = taxonomy_root / "bac120_taxonomy_r999.tsv.gz"
+    archaeal_payload = taxonomy_root / "ar53_taxonomy_r999.tsv.gz"
+    bacterial_sha256, bacterial_rows = write_taxonomy_payload(
+        bacterial_payload,
+        "GB_GCA_999999.1\td__Bacteria;g__Syntheticus\n",
+    )
+    archaeal_sha256, archaeal_rows = write_taxonomy_payload(
+        archaeal_payload,
+        "GB_GCA_999998.1\td__Archaea;g__Syntheticus\n",
+    )
+    (fixture_root / "data" / "gtdb_taxonomy" / "releases.tsv").write_text(
+        (
+            "resolved_release\taliases\tbacterial_taxonomy\tarchaeal_taxonomy\t"
+            "bacterial_taxonomy_sha256\tarchaeal_taxonomy_sha256\t"
+            "bacterial_taxonomy_rows\tarchaeal_taxonomy_rows\tis_latest\t"
+            "source_root_url\tchecksum_filename\n"
+            "999.0\t999,999.0,latest\tbac120_taxonomy_r999.tsv.gz\t"
+            "ar53_taxonomy_r999.tsv.gz\t"
+            f"{bacterial_sha256}\t{archaeal_sha256}\t"
+            f"{bacterial_rows}\t{archaeal_rows}\ttrue\t"
+            "https://example.org/999\tMD5SUM.txt\n"
+        ),
+        encoding="utf-8",
+    )
+
+    dist_root = tmp_path / "dist"
+    build_result = build_fixture_project(fixture_root, dist_root)
+    assert_build_result_succeeded(build_result)
+
+    wheel_path = next(dist_root.glob("*.whl"))
+    venv_root = tmp_path / "runtime-venv"
+    subprocess.run(
+        [sys.executable, "-m", "venv", str(venv_root)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    pip_bin = venv_root / "bin" / "pip"
+    python_bin = venv_root / "bin" / "python"
+    runtime_env = {
+        **os.environ,
+        "PATH": f"{venv_root / 'bin'}:/usr/bin:/bin",
+    }
+    install_result = subprocess.run(
+        [
+            str(pip_bin),
+            "install",
+            "--no-deps",
+            "--force-reinstall",
+            str(wheel_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=runtime_env,
+    )
+    assert install_result.returncode == 0, install_result.stderr
+
+    runtime_result = subprocess.run(
+        [
+            str(python_bin),
+            "-c",
+            (
+                "import shutil; "
+                "assert shutil.which('uv') is None; "
+                "from gtdb_genomes.release_resolver import "
+                "resolve_and_validate_release; "
+                "resolution = resolve_and_validate_release('latest'); "
+                "assert resolution.resolved_release == '999.0'; "
+                "assert resolution.bacterial_taxonomy is not None"
+            ),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=runtime_env,
+    )
+    assert runtime_result.returncode == 0, runtime_result.stderr
 
 
 def test_module_entrypoint_help_runs() -> None:
@@ -388,8 +532,13 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
             "REMOTE_TEST_ROOT",
             "case-results.tsv",
             "tool-versions.txt",
-            "Dry-runs now check `unzip` early",
-            "--ncbi-api-key",
+            "Dry-runs preflight `unzip` early",
+            "C5",
+            "C7",
+            "`NCBI_API_KEY` for `C7`",
+            "`NCBI_API_KEY` for `C2`, `C3`, and `C5`",
+            "packaged-runtime `C` coverage is split into separate build and runtime",
+            "no `uv` on `PATH`",
         ),
     )
     assert_not_contains_any(
@@ -413,24 +562,53 @@ def test_ci_workflow_runs_expected_validation_suites() -> None:
         (
             "validation-a:",
             "validation-b:",
-            "validation-c:",
+            "validation-c-build:",
+            "validation-c-runtime:",
             "uses: mamba-org/setup-micromamba@v2",
             "environment-name: gtdb-genome",
+            "- \"3.13\"",
+            "- \"3.14\"",
             "uv run python -m gtdb_genomes.bootstrap_taxonomy",
             "bin/run-real-data-tests-local.sh A1 A2 A3 A4 A5 A6 A7 A8 A9",
             "bin/run-real-data-tests-local.sh B1 B2 B3 B4 B5 B6",
-            "bin/run-real-data-tests-remote.sh C1 C2 C3 C4 C6",
+            "bin/run-real-data-tests-remote.sh C1 C2 C3 C4 C5 C6",
             "uv build",
+            "actions/download-artifact@v5",
             "python -m pip install --force-reinstall dist/*.whl",
+            "shutil.which('uv') is None",
             "resolve_and_validate_release('latest')",
         ),
     )
     assert_not_contains_any(
         ci_text,
         (
-            "bin/run-real-data-tests-remote.sh C5",
             "bin/run-real-data-tests-remote.sh C7",
             "LOCAL_LAUNCHER_MODE: module",
+        ),
+    )
+
+
+def test_release_workflow_enforces_build_then_clean_runtime() -> None:
+    """The release workflow should split build and packaged runtime validation."""
+
+    release_text = Path(".github/workflows/release.yml").read_text(
+        encoding="utf-8",
+    )
+
+    assert_contains_all(
+        release_text,
+        (
+            "build-artifacts:",
+            "runtime-validation:",
+            "workflow_dispatch:",
+            "push:",
+            "tags:",
+            "uv build",
+            "actions/upload-artifact@v6",
+            "actions/download-artifact@v5",
+            "python -m pip install --force-reinstall dist/*.whl",
+            "shutil.which('uv') is None",
+            "bin/run-real-data-tests-remote.sh C1 C2 C3 C4 C5 C6",
         ),
     )
 
