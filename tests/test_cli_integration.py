@@ -58,3 +58,46 @@ def test_main_passes_normalised_arguments_into_workflow(
             dry_run=True,
         ),
     ]
+
+
+def test_main_defaults_release_to_latest_when_flag_is_omitted(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """The CLI should pass the bundled latest alias when release is omitted."""
+
+    captured_args: list[CliArgs] = []
+
+    def fake_run_workflow(args: CliArgs) -> int:
+        """Capture the parsed arguments and return a stubbed exit code."""
+
+        captured_args.append(args)
+        return 0
+
+    monkeypatch.setattr("gtdb_genomes.workflow.run_workflow", fake_run_workflow)
+
+    exit_code = main(
+        [
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--outdir",
+            str(tmp_path / "output"),
+        ],
+    )
+
+    assert exit_code == 0
+    assert captured_args == [
+        CliArgs(
+            gtdb_release="latest",
+            gtdb_taxa=("g__Escherichia",),
+            outdir=tmp_path / "output",
+            prefer_genbank=False,
+            version_fixed=False,
+            threads=8,
+            ncbi_api_key=None,
+            include="genome",
+            debug=False,
+            keep_temp=False,
+            dry_run=False,
+        ),
+    ]

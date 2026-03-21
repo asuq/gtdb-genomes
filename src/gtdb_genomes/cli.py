@@ -119,8 +119,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--gtdb-release",
-        required=True,
-        help="GTDB release alias or bundled release identifier.",
+        default="latest",
+        help="GTDB release alias or bundled release identifier. Default: latest.",
     )
     parser.add_argument(
         "--gtdb-taxon",

@@ -29,7 +29,26 @@ def test_help_includes_documented_flags() -> None:
     assert "--dry-run" in help_text
     assert "Quote species taxa with spaces" in help_text
     assert "direct downloads remain serial" in help_text
+    assert "Default: latest." in help_text
     assert "8." in help_text
+
+
+def test_parse_args_defaults_release_to_latest(tmp_path: Path) -> None:
+    """Omitting the release flag should default to the bundled latest alias."""
+
+    parser = build_parser()
+    args = parse_args(
+        parser,
+        [
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--outdir",
+            str(tmp_path),
+        ],
+    )
+
+    assert isinstance(args, CliArgs)
+    assert args.gtdb_release == "latest"
 
 
 def test_parse_args_normalises_and_deduplicates_taxa(tmp_path: Path) -> None:
