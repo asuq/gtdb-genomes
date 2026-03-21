@@ -5,32 +5,27 @@ package:
   name: {{ name|lower }}
   version: {{ version }}
 
-source:
-  # Update version and sha256 together from the tagged Hatch sdist uploaded by
-  # the GitHub release workflow.
-  url: https://github.com/asuq/gtdb-genomes/releases/download/v{{ version }}/gtdb_genomes-{{ version }}.tar.gz
-  sha256: fb9da1144dbbbff7cbace2c014d4702029d9f9e4e287cefb9d92c18f732ef978
-
 build:
   number: 0
   noarch: python
-  # The Conda package should install the normal Python console entrypoint for
-  # gtdb-genomes and must not depend on uv at runtime. Source-checkout
-  # developer workflows may still use uv, but the packaged command should be
-  # the standard environment-installed executable. It should also include the
-  # bundled GTDB taxonomy data and local release manifest needed for offline
-  # release resolution.
   script: {{ PYTHON }} -m pip install . --no-deps --no-build-isolation -vv
+  entry_points:
+    - gtdb-genomes=gtdb_genomes.cli:main
+
+source:
+  # Fill these from the tagged GitHub release after the first public release
+  # is published.
+  url: https://github.com/asuq/gtdb-genomes/releases/download/v{{ version }}/gtdb_genomes-{{ version }}.tar.gz
+  sha256: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 requirements:
   host:
     - python >=3.12
     - pip
-    # Hatchling matches the shipped pyproject.toml build backend.
     - hatchling
   run:
     - python >=3.12
-    - polars
+    - polars <2.0.0
     - unzip >=6.0,<7.0
     - ncbi-datasets-cli >=18.21.0,<18.22.0
 
@@ -43,26 +38,14 @@ test:
 
 about:
   home: https://github.com/asuq/gtdb-genomes
-  summary: Download NCBI genomes by GTDB taxon and GTDB release.
-  description: |
-    gtdb-genomes downloads NCBI genomes by GTDB taxon and GTDB release using
-    bundled GTDB taxonomy tables for local release and taxon resolution plus
-    the packaged ncbi-datasets-cli dependency for metadata lookup and genome
-    downloads. Source checkouts bootstrap those GTDB taxonomy payloads from the
-    recorded UQ mirror metadata before building, while the Conda package itself
-    installs the standard gtdb-genomes console entrypoint and ships the
-    generated GTDB release manifest and taxonomy payload needed for offline
-    release resolution. The install step does not fetch GTDB data or depend on
-    uv at runtime. Because the package bundles GTDB taxonomy data, the release
-    metadata reflects both the MIT-licensed code and the CC BY-SA 4.0 bundled
-    data.
+  summary: CLI to download genomes by GTDB taxon and GTDB release.
   license: MIT AND CC-BY-SA-4.0
   license_file:
     - LICENSE
     - NOTICE
     - licenses/CC-BY-SA-4.0.txt
-  doc_url: https://github.com/asuq/gtdb-genomes/blob/main/README.md
   dev_url: https://github.com/asuq/gtdb-genomes
+  doc_url: https://github.com/asuq/gtdb-genomes/blob/main/README.md
 
 extra:
   recipe-maintainers:

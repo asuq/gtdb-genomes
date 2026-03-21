@@ -452,6 +452,8 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "`unzip >=6.0,<7.0`",
             "mamba create -n gtdb-genomes -c conda-forge -c bioconda",
             "uv sync --group dev",
+            "prepared for the first public release",
+            "published release archive and final SHA256 before publication",
             '--gtdb-taxon "p__Pseudomonadota" "c__Alphaproteobacteria"',
         ),
     )
@@ -495,6 +497,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "--download-method",
             "Pipeline concept",
             "Step-wise development plan",
+            "tracks the tagged sdist metadata",
         ),
     )
 
@@ -567,8 +570,8 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     )
 
 
-def test_bioconda_recipe_uses_real_upstream_metadata() -> None:
-    """The Bioconda recipe should use canonical release metadata."""
+def test_bioconda_recipe_uses_consistent_pre_release_metadata() -> None:
+    """The Bioconda recipe should stay consistent with the pre-release repo."""
 
     bioconda_text = Path("packaging/bioconda/meta.yaml").read_text(
         encoding="utf-8",
@@ -578,6 +581,10 @@ def test_bioconda_recipe_uses_real_upstream_metadata() -> None:
     assert "https://github.com/asuq/gtdb-genomes/releases/download/" in (
         bioconda_text
     )
+    assert (
+        "Fill these from the tagged GitHub release after the first public "
+        "release"
+    ) in bioconda_text
     assert "https://github.com/asuq/gtdb-genomes" in bioconda_text
     assert "https://github.com/asuq/gtdb-genomes/blob/main/README.md" in (
         bioconda_text
@@ -586,20 +593,22 @@ def test_bioconda_recipe_uses_real_upstream_metadata() -> None:
     assert "- ncbi-datasets-cli >=18.21.0,<18.22.0" in bioconda_text
     assert "recipe-maintainers:" in bioconda_text
     assert "- asuq" in bioconda_text
+    assert (
+        "sha256: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        in bioconda_text
+    )
     assert "example.org" not in bioconda_text
     assert "your-org" not in bioconda_text
     assert "your-github-id" not in bioconda_text
     assert '{% set version = "0.0.0" %}' not in bioconda_text
-    assert (
-        "0000000000000000000000000000000000000000000000000000000000000000"
-        not in bioconda_text
-    )
     assert_not_contains_any(
         bioconda_text,
         (
             "https://github.com/asuq/gtdb-genome/releases/download/",
             "https://github.com/asuq/gtdb-genome/blob/main/README.md",
             "https://github.com/asuq/gtdb-genome\n",
+            "run_exports:",
+            "???",
         ),
     )
 

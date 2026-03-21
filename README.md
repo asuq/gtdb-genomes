@@ -150,8 +150,8 @@ Supported workflows:
 - packaged runtime use through the Bioconda installation shown above
 - maintainer manifest refresh through
   `uv run python -m gtdb_genomes.refresh_taxonomy_manifest`
-- the checked-in Bioconda recipe tracks the tagged sdist metadata and the
-  supported packaged-runtime tool window for public releases
+- the checked-in Bioconda recipe is prepared for the first public release and
+  still needs the published release archive and final SHA256 before publication
 
 Source checkouts use the development workflow:
 
