@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-import json
 from pathlib import Path
-import re
 import subprocess
 import time
 
@@ -19,18 +17,9 @@ from gtdb_genomes.subprocess_utils import (
 
 
 DEHYDRATE_ACCESSION_THRESHOLD = 1000
-DEHYDRATE_SIZE_GB_THRESHOLD = 15.0
 REHYDRATE_WORKER_CAP = 30
 RETRY_DELAYS_SECONDS = (5, 15, 45)
 DEFAULT_REQUESTED_DOWNLOAD_METHOD = "auto"
-SIZE_PATTERN = re.compile(r"(?i)(\d+(?:\.\d+)?)\s*([KMGT]?B)\b")
-SIZE_UNITS = {
-    "B": 1,
-    "KB": 1024,
-    "MB": 1024**2,
-    "GB": 1024**3,
-    "TB": 1024**4,
-}
 SUPPORTED_INCLUDE_TOKENS = frozenset({"genome", "gff3", "protein"})
 
 
@@ -277,64 +266,11 @@ def build_rehydrate_command(
     return command
 
 
-def parse_preview_size_bytes(preview_text: str) -> int | None:
-    """Extract the package or download size from preview output."""
-
-    stripped_preview = preview_text.strip()
-    if not stripped_preview:
-        return None
-    json_sizes_mb: list[float] = []
-    for line in stripped_preview.splitlines():
-        if not line.strip().startswith("{"):
-            continue
-        try:
-            preview_payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        estimated_size_mb = preview_payload.get("estimated_file_size_mb")
-        if isinstance(estimated_size_mb, int | float):
-            json_sizes_mb.append(float(estimated_size_mb))
-            continue
-        included_data_files = preview_payload.get("included_data_files", {})
-        if not isinstance(included_data_files, dict):
-            continue
-        record_total_mb = 0.0
-        found_file_size = False
-        for file_metadata in included_data_files.values():
-            if not isinstance(file_metadata, dict):
-                continue
-            size_mb = file_metadata.get("size_mb")
-            if isinstance(size_mb, int | float):
-                record_total_mb += float(size_mb)
-                found_file_size = True
-        if found_file_size:
-            json_sizes_mb.append(record_total_mb)
-    if json_sizes_mb:
-        return int(sum(json_sizes_mb) * SIZE_UNITS["MB"])
-
-    labelled_matches = re.findall(
-        r"(?im)^\s*(?:package|download)\s+size\s*:\s*(\d+(?:\.\d+)?)\s*([KMGT]?B)\b",
-        preview_text,
-    )
-    if labelled_matches:
-        return sum(
-            int(float(size_value) * SIZE_UNITS[size_unit.upper()])
-            for size_value, size_unit in labelled_matches
-        )
-
-    matches = SIZE_PATTERN.findall(preview_text)
-    if len(matches) != 1:
-        return None
-    size_value, size_unit = matches[0]
-    return int(float(size_value) * SIZE_UNITS[size_unit.upper()])
-
-
 def select_download_method(
     requested_method: str,
     accession_count: int,
-    preview_text: str | None = None,
 ) -> DownloadMethodDecision:
-    """Resolve the effective download method for a request."""
+    """Resolve the effective download method from the request-token count."""
 
     if requested_method != "auto":
         return DownloadMethodDecision(
@@ -343,24 +279,14 @@ def select_download_method(
             accession_count=accession_count,
             preview_size_bytes=None,
         )
-    if preview_text is None:
-        raise PreviewError("datasets preview output is required in auto mode")
-    preview_size_bytes = parse_preview_size_bytes(preview_text)
-    if preview_size_bytes is None:
-        raise PreviewError(
-            "datasets preview output is incompatible; could not determine package size",
-        )
     method_used = "direct"
-    if (
-        accession_count >= DEHYDRATE_ACCESSION_THRESHOLD
-        or preview_size_bytes > int(DEHYDRATE_SIZE_GB_THRESHOLD * (1024**3))
-    ):
+    if accession_count > DEHYDRATE_ACCESSION_THRESHOLD:
         method_used = "dehydrate"
     return DownloadMethodDecision(
         requested_method=requested_method,
         method_used=method_used,
         accession_count=accession_count,
-        preview_size_bytes=preview_size_bytes,
+        preview_size_bytes=None,
     )
 
 

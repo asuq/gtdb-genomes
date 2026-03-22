@@ -9,14 +9,12 @@ import pytest
 
 from gtdb_genomes.download import (
     DEHYDRATE_ACCESSION_THRESHOLD,
-    DEHYDRATE_SIZE_GB_THRESHOLD,
     PreviewError,
     build_batch_dehydrate_command,
     build_direct_batch_download_command,
     build_preview_command,
     build_rehydrate_command,
     get_rehydrate_workers,
-    parse_preview_size_bytes,
     run_retryable_command,
     run_preview_command,
     select_download_method,
@@ -136,105 +134,25 @@ def test_command_builders_match_datasets_cli_shape() -> None:
     ]
 
 
-def test_select_download_method_uses_preview_size_and_count_thresholds() -> None:
-    """Auto mode should switch to dehydrate on either documented threshold."""
+def test_select_download_method_uses_count_only_threshold() -> None:
+    """Auto mode should switch to dehydrate only above the count threshold."""
 
-    small_preview = "Package size: 1.0 GB\n"
-    large_preview = f"Package size: {DEHYDRATE_SIZE_GB_THRESHOLD + 1.0} GB\n"
-    mixed_preview = "Download size: 1.0 GB\nUncompressed size: 16.0 GB\n"
-
-    assert select_download_method("auto", 5, small_preview).method_used == "direct"
-    assert select_download_method("auto", 5, mixed_preview).method_used == "direct"
+    assert select_download_method("auto", 5).method_used == "direct"
     assert (
-        select_download_method("auto", DEHYDRATE_ACCESSION_THRESHOLD, small_preview)
-        .method_used
+        select_download_method("auto", DEHYDRATE_ACCESSION_THRESHOLD).method_used
+        == "direct"
+    )
+    assert (
+        select_download_method("auto", DEHYDRATE_ACCESSION_THRESHOLD + 1).method_used
         == "dehydrate"
     )
-    assert select_download_method("auto", 5, large_preview).method_used == "dehydrate"
-
-    with pytest.raises(PreviewError, match="required in auto mode"):
-        select_download_method("auto", 5, None)
-
-    with pytest.raises(PreviewError, match="could not determine package size"):
-        select_download_method("auto", 5, "No size here")
-
-    with pytest.raises(PreviewError, match="could not determine package size"):
-        select_download_method(
-            "auto",
-            5,
-            "Estimated size: 850 MB\nUncompressed size: 2.5 GB\n",
-        )
 
 
-def test_parse_preview_size_bytes_prefers_package_or_download_size() -> None:
-    """Preview parsing should use the labelled package or download size."""
+def test_select_download_method_preserves_non_auto_request() -> None:
+    """Explicit methods should pass through unchanged."""
 
-    preview = "Download size: 850 MB\nUncompressed size: 2.5 GB\n"
-
-    assert parse_preview_size_bytes(preview) == int(850 * 1024**2)
-
-
-def test_parse_preview_size_bytes_sums_multiple_labelled_sizes() -> None:
-    """Preview parsing should sum multiple labelled size rows conservatively."""
-
-    preview = "Package size: 8.0 GB\nDownload size: 8.0 GB\n"
-
-    assert parse_preview_size_bytes(preview) == int(16.0 * 1024**3)
-
-
-def test_parse_preview_size_bytes_accepts_json_preview_output() -> None:
-    """Preview parsing should accept JSON output from datasets preview."""
-
-    preview = (
-        '{"resource_updated_on":"2026-03-18T16:17:00Z",'
-        '"record_count":1024,'
-        '"estimated_file_size_mb":1556,'
-        '"included_data_files":{"all_genomic_fasta":{"file_count":1024,'
-        '"size_mb":1556.5991}}}\n'
-    )
-
-    assert parse_preview_size_bytes(preview) == int(1556 * 1024**2)
-
-
-def test_parse_preview_size_bytes_sums_json_file_sizes_when_needed() -> None:
-    """Preview parsing should sum JSON file sizes without an estimate field."""
-
-    preview = (
-        '{"included_data_files":{"genome":{"size_mb":512.0},'
-        '"annotation":{"size_mb":128.5}}}\n'
-    )
-
-    assert parse_preview_size_bytes(preview) == int(640.5 * 1024**2)
-
-
-def test_parse_preview_size_bytes_sums_multiple_json_records() -> None:
-    """Preview parsing should sum sizes across JSON preview records."""
-
-    preview = (
-        '{"included_data_files":{"genome":{"size_mb":8000.0}}}\n'
-        '{"included_data_files":{"genome":{"size_mb":8000.0}}}\n'
-    )
-
-    assert parse_preview_size_bytes(preview) == int(16000.0 * 1024**2)
-
-
-def test_select_download_method_uses_total_json_preview_size_across_records() -> None:
-    """Auto mode should use the total parsed JSON preview size across records."""
-
-    preview = (
-        '{"included_data_files":{"genome":{"size_mb":8000.0}}}\n'
-        '{"included_data_files":{"genome":{"size_mb":8000.0}}}\n'
-    )
-
-    assert select_download_method("auto", 5, preview).method_used == "dehydrate"
-
-
-def test_parse_preview_size_bytes_rejects_ambiguous_unlabelled_sizes() -> None:
-    """Preview parsing should reject multi-size text without package labels."""
-
-    preview = "Estimated size: 850 MB\nUncompressed size: 2.5 GB\n"
-
-    assert parse_preview_size_bytes(preview) is None
+    assert select_download_method("direct", 5000).method_used == "direct"
+    assert select_download_method("dehydrate", 1).method_used == "dehydrate"
 
 
 def test_worker_caps_and_accession_input_file_follow_documented_limits(

@@ -12,16 +12,16 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 from gtdb_genomes.download import (
-    CommandFailureRecord,
     DEFAULT_REQUESTED_DOWNLOAD_METHOD,
     PreviewCommandResult,
+    PreviewError,
     build_preview_command,
     get_ordered_unique_accessions,
     run_preview_command,
     select_download_method,
     write_accession_input_file,
 )
-from gtdb_genomes.logging_utils import redact_command
+from gtdb_genomes.logging_utils import redact_command, redact_text
 from gtdb_genomes.metadata import (
     AssemblyStatusInfo,
     find_incomplete_genbank_metadata_accessions,
@@ -441,6 +441,10 @@ def plan_supported_downloads(
             Path(preview_directory) / "accessions.txt",
             preview_accessions,
         )
+        decision = select_download_method(
+            DEFAULT_REQUESTED_DOWNLOAD_METHOD,
+            len(preview_accessions),
+        )
         preview_command = build_preview_command(
             preview_accession_file,
             args.include,
@@ -448,29 +452,40 @@ def plan_supported_downloads(
             debug=args.debug,
         )
         logger.debug("Running %s", redact_command(preview_command, secrets))
-        preview_result = normalise_preview_command_result(
-            run_preview_command(
-                preview_accession_file,
-                args.include,
-                ncbi_api_key=args.ncbi_api_key,
-                debug=args.debug,
-            ),
-        )
-
-    decision = select_download_method(
-        DEFAULT_REQUESTED_DOWNLOAD_METHOD,
-        len(preview_accessions),
-        preview_text=preview_result.preview_text,
-    )
-    preview_shared_failures: tuple[SharedFailureContext, ...] = ()
-    if preview_result.failures:
-        preview_shared_failures = (
-            build_shared_failure_context(
-                preview_original_accessions,
-                preview_result.failures,
-                ";".join(preview_accessions),
-            ),
-        )
+        preview_shared_failures: tuple[SharedFailureContext, ...] = ()
+        try:
+            preview_result = normalise_preview_command_result(
+                run_preview_command(
+                    preview_accession_file,
+                    args.include,
+                    ncbi_api_key=args.ncbi_api_key,
+                    debug=args.debug,
+                ),
+            )
+        except PreviewError as error:
+            if error.failures:
+                preview_shared_failures = (
+                    build_shared_failure_context(
+                        preview_original_accessions,
+                        error.failures,
+                        ";".join(preview_accessions),
+                    ),
+                )
+            logger.warning(
+                "datasets preview failed during automatic planning; continuing "
+                "with %s because auto mode now uses only the request-token count: %s",
+                decision.method_used,
+                redact_text(str(error), secrets),
+            )
+        else:
+            if preview_result.failures:
+                preview_shared_failures = (
+                    build_shared_failure_context(
+                        preview_original_accessions,
+                        preview_result.failures,
+                        ";".join(preview_accessions),
+                    ),
+                )
     return accession_plans, decision.method_used, preview_shared_failures
 
 
