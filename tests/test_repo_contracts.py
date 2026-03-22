@@ -448,7 +448,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "exact-token and case-sensitive",
             "Direct downloads remain serial in the current workflow.",
             "`genome`, `gff3`, and `protein`",
-            "`ncbi-datasets-cli >=18.21.0,<18.22.0`",
+            "`ncbi-datasets-cli >=18.4.0,<18.22.0`",
             "`unzip >=6.0,<7.0`",
             "The CLI checks these versions during preflight",
             "mamba create -n gtdb-genomes -c conda-forge -c bioconda",
@@ -465,7 +465,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "mamba create -n gtdb-genomes -c conda-forge -c bioconda",
             "mamba activate gtdb-genomes",
             "gtdb-genomes --help",
-            "`ncbi-datasets-cli >=18.21.0,<18.22.0`",
+            "`ncbi-datasets-cli >=18.4.0,<18.22.0`",
             "`unzip >=6.0,<7.0`",
             "do not need a post-install taxonomy bootstrap step",
         ),
@@ -612,7 +612,7 @@ def test_bioconda_recipe_template_is_quarantined_until_release_metadata_exists()
         bioconda_text
     )
     assert "- unzip >=6.0,<7.0" in bioconda_text
-    assert "- ncbi-datasets-cli >=18.21.0,<18.22.0" in bioconda_text
+    assert "- ncbi-datasets-cli >=18.4.0,<18.22.0" in bioconda_text
     assert "recipe-maintainers:" in bioconda_text
     assert "- asuq" in bioconda_text
     assert (
@@ -691,8 +691,9 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
             "packaged-runtime `C` coverage is split into separate build and runtime",
             "validates both the wheel and `sdist`",
             "no `uv` on `PATH`",
-            "`ncbi-datasets-cli >=18.21.0,<18.22.0`",
+            "`ncbi-datasets-cli >=18.4.0,<18.22.0`",
             "`unzip >=6.0,<7.0`",
+            "ncbi-datasets-cli=18.4.0",
             "ncbi-datasets-cli=18.21.0",
             "unzip=6.0",
             "load_release_taxonomy()",
@@ -727,6 +728,7 @@ def test_ci_workflow_runs_expected_validation_suites() -> None:
             "python=3.12 uv pip",
             "- \"3.13\"",
             "- \"3.14\"",
+            "ncbi-datasets-cli=18.4.0",
             "ncbi-datasets-cli=18.21.0",
             "unzip=6.0",
             "micromamba run -n gtdb-genome",

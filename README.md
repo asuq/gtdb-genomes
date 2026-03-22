@@ -25,7 +25,7 @@ gtdb-genomes --help
 
 The packaged runtime is validated against:
 
-- `ncbi-datasets-cli >=18.21.0,<18.22.0`
+- `ncbi-datasets-cli >=18.4.0,<18.22.0`
 - `unzip >=6.0,<7.0`
 
 The CLI checks these versions during preflight and exits with code `5` when

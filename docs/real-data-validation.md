@@ -5,11 +5,13 @@ validation workflow for `gtdb-genomes`.
 
 Supported external-tool window for the first public release:
 
-- `ncbi-datasets-cli >=18.21.0,<18.22.0`
+- `ncbi-datasets-cli >=18.4.0,<18.22.0`
 - `unzip >=6.0,<7.0`
 
-GitHub Actions currently pins `ncbi-datasets-cli=18.21.0` and `unzip=6.0`
-inside that supported window.
+GitHub Actions validates both ends of the supported `datasets` window:
+`ncbi-datasets-cli=18.4.0` in Validation A and `ncbi-datasets-cli=18.21.0`
+in the remaining validation, live-validation, and release jobs. All jobs keep
+`unzip=6.0` inside that supported window.
 
 It is split into three passes:
 
@@ -136,7 +138,7 @@ Remote validation assumes:
 Suggested remote setup:
 
 ```bash
-mamba create -n gtdb-genome-test python=3.12 pip unzip=6.0 ncbi-datasets-cli=18.21.0
+mamba create -n gtdb-genome-test python=3.12 pip unzip=6.0 ncbi-datasets-cli=18.4.0
 mamba activate gtdb-genome-test
 python -m pip install /path/to/dist/gtdb_genomes-0.1.0-py3-none-any.whl
 which gtdb-genomes
@@ -225,7 +227,7 @@ SSH to the remote server and create a fresh packaged-runtime environment:
 
 ```bash
 ssh user@remote
-mamba create -n gtdb-genome-test python=3.12 pip unzip=6.0 ncbi-datasets-cli=18.21.0
+mamba create -n gtdb-genome-test python=3.12 pip unzip=6.0 ncbi-datasets-cli=18.4.0
 mamba activate gtdb-genome-test
 python -m pip install /tmp/gtdb-genome-remote/gtdb_genomes-0.1.0-py3-none-any.whl
 which gtdb-genomes
