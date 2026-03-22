@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -202,6 +203,59 @@ def test_zero_match_dry_run_missing_unzip_returns_exit_five(
             "--gtdb-taxon",
             "g__Escherichia",
             "--prefer-genbank",
+            "--outdir",
+            str(output_dir),
+            "--dry-run",
+        ],
+    )
+
+    assert exit_code == 5
+    assert not output_dir.exists()
+
+
+def test_dry_run_unsupported_unzip_version_returns_exit_five(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Dry-runs should fail early when unzip is outside the supported range."""
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.load_release_taxonomy",
+        lambda resolution: build_taxonomy_frame(
+            "d__Bacteria;p__Proteobacteria;g__Escherichia",
+        ),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.preflight.shutil.which",
+        lambda tool_name: f"/usr/bin/{tool_name}",
+    )
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+        timeout: int,
+    ) -> subprocess.CompletedProcess[str]:
+        """Return an unsupported unzip version during entrypoint preflight."""
+
+        del capture_output, text, check, timeout
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout="UnZip 7.00 of 20 April 2009\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr("gtdb_genomes.preflight.subprocess.run", fake_run)
+
+    output_dir = tmp_path / "unsupported-unzip-version"
+    exit_code = main(
+        [
+            "--gtdb-release",
+            "95",
+            "--gtdb-taxon",
+            "g__Escherichia",
             "--outdir",
             str(output_dir),
             "--dry-run",

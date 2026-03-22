@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 
 import pytest
 
@@ -31,6 +32,42 @@ def test_get_supported_preflight_tools_preserves_runtime_requirements() -> None:
     )
 
 
+def test_check_required_tools_accepts_supported_versions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Supported external-tool versions should pass preflight unchanged."""
+
+    monkeypatch.setattr(shutil, "which", lambda tool_name: f"/usr/bin/{tool_name}")
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+        timeout: int,
+    ) -> subprocess.CompletedProcess[str]:
+        """Return supported version output for each required command."""
+
+        del capture_output, text, check, timeout
+        if command[0] == "datasets":
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout="datasets version: 18.21.0\n",
+                stderr="",
+            )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout="UnZip 6.00 of 20 April 2009\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    check_required_tools(("datasets", "unzip"))
+
+
 def test_check_required_tools_raises_for_missing_commands(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -43,3 +80,76 @@ def test_check_required_tools_raises_for_missing_commands(
         match="Missing required external tools: datasets, unzip",
     ):
         check_required_tools(("datasets", "unzip"))
+
+
+def test_check_required_tools_raises_for_unsupported_versions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Out-of-range tool versions should fail preflight with the supported window."""
+
+    monkeypatch.setattr(shutil, "which", lambda tool_name: f"/usr/bin/{tool_name}")
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+        timeout: int,
+    ) -> subprocess.CompletedProcess[str]:
+        """Return unsupported datasets and unzip versions."""
+
+        del capture_output, text, check, timeout
+        if command[0] == "datasets":
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout="datasets version: 18.22.0\n",
+                stderr="",
+            )
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout="UnZip 7.00 of 20 April 2009\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(
+        PreflightError,
+        match="Supported range: >=18.21.0,<18.22.0",
+    ):
+        check_required_tools(("datasets", "unzip"))
+
+
+def test_check_required_tools_raises_for_unparseable_versions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unparseable version output should fail preflight conservatively."""
+
+    monkeypatch.setattr(shutil, "which", lambda tool_name: f"/usr/bin/{tool_name}")
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+        timeout: int,
+    ) -> subprocess.CompletedProcess[str]:
+        """Return unparsable version output for the required command."""
+
+        del command, capture_output, text, check, timeout
+        return subprocess.CompletedProcess(
+            ["datasets", "version"],
+            0,
+            stdout="datasets version unavailable\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(
+        PreflightError,
+        match="Could not parse the installed version",
+    ):
+        check_required_tools(("datasets",))

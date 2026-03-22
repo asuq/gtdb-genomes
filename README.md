@@ -28,6 +28,9 @@ The packaged runtime is validated against:
 - `ncbi-datasets-cli >=18.21.0,<18.22.0`
 - `unzip >=6.0,<7.0`
 
+The CLI checks these versions during preflight and exits with code `5` when
+the installed runtime falls outside this supported window.
+
 Bioconda installs the normal `gtdb-genomes` console entrypoint. Built wheels,
 sdists, and Conda packages already include the bundled GTDB taxonomy payload,
 so packaged installs do not need a post-install taxonomy bootstrap step.
