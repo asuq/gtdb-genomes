@@ -153,8 +153,9 @@ Supported workflows:
 - packaged runtime use through the Bioconda installation shown above
 - maintainer manifest refresh through
   `uv run python -m gtdb_genomes.refresh_taxonomy_manifest`
-- the checked-in Bioconda recipe is prepared for the first public release and
-  still needs the published release archive and final SHA256 before publication
+- a draft Bioconda recipe template is kept at
+  `packaging/bioconda/meta.yaml.template`
+  and is quarantined until a tagged release archive and final SHA256 are available
 
 Source checkouts use the development workflow:
 
@@ -189,4 +190,5 @@ The generated taxonomy payload is not relicensed by this project.
 
 - [Usage details](docs/usage-details.md)
 - [Real-data validation guide](docs/real-data-validation.md)
-- [Bioconda recipe](packaging/bioconda/meta.yaml)
+- [Bioconda draft template](packaging/bioconda/meta.yaml.template)
+- [Bioconda packaging notes](packaging/bioconda/README.md)

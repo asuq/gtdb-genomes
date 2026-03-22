@@ -450,10 +450,12 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "`genome`, `gff3`, and `protein`",
             "`ncbi-datasets-cli >=18.21.0,<18.22.0`",
             "`unzip >=6.0,<7.0`",
+            "The CLI checks these versions during preflight",
             "mamba create -n gtdb-genomes -c conda-forge -c bioconda",
             "uv sync --group dev",
-            "prepared for the first public release",
-            "published release archive and final SHA256 before publication",
+            "draft Bioconda recipe template",
+            "packaging/bioconda/meta.yaml.template",
+            "quarantined until a tagged release archive and final SHA256 are available",
             '--gtdb-taxon "p__Pseudomonadota" "c__Alphaproteobacteria"',
         ),
     )
@@ -537,7 +539,10 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
         ),
     )
 
-    bioconda_text = Path("packaging/bioconda/meta.yaml").read_text(
+    bioconda_text = Path("packaging/bioconda/meta.yaml.template").read_text(
+        encoding="utf-8",
+    )
+    bioconda_readme_text = Path("packaging/bioconda/README.md").read_text(
         encoding="utf-8",
     )
     notice_text = Path("NOTICE").read_text(encoding="utf-8")
@@ -550,6 +555,15 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "--no-build-isolation",
             "- ncbi-datasets-cli",
             "resolve_and_validate_release('latest')",
+        ),
+    )
+    assert_contains_all(
+        bioconda_readme_text,
+        (
+            "meta.yaml.template",
+            "draft recipe template",
+            "quarantined",
+            "final `sha256`",
         ),
     )
     assert_contains_all(
@@ -570,13 +584,19 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     )
 
 
-def test_bioconda_recipe_uses_consistent_pre_release_metadata() -> None:
-    """The Bioconda recipe should stay consistent with the pre-release repo."""
+def test_bioconda_recipe_template_is_quarantined_until_release_metadata_exists() -> None:
+    """The Bioconda draft recipe should stay quarantined until release metadata exists."""
 
-    bioconda_text = Path("packaging/bioconda/meta.yaml").read_text(
+    bioconda_template_path = Path("packaging/bioconda/meta.yaml.template")
+    bioconda_text = bioconda_template_path.read_text(
+        encoding="utf-8",
+    )
+    bioconda_readme_text = Path("packaging/bioconda/README.md").read_text(
         encoding="utf-8",
     )
 
+    assert not Path("packaging/bioconda/meta.yaml").exists()
+    assert bioconda_template_path.is_file()
     assert '{% set version = "0.1.0" %}' in bioconda_text
     assert "https://github.com/asuq/gtdb-genomes/releases/download/" in (
         bioconda_text
@@ -585,6 +605,8 @@ def test_bioconda_recipe_uses_consistent_pre_release_metadata() -> None:
         "Fill these from the tagged GitHub release after the first public "
         "release"
     ) in bioconda_text
+    assert "meta.yaml.template" in bioconda_readme_text
+    assert "quarantined" in bioconda_readme_text
     assert "https://github.com/asuq/gtdb-genomes" in bioconda_text
     assert "https://github.com/asuq/gtdb-genomes/blob/main/README.md" in (
         bioconda_text
