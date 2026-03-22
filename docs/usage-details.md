@@ -57,8 +57,6 @@ gtdb-genomes \
   - supported requests always go through the automatic planner
   - the planner switches to dehydrate only when the request contains more than
     1,000 unique `datasets` request tokens after accession rewriting
-  - `datasets --preview` is best-effort warning and provenance only and does
-    not affect the chosen method
   - smaller supported requests use batch direct
     `datasets download genome accession --inputfile ... --filename ...` passes
   - direct mode retries only the still-unresolved request accessions in later
@@ -114,12 +112,9 @@ gtdb-genomes \
   - preflight `unzip` early so real-run archive requirements fail fast
   - perform NCBI metadata lookup when `--prefer-genbank` is enabled and the
     selected rows include supported non-`UBA*` accessions
-  - run `datasets --preview` when the selected rows include supported
-    non-`UBA*` accessions
 
   Zero-match runs and unsupported-`UBA*`-only runs still avoid NCBI calls, but
-  dry-runs still preflight `unzip` before they exit. Preview failures warn but
-  do not abort count-based automatic planning.
+  dry-runs still preflight `unzip` before they exit.
 
 ## API Key Handling
 
@@ -193,10 +188,6 @@ otherwise collide.
     the final accession or accession set when the failed step has a known final
     outcome, stage, retry counters, redacted error message, and final failure
     status
-  - preview retry attempts and preview failure attempts are written here when a
-    real run later materialises the output tree
-  - preview failures during dry-run are log-only because dry-run does not
-    create the final output tree
 - `OUTPUT/taxa/<taxon_slug>/taxon_accessions.tsv`
   - one row per accession assigned to that taxon
   - records lineage, accession mapping, output path, and whether the accession
@@ -215,8 +206,6 @@ NCBI-facing work to the NCBI `datasets` CLI. Upstream project:
 The tool uses `datasets` for:
 
 - `datasets summary genome accession` during metadata lookup
-- `datasets download genome accession --preview` as a best-effort warning step
-  during automatic planning
 - direct batch `datasets download genome accession --inputfile ... --filename ...`
   passes for smaller requests
 - batch dehydrated `datasets download genome accession --inputfile ...` runs for
@@ -241,7 +230,6 @@ retries, using fixed backoff delays of 5 s, 15 s, and 45 s.
 This applies to:
 
 - `datasets summary genome accession`
-- `datasets download genome accession --preview`
 - direct batch `datasets download genome accession --inputfile ... --filename ...`
 - batch dehydrated `datasets download genome accession --inputfile ...`
 - `datasets rehydrate`
@@ -265,8 +253,8 @@ Exit codes:
 - `4`: zero matches for all requested taxa
 - `5`: external tool or preflight error
 - `6`: partial failure with at least one successful genome
-- `7`: runtime failure with no successful genomes
-- `8`: local output materialisation failure after planning or download
+- `7`: planning or runtime failure with no successful genomes
+- `8`: local final-output materialisation failure
 
 Status values:
 
@@ -285,7 +273,6 @@ Status values:
 - `download_failures.tsv.stage`
   - `preflight`
   - `metadata_lookup`
-  - `preview`
   - `preferred_download`
   - `fallback_download`
   - `layout`

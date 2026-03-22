@@ -496,7 +496,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "Operational Notes",
             "exact-token and case-sensitive",
             "Automatic planning switches to `dehydrate` only above 1,000 unique `datasets`",
-            "best-effort preview no longer changes the chosen method",
+            "request tokens after accession rewriting",
             "Direct downloads remain serial in the current workflow.",
             "`genome`, `gff3`, and `protein`",
             "`ncbi-datasets-cli >=18.4.0,<18.22.0`",
@@ -592,10 +592,8 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "candidate metadata lookup fails or stays incomplete",
             "more than",
             "1,000 unique `datasets` request tokens after accession rewriting",
-            "best-effort warning and provenance only",
-            "preview retry attempts and preview failure attempts are written here",
-            "preview failures during dry-run are log-only",
-            "log-only",
+            "planning or runtime failure with no successful genomes",
+            "local final-output materialisation failure",
             "MD5SUM",
             "--threads",
         ),
@@ -648,6 +646,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
         bioconda_text,
         (
             "--no-build-isolation",
+            "hatchling >=1.27.0,<2.0.0",
             "polars >=1.31.0,<2.0.0",
             "- ncbi-datasets-cli",
             "resolve_and_validate_release('latest')",
@@ -710,6 +709,7 @@ def test_bioconda_recipe_template_is_quarantined_until_release_metadata_exists()
     assert "https://github.com/asuq/gtdb-genomes/blob/main/README.md" in (
         bioconda_text
     )
+    assert "hatchling >=1.27.0,<2.0.0" in bioconda_text
     assert "polars >=1.31.0,<2.0.0" in bioconda_text
     assert f"- {unzip_policy.display_name} {unzip_policy.supported_range}" in (
         bioconda_text
@@ -799,6 +799,7 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
             "`unzip >=6.0,<7.0`",
             "ncbi-datasets-cli=18.4.0",
             "ncbi-datasets-cli=18.21.0",
+            "-c conda-forge -c bioconda",
             "unzip=6.0",
             "load_release_taxonomy()",
         ),

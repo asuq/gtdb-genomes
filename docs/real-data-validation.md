@@ -144,7 +144,7 @@ Remote validation assumes:
 Suggested remote setup:
 
 ```bash
-mamba create -n gtdb-genome-test python=3.12 pip unzip=6.0 ncbi-datasets-cli=18.4.0
+mamba create -n gtdb-genome-test -c conda-forge -c bioconda python=3.12 pip unzip=6.0 ncbi-datasets-cli=18.4.0
 mamba activate gtdb-genome-test
 python -m pip install /path/to/dist/gtdb_genomes-0.1.0-py3-none-any.whl
 which gtdb-genomes
@@ -233,7 +233,7 @@ SSH to the remote server and create a fresh packaged-runtime environment:
 
 ```bash
 ssh user@remote
-mamba create -n gtdb-genome-test python=3.12 pip unzip=6.0 ncbi-datasets-cli=18.4.0
+mamba create -n gtdb-genome-test -c conda-forge -c bioconda python=3.12 pip unzip=6.0 ncbi-datasets-cli=18.4.0
 mamba activate gtdb-genome-test
 python -m pip install /tmp/gtdb-genome-remote/gtdb_genomes-0.1.0-py3-none-any.whl
 which gtdb-genomes
@@ -397,7 +397,6 @@ Acceptance:
 - exit code `0`
 - no output tree
 - only `A1` should warn about `PRJNA417962`
-- only `A6` is expected to need preview
 - `A1`, `A2`, `A3`, `A4`, `A5`, `A7`, `A8`, and `A9` are valid offline local
   checks when the prepared local launcher is available
 
@@ -485,7 +484,7 @@ Interpretation:
 - `5`: preflight or environment failure
 - `6`: partial success, must be audited
 - `7`: matches existed but no usable genomes were produced
-- `8`: local output materialisation failed after planning or download
+- `8`: local final-output materialisation failure
 
 When `A6` or any `B*` case fails with DNS or connection errors before download
 work starts, treat that as an external environment problem rather than a
