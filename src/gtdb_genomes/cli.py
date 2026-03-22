@@ -82,15 +82,21 @@ def validate_output_path(parser: argparse.ArgumentParser, output: str) -> Path:
     """Validate the output path without creating directories."""
 
     path = Path(output).expanduser()
-    if path.exists():
-        if not path.is_dir():
-            parser.error(
-                "argument --outdir: path must not be an existing file",
-            )
-        if any(path.iterdir()):
-            parser.error(
-                "argument --outdir: directory must be empty if it already exists",
-            )
+    try:
+        path_exists = path.exists()
+        if path_exists:
+            if not path.is_dir():
+                parser.error(
+                    "argument --outdir: path must not be an existing file",
+                )
+            if any(path.iterdir()):
+                parser.error(
+                    "argument --outdir: directory must be empty if it already exists",
+                )
+    except OSError as error:
+        parser.error(
+            f"argument --outdir: could not inspect path {path}: {error}",
+        )
     return path
 
 

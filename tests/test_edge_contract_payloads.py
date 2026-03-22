@@ -201,3 +201,42 @@ def test_extract_download_payload_fallback_ignores_nested_accession_directories(
             / "GCA_000001.7"
         ),
     )
+
+
+def test_extract_download_payload_rejects_ambiguous_exact_payload_directories(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Duplicate exact payload directories should fail as an ambiguous layout."""
+
+    run_directories = initialise_run_directories(
+        tmp_path / "layout-ambiguous-exact-payload",
+    )
+
+    def fake_extract_archive(archive_path: Path, extraction_root: Path) -> Path:
+        """Create two top-level payload directories for one exact accession."""
+
+        del archive_path
+        first_payload = extraction_root / "batch_a" / "GCA_000001.7"
+        second_payload = extraction_root / "batch_b" / "GCA_000001.7"
+        first_payload.mkdir(parents=True, exist_ok=True)
+        second_payload.mkdir(parents=True, exist_ok=True)
+        return extraction_root
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_execution_payloads.extract_archive",
+        fake_extract_archive,
+    )
+
+    payload_directory, failures = extract_download_payload(
+        "GCA_000001.7",
+        tmp_path / "archive.zip",
+        run_directories,
+    )
+
+    assert payload_directory is None
+    assert len(failures) == 1
+    assert failures[0].stage == "layout"
+    assert "Resolved multiple extracted payload directories" in (
+        failures[0].error_message
+    )

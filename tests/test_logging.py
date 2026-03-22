@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from gtdb_genomes.logging_utils import (
     attach_debug_log_handler,
     close_logger,
+    configure_console_logging,
     configure_logging,
     redact_command,
     redact_text,
@@ -68,3 +70,41 @@ def test_attach_debug_log_handler_flushes_buffered_records(tmp_path: Path) -> No
     debug_log_text = realised_path.read_text(encoding="utf-8")
     assert "INFO selection started" in debug_log_text
     assert "DEBUG download started" in debug_log_text
+
+
+def test_configure_console_logging_closes_existing_handlers(
+    monkeypatch,
+) -> None:
+    """Reconfiguring console logging should close pre-existing handlers."""
+
+    class RecordingHandler(logging.StreamHandler):
+        """One stream handler that records whether it was closed."""
+
+        def __init__(self) -> None:
+            """Initialise the test handler state."""
+
+            super().__init__()
+            self.close_called = False
+
+        def close(self) -> None:
+            """Record the close call before delegating."""
+
+            self.close_called = True
+            super().close()
+
+    logger = logging.getLogger("gtdb_genomes.test-console")
+    logger.handlers.clear()
+    existing_handler = RecordingHandler()
+    logger.addHandler(existing_handler)
+
+    monkeypatch.setattr(
+        "gtdb_genomes.logging_utils.get_logger",
+        lambda: logger,
+    )
+
+    configured_logger = configure_console_logging(debug=False)
+
+    assert configured_logger is logger
+    assert existing_handler.close_called is True
+    assert len(logger.handlers) == 1
+    close_logger(logger)

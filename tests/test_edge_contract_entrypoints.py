@@ -8,6 +8,7 @@ import subprocess
 import pytest
 
 from gtdb_genomes.cli import main
+from gtdb_genomes.download import PreviewCommandResult
 from gtdb_genomes.layout import (
     ACCESSION_MAP_COLUMNS,
     RUN_SUMMARY_COLUMNS,
@@ -98,7 +99,10 @@ def test_mixed_uba_dry_run_warns_once_and_skips_outputs(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: PreviewCommandResult(
+            preview_text="Package size: 1.0 GB\n",
+            failures=(),
+        ),
     )
 
     output_dir = tmp_path / "mixed-uba-dry-run"
@@ -392,3 +396,55 @@ def test_supported_prefer_genbank_total_metadata_failure_returns_exit_five(
     )
 
     assert exit_code == 5
+
+
+def test_real_run_initial_output_directory_failure_returns_exit_eight(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Early real-run output directory failures should stay user-facing."""
+
+    log_stream = install_capture_logger(monkeypatch)
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.check_required_tools",
+        lambda required_tools: None,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.load_release_taxonomy",
+        lambda resolution: build_taxonomy_frame(
+            "d__Bacteria;p__Proteobacteria;g__Escherichia",
+        ),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_planning.run_summary_lookup_with_retries",
+        lambda *args, **kwargs: SummaryLookupResult(summary_map={}, failures=()),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_planning.run_preview_command",
+        lambda *args, **kwargs: PreviewCommandResult(
+            preview_text="Package size: 1.0 GB\n",
+            failures=(),
+        ),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow.initialise_run_directories",
+        lambda output_root: (_ for _ in ()).throw(PermissionError("permission denied")),
+    )
+
+    output_dir = tmp_path / "initial-output-failure"
+    exit_code = main(
+        [
+            "--gtdb-release",
+            "95",
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--outdir",
+            str(output_dir),
+        ],
+    )
+
+    assert exit_code == 8
+    assert "Real-run output materialisation failed: permission denied" in (
+        log_stream.getvalue()
+    )
+    assert not output_dir.exists()

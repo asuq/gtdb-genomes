@@ -54,7 +54,7 @@ def configure_console_logging(debug: bool = False) -> logging.Logger:
 
     logger = get_logger()
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
-    logger.handlers.clear()
+    close_logger(logger)
     logger.propagate = False
 
     handler = logging.StreamHandler()

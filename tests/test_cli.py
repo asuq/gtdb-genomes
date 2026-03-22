@@ -208,6 +208,62 @@ def test_parse_args_rejects_blank_taxon(tmp_path: Path) -> None:
     assert error.value.code == 2
 
 
+def test_parse_args_rejects_uninspectable_output_directory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Output paths that raise OS errors during inspection should fail cleanly."""
+
+    parser = build_parser()
+    output_dir = tmp_path / "uninspectable"
+    original_exists = Path.exists
+    original_is_dir = Path.is_dir
+    original_iterdir = Path.iterdir
+
+    def fake_exists(path: Path) -> bool:
+        """Pretend that only the test output directory already exists."""
+
+        if path == output_dir:
+            return True
+        return original_exists(path)
+
+    def fake_is_dir(path: Path) -> bool:
+        """Report the test path as an existing directory."""
+
+        if path == output_dir:
+            return True
+        return original_is_dir(path)
+
+    def fake_iterdir(path: Path):
+        """Raise a deterministic permission error for the test path."""
+
+        if path == output_dir:
+            raise PermissionError("permission denied")
+        return original_iterdir(path)
+
+    monkeypatch.setattr(Path, "exists", fake_exists)
+    monkeypatch.setattr(Path, "is_dir", fake_is_dir)
+    monkeypatch.setattr(Path, "iterdir", fake_iterdir)
+
+    with pytest.raises(SystemExit) as error:
+        parse_args(
+            parser,
+            [
+                "--gtdb-release",
+                "latest",
+                "--gtdb-taxon",
+                "g__Escherichia",
+                "--outdir",
+                str(output_dir),
+            ],
+        )
+
+    captured = capsys.readouterr()
+    assert error.value.code == 2
+    assert "argument --outdir: could not inspect path" in captured.err
+
+
 def test_parse_args_rejects_non_positive_threads(tmp_path: Path) -> None:
     """Thread counts must be positive integers."""
 

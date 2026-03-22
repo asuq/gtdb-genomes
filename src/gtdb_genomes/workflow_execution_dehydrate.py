@@ -83,21 +83,20 @@ def execute_batch_dehydrate_plans(
             shared_failures=(),
         )
 
-    batch_attempted_accessions = ";".join(
-        get_ordered_unique_accessions(
-            plan.download_request_accession for plan in plans
-        ),
+    requested_accessions = get_ordered_unique_accessions(
+        plan.download_request_accession for plan in plans
     )
+    batch_attempted_accessions = ";".join(requested_accessions)
     logger.info(
         "dehydrated_batch: starting preferred_download for %d request accession(s)",
-        len(plans),
+        len(requested_accessions),
     )
     affected_original_accessions = tuple(
         plan.original_accession for plan in plans
     )
     accession_file = write_accession_input_file(
         run_directories.working_root / "dehydrate_accessions.txt",
-        (plan.download_request_accession for plan in plans),
+        requested_accessions,
     )
     archive_path = build_batch_archive_path(run_directories)
     download_command = build_batch_dehydrate_command(

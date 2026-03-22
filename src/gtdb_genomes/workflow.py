@@ -40,6 +40,20 @@ def log_run_start(
     )
 
 
+def log_output_materialisation_failure(
+    logger: logging.Logger,
+    error: OSError | shutil.Error,
+    secrets: tuple[str, ...],
+) -> int:
+    """Log one structured output-materialisation failure and return exit code 8."""
+
+    logger.error(
+        "Real-run output materialisation failed: %s",
+        redact_text(str(error), secrets),
+    )
+    return OUTPUT_MATERIALISATION_FAILURE_EXIT_CODE
+
+
 def run_workflow(args: CliArgs) -> int:
     """Run the workflow and return the process exit code."""
 
@@ -103,6 +117,10 @@ def run_workflow(args: CliArgs) -> int:
         logger.error("%s", redact_text(str(error), secrets))
         close_logger(logger)
         return 5
+    except (OSError, shutil.Error) as error:
+        exit_code = log_output_materialisation_failure(logger, error, secrets)
+        close_logger(logger)
+        return exit_code
 
     # Dry-runs stop after planning and report the planned workload
     if args.dry_run:
@@ -115,8 +133,13 @@ def run_workflow(args: CliArgs) -> int:
         return 0
 
     # Real runs execute downloads and materialise outputs
-    run_directories = initialise_run_directories(args.outdir)
-    logger = workflow_outputs.configure_output_logger(args, logger, run_directories)
+    try:
+        run_directories = initialise_run_directories(args.outdir)
+        logger = workflow_outputs.configure_output_logger(args, logger, run_directories)
+    except (OSError, shutil.Error) as error:
+        exit_code = log_output_materialisation_failure(logger, error, secrets)
+        close_logger(logger)
+        return exit_code
     if accession_plans:
         execution_result = workflow_execution.execute_accession_plans(
             accession_plans,
@@ -152,11 +175,7 @@ def run_workflow(args: CliArgs) -> int:
             suppressed_notes=suppressed_notes,
         )
     except (OSError, shutil.Error) as error:
-        logger.error(
-            "Real-run output materialisation failed: %s",
-            redact_text(str(error), secrets),
-        )
-        exit_code = OUTPUT_MATERIALISATION_FAILURE_EXIT_CODE
+        exit_code = log_output_materialisation_failure(logger, error, secrets)
     else:
         failed_suppressed_warning = workflow_planning.build_failed_suppressed_warning(
             suppressed_notes,

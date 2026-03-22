@@ -149,11 +149,10 @@ def locate_partial_batch_payload_directories(
         payload_records = collect_payload_directories(extraction_root)
     except LayoutError:
         payload_records = ()
-    payloads_by_accession = {
-        payload.final_accession: payload for payload in payload_records
-    }
+    payloads_by_accession: dict[str, list[ResolvedPayloadDirectory]] = defaultdict(list)
     payloads_by_stem: dict[str, list[ResolvedPayloadDirectory]] = defaultdict(list)
     for payload in payload_records:
+        payloads_by_accession[payload.final_accession].append(payload)
         payloads_by_stem[get_assembly_accession_stem(payload.final_accession)].append(
             payload,
         )
@@ -161,9 +160,16 @@ def locate_partial_batch_payload_directories(
     located_payloads: dict[str, ResolvedPayloadDirectory] = {}
     unresolved_messages: dict[str, str] = {}
     for requested_accession in requested_accessions:
-        exact_match = payloads_by_accession.get(requested_accession)
-        if exact_match is not None:
-            located_payloads[requested_accession] = exact_match
+        exact_matches = tuple(payloads_by_accession.get(requested_accession, ()))
+        if len(exact_matches) == 1:
+            located_payloads[requested_accession] = exact_matches[0]
+            continue
+        if len(exact_matches) > 1:
+            unresolved_messages[requested_accession] = (
+                "Resolved multiple extracted payload directories for requested "
+                f"accession {requested_accession}: "
+                f"{', '.join(str(payload.directory) for payload in exact_matches)}"
+            )
             continue
 
         request_stem = parse_assembly_accession_stem(requested_accession)
