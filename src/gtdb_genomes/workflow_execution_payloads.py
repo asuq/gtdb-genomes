@@ -86,13 +86,13 @@ def collect_payload_directories(
 ) -> tuple[ResolvedPayloadDirectory, ...]:
     """Collect realised payload directories from one extracted archive."""
 
+    payloads_by_directory: dict[Path, ResolvedPayloadDirectory] = {}
     data_root = extraction_root / "ncbi_dataset" / "data"
     if data_root.is_dir():
-        payload_directories = collect_root_payload_directories(data_root)
-        if payload_directories:
-            return payload_directories
+        for payload_directory in collect_root_payload_directories(data_root):
+            payloads_by_directory[payload_directory.directory] = payload_directory
 
-    payload_directories = tuple(
+    for payload_directory in (
         resolved_payload
         for candidate in sorted(
             extraction_root.rglob("*"),
@@ -100,7 +100,10 @@ def collect_payload_directories(
         )
         if (resolved_payload := build_resolved_payload_directory(candidate)) is not None
         and not has_accession_named_parent(candidate, extraction_root)
-    )
+    ):
+        payloads_by_directory[payload_directory.directory] = payload_directory
+
+    payload_directories = tuple(payloads_by_directory.values())
     if payload_directories:
         return payload_directories
     raise LayoutError("Could not locate extracted payload directories")

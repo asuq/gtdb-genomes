@@ -240,3 +240,42 @@ def test_extract_download_payload_rejects_ambiguous_exact_payload_directories(
     assert "Resolved multiple extracted payload directories" in (
         failures[0].error_message
     )
+
+
+def test_extract_download_payload_rejects_duplicate_exact_accessions_across_layouts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A data-root payload should not mask a conflicting exact fallback payload."""
+
+    run_directories = initialise_run_directories(
+        tmp_path / "layout-ambiguous-across-roots",
+    )
+
+    def fake_extract_archive(archive_path: Path, extraction_root: Path) -> Path:
+        """Create the same exact accession under the data root and elsewhere."""
+
+        del archive_path
+        first_payload = extraction_root / "ncbi_dataset" / "data" / "GCA_000001.7"
+        second_payload = extraction_root / "relocated" / "GCA_000001.7"
+        first_payload.mkdir(parents=True, exist_ok=True)
+        second_payload.mkdir(parents=True, exist_ok=True)
+        return extraction_root
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_execution_payloads.extract_archive",
+        fake_extract_archive,
+    )
+
+    payload_directory, failures = extract_download_payload(
+        "GCA_000001.7",
+        tmp_path / "archive.zip",
+        run_directories,
+    )
+
+    assert payload_directory is None
+    assert len(failures) == 1
+    assert failures[0].stage == "layout"
+    assert "Resolved multiple extracted payload directories" in (
+        failures[0].error_message
+    )
