@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any, TypedDict
 import polars as pl
 
 from gtdb_genomes.download import (
-    CommandFailureRecord,
     DEFAULT_REQUESTED_DOWNLOAD_METHOD,
 )
 from gtdb_genomes.layout import (
@@ -355,30 +354,25 @@ def build_shared_failure_rows(
 def build_failure_rows(
     enriched_rows: list[EnrichedOutputRow],
     executions: dict[str, AccessionExecution],
-    metadata_failures: tuple[CommandFailureRecord, ...],
+    metadata_shared_failures: tuple[SharedFailureContext, ...],
     shared_failures: tuple[SharedFailureContext, ...],
     secrets: tuple[str, ...],
-    shared_context_rows: list[EnrichedOutputRow] | None = None,
     suppressed_notes: dict[str, SuppressedAccessionNote] | None = None,
 ) -> list[FailureManifestRow]:
     """Build attempt-centric `download_failures.tsv` rows."""
 
-    context_rows = enriched_rows if shared_context_rows is None else shared_context_rows
     failure_rows: list[FailureManifestRow] = []
     suppressed_accessions = (
         {}
         if suppressed_notes is None
         else suppressed_notes
     )
-    failure_rows.extend(
-        build_shared_failure_rows(context_rows, metadata_failures, secrets),
-    )
 
     rows_by_accession: dict[str, list[EnrichedOutputRow]] = defaultdict(list)
     for row in enriched_rows:
         rows_by_accession[row["ncbi_accession"]].append(row)
 
-    for shared_failure in shared_failures:
+    for shared_failure in metadata_shared_failures + shared_failures:
         scoped_rows = [
             row
             for accession in shared_failure.affected_original_accessions
@@ -588,7 +582,7 @@ def materialise_real_run_outputs(
     started_at: str,
     resolution: ReleaseResolution,
     mapped_frame: pl.DataFrame,
-    metadata_failures: tuple[CommandFailureRecord, ...],
+    metadata_shared_failures: tuple[SharedFailureContext, ...],
     execution_result: DownloadExecutionResult,
     unsupported_executions: dict[str, AccessionExecution],
     secrets: tuple[str, ...],
@@ -617,10 +611,9 @@ def materialise_real_run_outputs(
             **execution_result.executions,
             **unsupported_executions,
         },
-        metadata_failures,
+        metadata_shared_failures,
         execution_result.shared_failures,
         secrets,
-        shared_context_rows=supported_enriched_rows,
         suppressed_notes=suppressed_notes,
     )
     taxon_summary_rows = build_taxon_summary_rows(

@@ -31,7 +31,11 @@ from gtdb_genomes.metadata import (
     is_suppressed_status,
     run_summary_lookup_with_retries,
 )
-from gtdb_genomes.workflow_execution import AccessionPlan
+from gtdb_genomes.workflow_execution import (
+    AccessionPlan,
+    SharedFailureContext,
+    build_shared_failure_context,
+)
 from gtdb_genomes.workflow_selection import build_unsupported_accession_frame
 
 if TYPE_CHECKING:
@@ -101,6 +105,31 @@ def build_accession_plans(
             conversion_status=row["conversion_status"],
         )
         for row in unique_rows
+    )
+
+
+def build_original_accession_scope(
+    accessions: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Return a deterministic original-accession scope for shared failures."""
+
+    return get_ordered_unique_accessions(accessions)
+
+
+def build_candidate_accession_scope(
+    summary_map: dict[str, set[str]],
+    candidate_accessions: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Return originals affected by the paired-GenBank candidate lookup."""
+
+    candidate_accession_set = set(candidate_accessions)
+    return get_ordered_unique_accessions(
+        original_accession
+        for original_accession, discovered_accessions in summary_map.items()
+        if any(
+            candidate_accession in candidate_accession_set
+            for candidate_accession in discovered_accessions
+        )
     )
 
 
@@ -227,7 +256,7 @@ def resolve_supported_accession_preferences(
     secrets: tuple[str, ...],
 ) -> tuple[
     pl.DataFrame,
-    tuple[CommandFailureRecord, ...],
+    tuple[SharedFailureContext, ...],
     dict[str, SuppressedAccessionNote],
 ]:
     """Resolve preferred accessions for supported selected rows."""
@@ -259,7 +288,7 @@ def resolve_supported_accession_preferences(
     summary_map: dict[str, set[str]] = {}
     status_map: dict[str, AssemblyStatusInfo] = {}
     incomplete_genbank_accessions: set[str] = set()
-    metadata_failures: tuple[CommandFailureRecord, ...] = ()
+    metadata_shared_failures: list[SharedFailureContext] = []
     supported_accessions = get_ordered_unique_accessions(
         supported_selected_frame.get_column("ncbi_accession").to_list(),
     )
@@ -279,7 +308,14 @@ def resolve_supported_accession_preferences(
         )
         summary_map = summary_lookup.summary_map
         status_map = summary_lookup.status_map
-        metadata_failures = summary_lookup.failures
+        if summary_lookup.failures:
+            metadata_shared_failures.append(
+                build_shared_failure_context(
+                    build_original_accession_scope(supported_accessions),
+                    summary_lookup.failures,
+                    ";".join(supported_accessions),
+                ),
+            )
         incomplete_genbank_accessions.update(
             accession
             for accession in summary_lookup.incomplete_accessions
@@ -296,6 +332,10 @@ def resolve_supported_accession_preferences(
             if accession.startswith("GCA_") and accession not in status_map
         )
         if candidate_accessions:
+            candidate_original_accessions = build_candidate_accession_scope(
+                summary_map,
+                candidate_accessions,
+            )
             logger.info(
                 "Running candidate metadata lookup for %d paired GenBank "
                 "accession(s)",
@@ -317,9 +357,22 @@ def resolve_supported_accession_preferences(
                     "accession(s); falling back to original accessions",
                     len(candidate_accessions),
                 )
-                metadata_failures = metadata_failures + error.failures
+                metadata_shared_failures.append(
+                    build_shared_failure_context(
+                        candidate_original_accessions,
+                        error.failures,
+                        ";".join(candidate_accessions),
+                    ),
+                )
             else:
-                metadata_failures = metadata_failures + candidate_lookup.failures
+                if candidate_lookup.failures:
+                    metadata_shared_failures.append(
+                        build_shared_failure_context(
+                            candidate_original_accessions,
+                            candidate_lookup.failures,
+                            ";".join(candidate_accessions),
+                        ),
+                    )
                 status_map = {
                     **status_map,
                     **candidate_lookup.status_map,
@@ -339,7 +392,7 @@ def resolve_supported_accession_preferences(
     )
     return (
         mapped_frame,
-        metadata_failures,
+        tuple(metadata_shared_failures),
         build_suppressed_accession_notes(mapped_frame, status_map),
     )
 
@@ -401,7 +454,7 @@ def prepare_planning_inputs(
     secrets: tuple[str, ...],
 ) -> tuple[
     pl.DataFrame,
-    tuple[CommandFailureRecord, ...],
+    tuple[SharedFailureContext, ...],
     dict[str, SuppressedAccessionNote],
     tuple[AccessionPlan, ...],
     str,
@@ -410,7 +463,7 @@ def prepare_planning_inputs(
 
     (
         supported_mapped_frame,
-        metadata_failures,
+        metadata_shared_failures,
         suppressed_notes,
     ) = resolve_supported_accession_preferences(
         supported_selected_frame,
@@ -442,7 +495,7 @@ def prepare_planning_inputs(
     )
     return (
         mapped_frame,
-        metadata_failures,
+        metadata_shared_failures,
         suppressed_notes,
         accession_plans,
         decision_method,

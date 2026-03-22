@@ -1732,29 +1732,34 @@ def test_failure_manifest_collapses_shared_metadata_attempts() -> None:
             failures=(),
         ),
     }
-    metadata_failures = (
-        CommandFailureRecord(
-            stage="metadata_lookup",
-            attempt_index=1,
-            max_attempts=4,
-            error_type="metadata_lookup",
-            error_message="temporary failure",
-            final_status="retry_scheduled",
-        ),
-        CommandFailureRecord(
-            stage="metadata_lookup",
-            attempt_index=2,
-            max_attempts=4,
-            error_type="metadata_lookup",
-            error_message="temporary failure",
-            final_status="retry_exhausted",
+    metadata_shared_failures = (
+        SharedFailureContext(
+            affected_original_accessions=("GCF_000001.1", "GCF_000002.1"),
+            failures=(
+                CommandFailureRecord(
+                    stage="metadata_lookup",
+                    attempt_index=1,
+                    max_attempts=4,
+                    error_type="metadata_lookup",
+                    error_message="temporary failure",
+                    final_status="retry_scheduled",
+                ),
+                CommandFailureRecord(
+                    stage="metadata_lookup",
+                    attempt_index=2,
+                    max_attempts=4,
+                    error_type="metadata_lookup",
+                    error_message="temporary failure",
+                    final_status="retry_exhausted",
+                ),
+            ),
         ),
     )
 
     failure_rows = build_failure_rows(
         enriched_rows,
         executions,
-        metadata_failures,
+        metadata_shared_failures,
         (),
         (),
     )
@@ -1774,18 +1779,23 @@ def test_failure_manifest_collapses_shared_metadata_attempts() -> None:
 def test_failure_manifest_preserves_metadata_candidate_accession_set() -> None:
     """Metadata failure rows should keep the paired-GCA candidate accession set."""
 
-    metadata_failures = (
-        CommandFailureRecord(
-            stage="metadata_lookup",
-            attempt_index=1,
-            max_attempts=4,
-            error_type="metadata_lookup",
-            error_message="partial paired-GCA metadata",
-            final_status="retry_exhausted",
-            attempted_accession="GCA_000001.2;GCA_000001.3",
+    metadata_shared_failures = (
+        SharedFailureContext(
+            affected_original_accessions=("GCF_000001.1",),
+            failures=(
+                CommandFailureRecord(
+                    stage="metadata_lookup",
+                    attempt_index=1,
+                    max_attempts=4,
+                    error_type="metadata_lookup",
+                    error_message="partial paired-GCA metadata",
+                    final_status="retry_exhausted",
+                    attempted_accession="GCA_000001.2;GCA_000001.3",
+                ),
+            ),
         ),
     )
-    shared_context_rows = [
+    enriched_rows = [
         {
             "requested_taxon": "g__Escherichia",
             "taxon_slug": "g__Escherichia",
@@ -1796,12 +1806,93 @@ def test_failure_manifest_preserves_metadata_candidate_accession_set() -> None:
     ]
 
     failure_rows = build_failure_rows(
-        [],
-        {},
-        metadata_failures,
+        enriched_rows,
+        {
+            "GCF_000001.1": AccessionExecution(
+                original_accession="GCF_000001.1",
+                final_accession="GCF_000001.1",
+                conversion_status="unchanged_original",
+                download_status="downloaded",
+                download_batch="GCF_000001.1",
+                payload_directory=None,
+                failures=(),
+            ),
+        },
+        metadata_shared_failures,
         (),
         (),
-        shared_context_rows=shared_context_rows,
     )
 
     assert failure_rows[0]["attempted_accession"] == "GCA_000001.2;GCA_000001.3"
+
+
+def test_failure_manifest_scopes_candidate_metadata_failures_to_affected_rows() -> None:
+    """Candidate metadata failures should not leak onto unrelated supported rows."""
+
+    enriched_rows = [
+        {
+            "requested_taxon": "g__Escherichia",
+            "taxon_slug": "g__Escherichia",
+            "gtdb_accession": "RS_GCF_000001.1",
+            "ncbi_accession": "GCF_000001.1",
+            "final_accession": "GCF_000001.1",
+        },
+        {
+            "requested_taxon": "g__Bacillus",
+            "taxon_slug": "g__Bacillus",
+            "gtdb_accession": "RS_GCF_000002.1",
+            "ncbi_accession": "GCF_000002.1",
+            "final_accession": "GCF_000002.1",
+        },
+    ]
+    executions = {
+        "GCF_000001.1": AccessionExecution(
+            original_accession="GCF_000001.1",
+            final_accession="GCF_000001.1",
+            conversion_status="paired_gca_metadata_incomplete_fallback_original",
+            download_status="downloaded",
+            download_batch="direct_batch_1",
+            payload_directory=None,
+            failures=(),
+        ),
+        "GCF_000002.1": AccessionExecution(
+            original_accession="GCF_000002.1",
+            final_accession="GCF_000002.1",
+            conversion_status="unchanged_original",
+            download_status="downloaded",
+            download_batch="direct_batch_1",
+            payload_directory=None,
+            failures=(),
+        ),
+    }
+    metadata_shared_failures = (
+        SharedFailureContext(
+            affected_original_accessions=("GCF_000001.1",),
+            failures=(
+                CommandFailureRecord(
+                    stage="metadata_lookup",
+                    attempt_index=1,
+                    max_attempts=4,
+                    error_type="metadata_lookup",
+                    error_message="candidate lookup failed",
+                    final_status="retry_scheduled",
+                    attempted_accession="GCA_000001.2",
+                ),
+            ),
+        ),
+    )
+
+    failure_rows = build_failure_rows(
+        enriched_rows,
+        executions,
+        metadata_shared_failures,
+        (),
+        (),
+    )
+
+    assert len(failure_rows) == 1
+    assert failure_rows[0]["requested_taxon"] == "g__Escherichia"
+    assert failure_rows[0]["taxon_slug"] == "g__Escherichia"
+    assert failure_rows[0]["gtdb_accession"] == "RS_GCF_000001.1"
+    assert failure_rows[0]["attempted_accession"] == "GCA_000001.2"
+    assert failure_rows[0]["final_accession"] == "GCF_000001.1"
