@@ -495,6 +495,8 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             'prints the planned download list without downloading',
             "Operational Notes",
             "exact-token and case-sensitive",
+            "Automatic planning switches to `dehydrate` only above 1,000 unique `datasets`",
+            "best-effort preview no longer changes the chosen method",
             "Direct downloads remain serial in the current workflow.",
             "`genome`, `gff3`, and `protein`",
             "`ncbi-datasets-cli >=18.4.0,<18.22.0`",
@@ -586,8 +588,11 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "--version-latest",
             "exact selected versioned accession",
             "candidate metadata lookup fails or stays incomplete",
-            "preview retry attempts are written here when planning later succeeds",
-            "planning-abort preview failures are",
+            "more than",
+            "1,000 unique `datasets` request tokens after accession rewriting",
+            "best-effort warning and provenance only",
+            "preview retry attempts and preview failure attempts are written here",
+            "preview failures during dry-run are log-only",
             "log-only",
             "MD5SUM",
             "--threads",
@@ -598,6 +603,15 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
         (
             "--download-method",
             "--no-prefer-genbank",
+            "preview reports more",
+            "than 15 GB",
+        ),
+    )
+    assert_not_contains_any(
+        readme_text,
+        (
+            "preview reports more",
+            "than 15 GB",
         ),
     )
     datasets_policy = SUPPORTED_TOOL_VERSIONS["datasets"]

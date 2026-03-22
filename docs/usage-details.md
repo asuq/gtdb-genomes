@@ -55,9 +55,10 @@ gtdb-genomes \
   Rules:
 
   - supported requests always go through the automatic planner
-  - the planner runs `datasets --preview` and switches to dehydrate when the
-    request contains at least 1,000 accessions or when preview reports more
-    than 15 GB
+  - the planner switches to dehydrate only when the request contains more than
+    1,000 unique `datasets` request tokens after accession rewriting
+  - `datasets --preview` is best-effort warning and provenance only and does
+    not affect the chosen method
   - smaller supported requests use batch direct
     `datasets download genome accession --inputfile ... --filename ...` passes
   - direct mode retries only the still-unresolved request accessions in later
@@ -117,7 +118,8 @@ gtdb-genomes \
     non-`UBA*` accessions
 
   Zero-match runs and unsupported-`UBA*`-only runs still avoid NCBI calls, but
-  dry-runs still preflight `unzip` before they exit.
+  dry-runs still preflight `unzip` before they exit. Preview failures warn but
+  do not abort count-based automatic planning.
 
 ## API Key Handling
 
@@ -191,11 +193,10 @@ otherwise collide.
     the final accession or accession set when the failed step has a known final
     outcome, stage, retry counters, redacted error message, and final failure
     status
-  - preview retry attempts are written here when planning later succeeds and
-    the real-run output tree is materialised
-  - if preview exhausts retries during planning, the workflow exits `5` before
-    creating the output tree, so those planning-abort preview failures are
-    log-only
+  - preview retry attempts and preview failure attempts are written here when a
+    real run later materialises the output tree
+  - preview failures during dry-run are log-only because dry-run does not
+    create the final output tree
 - `OUTPUT/taxa/<taxon_slug>/taxon_accessions.tsv`
   - one row per accession assigned to that taxon
   - records lineage, accession mapping, output path, and whether the accession
@@ -214,8 +215,8 @@ NCBI-facing work to the NCBI `datasets` CLI. Upstream project:
 The tool uses `datasets` for:
 
 - `datasets summary genome accession` during metadata lookup
-- `datasets download genome accession --preview` when the automatic planner
-  needs a size estimate
+- `datasets download genome accession --preview` as a best-effort warning step
+  during automatic planning
 - direct batch `datasets download genome accession --inputfile ... --filename ...`
   passes for smaller requests
 - batch dehydrated `datasets download genome accession --inputfile ...` runs for

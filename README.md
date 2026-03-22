@@ -108,6 +108,9 @@ gtdb-genomes \
 - Taxon matching is exact-token and case-sensitive.
 - `--outdir` must be empty or absent before each run.
 - If one genome matches multiple requested taxa, the downloaded package is copied into each matching taxon directory.
+- Automatic planning switches to `dehydrate` only above 1,000 unique `datasets`
+  request tokens; best-effort preview no longer changes the chosen method or
+  aborts planning by itself.
 - Direct downloads remain serial in the current workflow.
 - `--include` accepts only `genome`, `gff3`, and `protein`; see [docs/usage-details.md](docs/usage-details.md) for the full runtime contract.
 
