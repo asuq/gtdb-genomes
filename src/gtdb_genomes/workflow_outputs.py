@@ -23,7 +23,7 @@ from gtdb_genomes.layout import (
     write_taxon_accessions,
 )
 from gtdb_genomes.logging_utils import attach_debug_log_handler, redact_text
-from gtdb_genomes.metadata import SUPPRESSED_ASSEMBLY_NOTE
+from gtdb_genomes.metadata import SUPPRESSED_ASSEMBLY_NOTE, get_accession_type
 from gtdb_genomes.provenance import (
     build_deterministic_run_id,
     build_runtime_provenance,
@@ -476,7 +476,7 @@ def build_enriched_output_rows(
                 "final_accession": final_accession,
                 "accession_type_original": row["accession_type_original"],
                 "accession_type_final": (
-                    row["accession_type_final"]
+                    get_accession_type(execution.final_accession)
                     if execution.final_accession is not None
                     else ""
                 ),

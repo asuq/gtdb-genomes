@@ -920,6 +920,13 @@ def test_direct_fallback_manifest_uses_execution_request_accession_and_batch(
     assert accession_maps["RS_GCF_001881595.2"]["download_request_accession"] == (
         "GCF_001881595.2"
     )
+    assert accession_maps["RS_GCF_001881595.2"]["final_accession"] == (
+        "GCF_001881595.2"
+    )
+    assert accession_maps["RS_GCF_001881595.2"]["accession_type_final"] == "GCF"
+    assert accession_maps["RS_GCF_001881595.2"]["conversion_status"] == (
+        "paired_to_gca_fallback_original_on_download_failure"
+    )
     assert accession_maps["RS_GCF_001881595.2"]["download_batch"] == "direct_fallback_batch_1"
     assert taxon_maps["RS_GCF_001881595.2"]["download_request_accession"] == (
         "GCF_001881595.2"
@@ -1033,6 +1040,16 @@ def test_latest_fallback_manifest_uses_original_fallback_request_accession(
     )
     assert accession_maps["RS_GCF_001881595.2"]["download_request_accession"] == (
         "GCF_001881595.2"
+    )
+    assert accession_maps["RS_GCF_001881595.2"]["final_accession"] == (
+        "GCF_001881595.2"
+    )
+    assert accession_maps["RS_GCF_001881595.2"]["accession_type_final"] == "GCF"
+    assert accession_maps["RS_GCF_001881595.2"]["conversion_status"] == (
+        "paired_to_gca_fallback_original_on_download_failure"
+    )
+    assert accession_maps["RS_GCF_001881595.2"]["download_batch"] == (
+        "direct_fallback_batch_1"
     )
 
 
@@ -1330,6 +1347,7 @@ def test_build_enriched_output_rows_uses_execution_request_accession(
     assert enriched_rows[0]["selected_accession"] == "GCA_001881595.3"
     assert enriched_rows[0]["download_request_accession"] == "GCF_001881595.2"
     assert enriched_rows[0]["final_accession"] == "GCF_001881595.2"
+    assert enriched_rows[0]["accession_type_final"] == "GCF"
 
 
 def test_failure_manifest_collapses_shared_accession_taxa(
