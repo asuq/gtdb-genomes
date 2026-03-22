@@ -59,7 +59,7 @@ jobs:
       - name: Create validation environment
         run: >-
           micromamba create -y -n gtdb-genome python=3.12 uv pip
-          ncbi-datasets-cli=18.21.0 unzip=6.0
+          ncbi-datasets-cli=18.4.0 unzip=6.0
 
       - name: Sync project dependencies
         run: micromamba run -n gtdb-genome uv sync --locked --group dev

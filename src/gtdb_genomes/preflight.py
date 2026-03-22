@@ -38,9 +38,9 @@ SUPPORTED_TOOL_VERSIONS = {
     "datasets": ToolVersionPolicy(
         display_name="ncbi-datasets-cli",
         version_command=("datasets", "version"),
-        minimum_version=(18, 21, 0),
+        minimum_version=(18, 4, 0),
         maximum_version_exclusive=(18, 22, 0),
-        supported_range=">=18.21.0,<18.22.0",
+        supported_range=">=18.4.0,<18.22.0",
     ),
     "unzip": ToolVersionPolicy(
         display_name="unzip",
