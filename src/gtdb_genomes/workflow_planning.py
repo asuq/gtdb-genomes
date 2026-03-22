@@ -280,6 +280,11 @@ def resolve_supported_accession_preferences(
         summary_map = summary_lookup.summary_map
         status_map = summary_lookup.status_map
         metadata_failures = summary_lookup.failures
+        incomplete_genbank_accessions.update(
+            accession
+            for accession in summary_lookup.incomplete_accessions
+            if accession.startswith("GCF_")
+        )
         logger.info(
             "Metadata lookup finished with %d preferred mapping(s)",
             len(summary_map),
@@ -316,13 +321,12 @@ def resolve_supported_accession_preferences(
                 **status_map,
                 **candidate_lookup.status_map,
             }
-            if candidate_lookup.failures:
-                incomplete_genbank_accessions = (
-                    find_incomplete_genbank_metadata_accessions(
-                        summary_map,
-                        status_map,
-                    )
+            incomplete_genbank_accessions.update(
+                find_incomplete_genbank_metadata_accessions(
+                    summary_map,
+                    status_map,
                 )
+            )
     mapped_frame = apply_accession_preferences(
         supported_selected_frame,
         summary_map,

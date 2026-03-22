@@ -628,7 +628,20 @@ def test_real_run_records_provenance_and_download_request_accessions(
                 "GCF_001881595.2": {"GCF_001881595.2", "GCA_001881595.3"},
                 "GCA_001881595.3": {"GCA_001881595.3"},
             },
-            status_map={},
+            status_map={
+                "GCF_001881595.2": AssemblyStatusInfo(
+                    assembly_status="current",
+                    suppression_reason=None,
+                    paired_accession="GCA_001881595.3",
+                    paired_assembly_status="current",
+                ),
+                "GCA_001881595.3": AssemblyStatusInfo(
+                    assembly_status="current",
+                    suppression_reason=None,
+                    paired_accession=None,
+                    paired_assembly_status=None,
+                ),
+            },
             failures=(),
         ),
     )

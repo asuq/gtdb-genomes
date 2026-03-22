@@ -70,6 +70,7 @@ class SummaryLookupResult:
 
     summary_map: dict[str, set[str]] = field(default_factory=dict)
     status_map: dict[str, "AssemblyStatusInfo"] = field(default_factory=dict)
+    incomplete_accessions: tuple[str, ...] = ()
     failures: tuple[CommandFailureRecord, ...] = ()
 
 
@@ -89,6 +90,7 @@ class ParsedSummaryOutput:
 
     summary_map: dict[str, set[str]]
     status_map: dict[str, AssemblyStatusInfo]
+    incomplete_accessions: tuple[str, ...]
 
 
 SUPPRESSED_ASSEMBLY_NOTE = (
@@ -290,6 +292,7 @@ def run_summary_lookup_with_retries(
                     return SummaryLookupResult(
                         summary_map=parsed_summary.summary_map,
                         status_map=parsed_summary.status_map,
+                        incomplete_accessions=parsed_summary.incomplete_accessions,
                         failures=tuple(failures),
                     )
                 except MetadataLookupError as error:
@@ -366,33 +369,54 @@ def get_nested_string_value(
     return stripped_value or None
 
 
+def get_first_nested_string_value(
+    payload: object,
+    *paths: tuple[str, ...],
+) -> str | None:
+    """Return the first populated nested string from alternative paths."""
+
+    for path in paths:
+        value = get_nested_string_value(payload, *path)
+        if value is not None:
+            return value
+    return None
+
+
 def build_assembly_status_info(payload: object) -> AssemblyStatusInfo:
     """Extract structured assembly status fields from one summary payload."""
 
     return AssemblyStatusInfo(
-        assembly_status=get_nested_string_value(
+        assembly_status=get_first_nested_string_value(
             payload,
-            "assemblyInfo",
-            "assemblyStatus",
+            ("assemblyInfo", "assemblyStatus"),
+            ("assembly_info", "assembly_status"),
         ),
-        suppression_reason=get_nested_string_value(
+        suppression_reason=get_first_nested_string_value(
             payload,
-            "assemblyInfo",
-            "suppressionReason",
+            ("assemblyInfo", "suppressionReason"),
+            ("assembly_info", "suppression_reason"),
         ),
-        paired_accession=get_nested_string_value(
+        paired_accession=get_first_nested_string_value(
             payload,
-            "assemblyInfo",
-            "pairedAssembly",
-            "accession",
+            ("assemblyInfo", "pairedAssembly", "accession"),
+            ("assembly_info", "paired_assembly", "accession"),
         ),
-        paired_assembly_status=get_nested_string_value(
+        paired_assembly_status=get_first_nested_string_value(
             payload,
-            "assemblyInfo",
-            "pairedAssembly",
-            "status",
+            ("assemblyInfo", "pairedAssembly", "status"),
+            ("assembly_info", "paired_assembly", "status"),
         ),
     )
+
+
+def has_complete_assembly_status_info(
+    status_info: AssemblyStatusInfo | None,
+) -> bool:
+    """Return whether one parsed status record contains usable status metadata."""
+
+    if status_info is None:
+        return False
+    return status_info.assembly_status is not None
 
 
 def parse_summary_output(
@@ -401,7 +425,8 @@ def parse_summary_output(
 ) -> ParsedSummaryOutput:
     """Parse summary JSON-lines into pairing and status mappings."""
 
-    requested = set(requested_accessions)
+    ordered_requested_accessions = tuple(dict.fromkeys(requested_accessions))
+    requested = set(ordered_requested_accessions)
     summaries: dict[str, set[str]] = {}
     statuses: dict[str, AssemblyStatusInfo] = {}
     for raw_line in raw_text.splitlines():
@@ -437,7 +462,17 @@ def parse_summary_output(
                 f"{primary_accession}",
             )
         statuses[primary_accession] = status_info
-    return ParsedSummaryOutput(summary_map=summaries, status_map=statuses)
+    incomplete_accessions = tuple(
+        accession
+        for accession in ordered_requested_accessions
+        if accession not in summaries
+        or not has_complete_assembly_status_info(statuses.get(accession))
+    )
+    return ParsedSummaryOutput(
+        summary_map=summaries,
+        status_map=statuses,
+        incomplete_accessions=incomplete_accessions,
+    )
 
 
 def parse_summary_json_lines(
@@ -512,7 +547,8 @@ def find_incomplete_genbank_metadata_accessions(
             discovered_accessions,
         )
         if matching_genbank and any(
-            accession not in status_map for accession in matching_genbank
+            not has_complete_assembly_status_info(status_map.get(accession))
+            for accession in matching_genbank
         ):
             incomplete_accessions.add(requested_accession)
     return incomplete_accessions
@@ -545,11 +581,11 @@ def choose_preferred_accession(
     )
     if paired_genbank:
         preferred_accession = paired_genbank[0]
+        preferred_status_info = (status_map or {}).get(preferred_accession)
+        if not has_complete_assembly_status_info(preferred_status_info):
+            return requested_accession, "paired_gca_metadata_incomplete_fallback_original"
         if is_suppressed_status(
-            (status_map or {}).get(
-                preferred_accession,
-                UNKNOWN_ASSEMBLY_STATUS_INFO,
-            ).assembly_status,
+            preferred_status_info.assembly_status,
         ):
             return requested_accession, "paired_gca_suppressed_fallback_original"
         return paired_genbank[0], "paired_to_gca"

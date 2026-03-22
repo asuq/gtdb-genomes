@@ -100,6 +100,41 @@ def test_run_summary_lookup_with_retries_parses_requested_accessions(
     assert result.failures == ()
 
 
+def test_run_summary_lookup_with_retries_marks_silent_omissions_incomplete(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Silent omissions should be tracked as incomplete requested metadata."""
+
+    payload = (
+        '{"accession":"GCA_000001.1",'
+        '"assembly_info":{"assembly_status":"current"}}\n'
+    )
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+        timeout: int,
+    ) -> subprocess.CompletedProcess[str]:
+        """Return one successful lookup with a silently omitted accession."""
+
+        del capture_output, text, check, timeout
+        return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = run_summary_lookup_with_retries(
+        ["GCA_000001.1", "GCA_000002.1"],
+        Path("/tmp/accessions.txt"),
+    )
+
+    assert result.summary_map == {
+        "GCA_000001.1": {"GCA_000001.1"},
+    }
+    assert result.incomplete_accessions == ("GCA_000002.1",)
+
+
 def test_run_summary_lookup_with_retries_raises_on_command_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -206,6 +241,24 @@ def test_choose_preferred_accession_falls_back_when_all_gca_matches_are_suppress
     )
 
 
+def test_choose_preferred_accession_falls_back_when_preferred_gca_status_is_unknown() -> None:
+    """Unknown candidate metadata should never be treated as safe to promote."""
+
+    discovered_accessions = {
+        "GCF_000001.1",
+        "GCA_000001.2",
+    }
+
+    assert choose_preferred_accession(
+        "GCF_000001.1",
+        discovered_accessions,
+        status_map={},
+    ) == (
+        "GCF_000001.1",
+        "paired_gca_metadata_incomplete_fallback_original",
+    )
+
+
 def test_build_download_request_accession_defaults_to_fixed_version_requests() -> None:
     """Prefer-GenBank should keep the selected version unless latest-mode is enabled."""
 
@@ -275,8 +328,20 @@ def test_apply_accession_preferences_emits_fixed_status_values() -> None:
         "GCF_000001.1": {"GCF_000001.1", "GCA_000001.1"},
         "GCA_000002.1": {"GCA_000002.1"},
     }
+    status_map = {
+        "GCA_000001.1": AssemblyStatusInfo(
+            assembly_status="current",
+            suppression_reason=None,
+            paired_accession=None,
+            paired_assembly_status=None,
+        ),
+    }
 
-    mapped = apply_accession_preferences(selection_frame, summary_map)
+    mapped = apply_accession_preferences(
+        selection_frame,
+        summary_map,
+        status_map=status_map,
+    )
 
     assert mapped.select(
         "ncbi_accession",
@@ -329,6 +394,20 @@ def test_apply_accession_preferences_uses_shared_numeric_identifier() -> None:
                 "GCA_999999.9",
             },
         },
+        status_map={
+            "GCA_000001.1": AssemblyStatusInfo(
+                assembly_status="current",
+                suppression_reason=None,
+                paired_accession=None,
+                paired_assembly_status=None,
+            ),
+            "GCA_000001.3": AssemblyStatusInfo(
+                assembly_status="current",
+                suppression_reason=None,
+                paired_accession=None,
+                paired_assembly_status=None,
+            ),
+        },
     )
 
     assert mapped.select("final_accession", "conversion_status").rows(
@@ -363,6 +442,20 @@ def test_parse_summary_json_lines_ignores_unrelated_accession_text() -> None:
     assert choose_preferred_accession(
         "GCF_000001.2",
         parsed["GCF_000001.2"],
+        status_map={
+            "GCA_000001.1": AssemblyStatusInfo(
+                assembly_status="current",
+                suppression_reason=None,
+                paired_accession=None,
+                paired_assembly_status=None,
+            ),
+            "GCA_000001.3": AssemblyStatusInfo(
+                assembly_status="current",
+                suppression_reason=None,
+                paired_accession=None,
+                paired_assembly_status=None,
+            ),
+        },
     ) == (
         "GCA_000001.3",
         "paired_to_gca",
@@ -387,6 +480,29 @@ def test_parse_summary_status_map_extracts_suppressed_fields() -> None:
             suppression_reason="removed by submitter",
             paired_accession="GCA_003670205.2",
             paired_assembly_status="current",
+        ),
+    }
+
+
+def test_parse_summary_status_map_supports_snake_case_status_fields() -> None:
+    """Real datasets snake_case payloads should populate suppression fields."""
+
+    payload = (
+        '{"accession":"GCF_003670205.1",'
+        '"assembly_info":{"assembly_status":"suppressed",'
+        '"suppression_reason":"removed because contaminated",'
+        '"paired_assembly":{"accession":"GCA_003670205.1",'
+        '"status":"suppressed"}}}\n'
+    )
+
+    parsed = parse_summary_status_map(payload, ["GCF_003670205.1"])
+
+    assert parsed == {
+        "GCF_003670205.1": AssemblyStatusInfo(
+            assembly_status="suppressed",
+            suppression_reason="removed because contaminated",
+            paired_accession="GCA_003670205.1",
+            paired_assembly_status="suppressed",
         ),
     }
 

@@ -172,6 +172,101 @@ def test_resolve_supported_accession_preferences_falls_back_when_candidate_metad
     ]
 
 
+def test_resolve_supported_accession_preferences_falls_back_when_candidate_lookup_silently_omits_requested_gca(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Silent candidate omissions should keep the original accession."""
+
+    lookup_calls: list[tuple[str, ...]] = []
+
+    def fake_run_summary_lookup_with_retries(
+        accessions,
+        accession_file,
+        ncbi_api_key=None,
+        datasets_bin="datasets",
+        sleep_func=None,
+        runner=None,
+    ) -> SummaryLookupResult:
+        """Return one complete first lookup and one silent second omission."""
+
+        del accession_file, ncbi_api_key, datasets_bin, sleep_func, runner
+        ordered_accessions = tuple(accessions)
+        lookup_calls.append(ordered_accessions)
+        if len(lookup_calls) == 1:
+            return SummaryLookupResult(
+                summary_map={
+                    "GCF_000001.1": {
+                        "GCF_000001.1",
+                        "GCA_000001.2",
+                        "GCA_000001.3",
+                    },
+                },
+                status_map={
+                    "GCF_000001.1": AssemblyStatusInfo(
+                        assembly_status="current",
+                        suppression_reason=None,
+                        paired_accession=None,
+                        paired_assembly_status=None,
+                    ),
+                },
+                failures=(),
+            )
+        return SummaryLookupResult(
+            summary_map={
+                "GCA_000001.2": {"GCA_000001.2"},
+            },
+            status_map={
+                "GCA_000001.2": AssemblyStatusInfo(
+                    assembly_status="current",
+                    suppression_reason=None,
+                    paired_accession=None,
+                    paired_assembly_status=None,
+                ),
+            },
+            incomplete_accessions=("GCA_000001.3",),
+            failures=(),
+        )
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_planning.run_summary_lookup_with_retries",
+        fake_run_summary_lookup_with_retries,
+    )
+
+    supported_selected_frame = pl.DataFrame(
+        {
+            "requested_taxon": ["g__Escherichia"],
+            "taxon_slug": ["g__Escherichia"],
+            "gtdb_accession": ["RS_GCF_000001.1"],
+            "ncbi_accession": ["GCF_000001.1"],
+            "lineage": ["d__Bacteria;p__Proteobacteria;g__Escherichia"],
+            "taxonomy_file": ["bac120_taxonomy_r95.tsv"],
+        },
+    )
+
+    mapped_frame, metadata_failures, suppressed_notes = (
+        resolve_supported_accession_preferences(
+            supported_selected_frame,
+            build_cli_args(tmp_path / "output"),
+            logging.getLogger("test-planning-silent-candidate-omission"),
+            (),
+        )
+    )
+
+    assert lookup_calls[0] == ("GCF_000001.1",)
+    assert set(lookup_calls[1]) == {"GCA_000001.2", "GCA_000001.3"}
+    assert metadata_failures == ()
+    assert suppressed_notes == {}
+    assert mapped_frame.select("final_accession", "conversion_status").rows(
+        named=True,
+    ) == [
+        {
+            "final_accession": "GCF_000001.1",
+            "conversion_status": "paired_gca_metadata_incomplete_fallback_original",
+        },
+    ]
+
+
 def test_build_suppressed_accession_notes_prefers_selected_accession_status() -> None:
     """Suppression warnings should use the selected accession status when known."""
 
