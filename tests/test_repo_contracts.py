@@ -492,7 +492,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "keep the exact selected version",
             "--prefer-genbank",
             "--threads",
-            'prints the planned download list without downloading',
+            "resolves inputs without creating the final output tree",
             "Operational Notes",
             "exact-token and case-sensitive",
             "Automatic planning switches to `dehydrate` only above 1,000 unique `datasets`",

@@ -59,7 +59,7 @@ In short:
 - `--threads`: number of threads to run, defaults to 8
 - `--include`: locally supported tokens are `genome`, `gff3`, and `protein`, e.g. `genome,gff3,protein`, see [NCBI datasets documentation](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/how-tos/genomes/download-genome/#choosing-which-data-files-to-include-in-the-data-package)
 - `--ncbi-api-key`: NCBI API key, passed only to the `datasets` command
-- `--dry-run`: supported with automatic planning, prints the planned download list without downloading
+- `--dry-run`: supported with automatic planning, resolves inputs without creating the final output tree
 
 ## Examples
 
