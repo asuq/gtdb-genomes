@@ -143,9 +143,15 @@ def test_direct_mode_downloads_shared_preferred_accession_once(
     assert result.executions["GCF_001881595.2"].final_accession == "GCA_001881595.5"
     assert result.executions["GCF_001881595.2"].download_status == "downloaded"
     assert result.executions["GCF_001881595.2"].download_batch == "direct_batch_1"
+    assert result.executions["GCF_001881595.2"].request_accession_used == (
+        "GCA_001881595"
+    )
     assert result.executions["GCA_001881595.3"].final_accession == "GCA_001881595.5"
     assert result.executions["GCA_001881595.3"].download_status == "downloaded"
     assert result.executions["GCA_001881595.3"].download_batch == "direct_batch_1"
+    assert result.executions["GCA_001881595.3"].request_accession_used == (
+        "GCA_001881595"
+    )
 
 
 def test_direct_mode_retries_unresolved_accessions_in_later_batches(
@@ -262,7 +268,9 @@ def test_direct_mode_retries_unresolved_accessions_in_later_batches(
     ]
     assert result.executions["GCF_000001.1"].download_batch == "direct_batch_1"
     assert result.executions["GCF_000001.1"].failures == ()
+    assert result.executions["GCF_000001.1"].request_accession_used == "GCF_000001.1"
     assert result.executions["GCF_000002.1"].download_batch == "direct_batch_2"
+    assert result.executions["GCF_000002.1"].request_accession_used == "GCF_000002.1"
     assert [failure.final_status for failure in result.executions["GCF_000002.1"].failures] == [
         "retry_scheduled",
     ]
@@ -365,6 +373,9 @@ def test_direct_mode_falls_back_to_original_accession_after_preferred_phase(
     assert result.executions["GCF_001881595.2"].final_accession == "GCF_001881595.2"
     assert result.executions["GCF_001881595.2"].download_batch == "direct_fallback_batch_1"
     assert result.executions["GCF_001881595.2"].download_status == "downloaded_after_fallback"
+    assert result.executions["GCF_001881595.2"].request_accession_used == (
+        "GCF_001881595.2"
+    )
     assert (
         result.executions["GCF_001881595.2"].conversion_status
         == "paired_to_gca_fallback_original_on_download_failure"
@@ -375,6 +386,9 @@ def test_direct_mode_falls_back_to_original_accession_after_preferred_phase(
     assert result.executions["GCA_001881595.3"].final_accession is None
     assert result.executions["GCA_001881595.3"].download_status == "failed"
     assert result.executions["GCA_001881595.3"].download_batch == "direct_batch_1"
+    assert result.executions["GCA_001881595.3"].request_accession_used == (
+        "GCA_001881595"
+    )
     assert [failure.attempted_accession for failure in result.executions["GCA_001881595.3"].failures] == [
         "GCA_001881595",
     ]
@@ -461,6 +475,9 @@ def test_direct_mode_records_failed_fallback_after_layout_exhaustion(
 
     assert result.executions["GCF_001881595.2"].final_accession is None
     assert result.executions["GCF_001881595.2"].download_batch == "direct_fallback_batch_1"
+    assert result.executions["GCF_001881595.2"].request_accession_used == (
+        "GCF_001881595.2"
+    )
     assert [failure.attempted_accession for failure in result.executions["GCF_001881595.2"].failures] == [
         "GCA_001881595",
         "GCF_001881595.2",
@@ -471,6 +488,9 @@ def test_direct_mode_records_failed_fallback_after_layout_exhaustion(
     ]
     assert result.executions["GCA_001881595.3"].final_accession is None
     assert result.executions["GCA_001881595.3"].download_batch == "direct_batch_1"
+    assert result.executions["GCA_001881595.3"].request_accession_used == (
+        "GCA_001881595"
+    )
     assert [failure.attempted_accession for failure in result.executions["GCA_001881595.3"].failures] == [
         "GCA_001881595",
     ]
@@ -546,6 +566,7 @@ def test_batch_dehydrate_failure_falls_back_to_direct(
                     download_batch=plan.original_accession,
                     payload_directory=tmp_path,
                     failures=(),
+                    request_accession_used=plan.original_accession,
                 )
                 for plan in plans
             },
@@ -570,6 +591,7 @@ def test_batch_dehydrate_failure_falls_back_to_direct(
     assert result.method_used == "dehydrate_fallback_direct"
     assert result.download_concurrency_used == 2
     assert result.executions["GCF_000001.1"].failures == ()
+    assert result.executions["GCF_000001.1"].request_accession_used == "GCF_000001.1"
     assert result.shared_failures[0].failures[0].attempted_accession == (
         "GCA_000001;GCA_000002"
     )

@@ -64,6 +64,7 @@ def run_direct_batch_phase(
     success_status: str,
     failure_history: dict[str, list[CommandFailureRecord]],
     last_download_batches: dict[str, str],
+    last_request_accessions: dict[str, str],
 ) -> DirectBatchPhaseResult:
     """Execute one batch-based direct phase with shrinking retry inputs."""
 
@@ -92,6 +93,9 @@ def run_direct_batch_phase(
         )
         for original_accession in affected_original_accessions:
             last_download_batches[original_accession] = batch_label
+        for request_accession, grouped_plans in pending_groups:
+            for plan in grouped_plans:
+                last_request_accessions[plan.original_accession] = request_accession
         accession_file = write_accession_input_file(
             run_directories.working_root / f"{batch_label}.txt",
             pending_request_accessions,
@@ -178,6 +182,7 @@ def run_direct_batch_phase(
                         payload.final_accession,
                         success_status,
                         batch_label,
+                        request_accession,
                         payload.directory,
                         plan_failures,
                     )
@@ -246,6 +251,9 @@ def execute_direct_accession_plans(
     last_download_batches: dict[str, str] = {
         plan.original_accession: plan.original_accession for plan in plans
     }
+    last_request_accessions: dict[str, str] = {
+        plan.original_accession: plan.download_request_accession for plan in plans
+    }
 
     preferred_phase = run_direct_batch_phase(
         plan_groups,
@@ -257,6 +265,7 @@ def execute_direct_accession_plans(
         success_status="downloaded",
         failure_history=failure_history,
         last_download_batches=last_download_batches,
+        last_request_accessions=last_request_accessions,
     )
     executions.update(preferred_phase.executions)
     shared_failures.extend(preferred_phase.shared_failures)
@@ -279,6 +288,7 @@ def execute_direct_accession_plans(
             failed_after_preferred,
             failure_history,
             last_download_batches,
+            last_request_accessions,
         ),
     )
 
@@ -293,6 +303,7 @@ def execute_direct_accession_plans(
             success_status="downloaded_after_fallback",
             failure_history=failure_history,
             last_download_batches=last_download_batches,
+            last_request_accessions=last_request_accessions,
         )
         executions.update(fallback_phase.executions)
         shared_failures.extend(fallback_phase.shared_failures)
@@ -306,6 +317,7 @@ def execute_direct_accession_plans(
                 unresolved_fallback_plans,
                 failure_history,
                 last_download_batches,
+                last_request_accessions,
             ),
         )
 

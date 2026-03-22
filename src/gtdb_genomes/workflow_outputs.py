@@ -23,10 +23,7 @@ from gtdb_genomes.layout import (
     write_taxon_accessions,
 )
 from gtdb_genomes.logging_utils import attach_debug_log_handler, redact_text
-from gtdb_genomes.metadata import (
-    SUPPRESSED_ASSEMBLY_NOTE,
-    build_download_request_accession,
-)
+from gtdb_genomes.metadata import SUPPRESSED_ASSEMBLY_NOTE
 from gtdb_genomes.provenance import (
     build_deterministic_run_id,
     build_runtime_provenance,
@@ -475,15 +472,7 @@ def build_enriched_output_rows(
                 "gtdb_accession": row["gtdb_accession"],
                 "ncbi_accession": row["ncbi_accession"],
                 "selected_accession": selected_accession,
-                "download_request_accession": (
-                    build_download_request_accession(
-                        selected_accession,
-                        prefer_genbank=args.prefer_genbank,
-                        version_latest=args.version_latest,
-                    )
-                    if selected_accession
-                    else ""
-                ),
+                "download_request_accession": execution.request_accession_used,
                 "final_accession": final_accession,
                 "accession_type_original": row["accession_type_original"],
                 "accession_type_final": (

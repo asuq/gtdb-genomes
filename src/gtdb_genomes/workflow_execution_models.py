@@ -28,6 +28,7 @@ class AccessionExecution:
     download_batch: str
     payload_directory: Path | None
     failures: tuple[CommandFailureRecord, ...]
+    request_accession_used: str = ""
 
 
 @dataclass(slots=True)

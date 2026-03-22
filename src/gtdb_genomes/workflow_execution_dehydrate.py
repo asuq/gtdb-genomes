@@ -198,6 +198,7 @@ def execute_batch_dehydrate_plans(
                 download_batch="dehydrated_batch",
                 payload_directory=payload.directory,
                 failures=(),
+                request_accession_used=plan.download_request_accession,
             )
     except LayoutError as error:
         return fallback_batch_to_direct(

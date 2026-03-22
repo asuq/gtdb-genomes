@@ -156,6 +156,7 @@ def build_unsupported_executions(
                     attempted_accession=accession,
                 ),
             ),
+            request_accession_used="",
         )
     return executions
 

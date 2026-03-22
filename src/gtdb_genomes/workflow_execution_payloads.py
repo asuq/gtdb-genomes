@@ -277,6 +277,7 @@ def build_failed_execution(
     original_accession: str,
     failures: tuple[CommandFailureRecord, ...],
     download_batch: str,
+    request_accession_used: str,
 ) -> AccessionExecution:
     """Build a failed execution for one original accession."""
 
@@ -288,6 +289,7 @@ def build_failed_execution(
         download_batch=download_batch,
         payload_directory=None,
         failures=failures,
+        request_accession_used=request_accession_used,
     )
 
 
@@ -296,6 +298,7 @@ def build_successful_execution(
     final_accession: str,
     download_status: str,
     download_batch: str,
+    request_accession_used: str,
     payload_directory: Path,
     failures: tuple[CommandFailureRecord, ...],
 ) -> AccessionExecution:
@@ -315,6 +318,7 @@ def build_successful_execution(
         download_batch=download_batch,
         payload_directory=payload_directory,
         failures=failures,
+        request_accession_used=request_accession_used,
     )
 
 
@@ -331,6 +335,7 @@ def build_phase_failed_executions(
     plans: tuple[AccessionPlan, ...],
     failure_history: dict[str, list[CommandFailureRecord]],
     last_download_batches: dict[str, str],
+    last_request_accessions: dict[str, str],
 ) -> dict[str, AccessionExecution]:
     """Build failed executions for one set of unresolved direct plans."""
 
@@ -339,6 +344,7 @@ def build_phase_failed_executions(
             plan.original_accession,
             tuple(failure_history[plan.original_accession]),
             last_download_batches[plan.original_accession],
+            last_request_accessions[plan.original_accession],
         )
         for plan in plans
     }
