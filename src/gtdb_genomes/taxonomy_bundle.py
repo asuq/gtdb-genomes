@@ -456,17 +456,19 @@ def load_checksum_mapping(
     return parse_checksum_lines(read_url_text(checksum_url), checksum_url)
 
 
-def detect_checksum_filename(source_root_url: str) -> str:
-    """Detect the checksum filename used by one release directory."""
+def detect_checksum_mapping(
+    source_root_url: str,
+) -> tuple[str, dict[str, tuple[str, ...]]]:
+    """Detect the checksum file and return its parsed mapping."""
 
     last_error: TaxonomyBundleError | None = None
     for candidate_name in CHECKSUM_CANDIDATE_FILENAMES:
         try:
-            load_checksum_mapping(source_root_url, candidate_name)
+            checksum_mapping = load_checksum_mapping(source_root_url, candidate_name)
         except TaxonomyBundleError as error:
             last_error = error
             continue
-        return candidate_name
+        return candidate_name, checksum_mapping
     raise TaxonomyBundleError(
         f"Could not find a checksum file under {source_root_url}",
     ) from last_error
@@ -504,8 +506,9 @@ def refresh_manifest_entries(
             entry.resolved_release,
             releases_root_url=releases_root_url,
         )
-        checksum_filename = detect_checksum_filename(source_root_url)
-        checksum_mapping = load_checksum_mapping(source_root_url, checksum_filename)
+        checksum_filename, checksum_mapping = detect_checksum_mapping(
+            source_root_url,
+        )
         resolve_source_name(entry.bacterial_taxonomy, checksum_mapping)
         resolve_source_name(entry.archaeal_taxonomy, checksum_mapping)
         if logger is not None:
