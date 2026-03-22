@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 import polars as pl
@@ -14,7 +13,6 @@ from gtdb_genomes.download import (
     CommandFailureRecord,
     DownloadMethodDecision,
     PreviewCommandResult,
-    PreviewError,
     RetryableCommandResult,
 )
 from gtdb_genomes.workflow_execution_models import (
@@ -238,18 +236,16 @@ def test_auto_method_uses_unique_download_request_count_after_stem_collapse_in_l
         fake_select_download_method,
     )
 
-    plans, decision_method, preview_shared_failures = plan_supported_downloads(
+    plans, decision_method, planning_shared_failures = plan_supported_downloads(
         supported_mapped_frame,
         args,
-        logging.getLogger("test-auto-stem-collapse"),
-        (),
     )
 
     assert len(plans) == 2
     assert {plan.download_request_accession for plan in plans} == {"GCA_000001"}
     assert observed_counts == [1]
     assert decision_method == "direct"
-    assert preview_shared_failures == ()
+    assert planning_shared_failures == ()
 
 
 def test_auto_method_keeps_versioned_requests_by_default_with_prefer_genbank(
@@ -304,11 +300,9 @@ def test_auto_method_keeps_versioned_requests_by_default_with_prefer_genbank(
         fake_select_download_method,
     )
 
-    plans, decision_method, preview_shared_failures = plan_supported_downloads(
+    plans, decision_method, planning_shared_failures = plan_supported_downloads(
         supported_mapped_frame,
         args,
-        logging.getLogger("test-auto-fixed-version"),
-        (),
     )
 
     assert len(plans) == 2
@@ -318,7 +312,7 @@ def test_auto_method_keeps_versioned_requests_by_default_with_prefer_genbank(
     }
     assert observed_counts == [2]
     assert decision_method == "direct"
-    assert preview_shared_failures == ()
+    assert planning_shared_failures == ()
 
 
 def test_plan_supported_downloads_switches_to_dehydrate_only_above_request_threshold(
@@ -359,23 +353,21 @@ def test_plan_supported_downloads_switches_to_dehydrate_only_above_request_thres
         lambda *args, **kwargs: successful_preview_result(),
     )
 
-    plans, decision_method, preview_shared_failures = plan_supported_downloads(
+    plans, decision_method, planning_shared_failures = plan_supported_downloads(
         supported_mapped_frame,
         args,
-        logging.getLogger("test-auto-count-threshold"),
-        (),
     )
 
     assert len(plans) == 1001
     assert decision_method == "dehydrate"
-    assert preview_shared_failures == ()
+    assert planning_shared_failures == ()
 
 
-def test_plan_supported_downloads_records_scoped_preview_retry_failures(
+def test_plan_supported_downloads_skips_preview_calls(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Successful preview retries should stay scoped to the planned originals."""
+    """Count-based planning should not call the old preview helper."""
 
     supported_mapped_frame = pl.DataFrame(
         {
@@ -400,124 +392,19 @@ def test_plan_supported_downloads_records_scoped_preview_retry_failures(
 
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: PreviewCommandResult(
-            preview_text="Package size: 1.0 GB\n",
-            failures=(
-                CommandFailureRecord(
-                    stage="preview",
-                    attempt_index=1,
-                    max_attempts=4,
-                    error_type="subprocess",
-                    error_message="temporary preview failure",
-                    final_status="retry_scheduled",
-                ),
-            ),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("preview should not run"),
         ),
     )
 
-    plans, decision_method, preview_shared_failures = plan_supported_downloads(
+    plans, decision_method, planning_shared_failures = plan_supported_downloads(
         supported_mapped_frame,
         args,
-        logging.getLogger("test-auto-preview-retry-scope"),
-        (),
     )
 
     assert len(plans) == 2
     assert decision_method == "direct"
-    assert preview_shared_failures == (
-        SharedFailureContext(
-            affected_original_accessions=("GCF_000001.1", "GCF_000002.1"),
-            failures=(
-                CommandFailureRecord(
-                    stage="preview",
-                    attempt_index=1,
-                    max_attempts=4,
-                    error_type="subprocess",
-                    error_message="temporary preview failure",
-                    final_status="retry_scheduled",
-                    attempted_accession="GCF_000001.1;GCF_000002.1",
-                ),
-            ),
-        ),
-    )
-
-
-def test_plan_supported_downloads_continues_after_preview_failure(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """Preview failure should warn and keep the count-based method choice."""
-
-    supported_mapped_frame = pl.DataFrame(
-        {
-            "ncbi_accession": ["GCF_000001.1"],
-            "final_accession": ["GCF_000001.1"],
-            "conversion_status": ["unchanged_original"],
-        },
-    )
-    args = CliArgs(
-        gtdb_release="95",
-        gtdb_taxa=("g__Escherichia",),
-        outdir=tmp_path / "output",
-        prefer_genbank=False,
-        version_latest=False,
-        threads=4,
-        ncbi_api_key=None,
-        include="genome",
-        debug=False,
-        keep_temp=False,
-        dry_run=False,
-    )
-    monkeypatch.setattr(
-        "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            PreviewError(
-                "preview failed",
-                failures=(
-                    CommandFailureRecord(
-                        stage="preview",
-                        attempt_index=1,
-                        max_attempts=4,
-                        error_type="subprocess",
-                        error_message="preview failed",
-                        final_status="retry_exhausted",
-                    ),
-                ),
-            ),
-        ),
-    )
-
-    logger = logging.getLogger("test-auto-preview-warning")
-    with caplog.at_level(logging.WARNING, logger=logger.name):
-        plans, decision_method, preview_shared_failures = plan_supported_downloads(
-            supported_mapped_frame,
-            args,
-            logger,
-            (),
-        )
-
-    assert len(plans) == 1
-    assert decision_method == "direct"
-    assert preview_shared_failures == (
-        SharedFailureContext(
-            affected_original_accessions=("GCF_000001.1",),
-            failures=(
-                CommandFailureRecord(
-                    stage="preview",
-                    attempt_index=1,
-                    max_attempts=4,
-                    error_type="subprocess",
-                    error_message="preview failed",
-                    final_status="retry_exhausted",
-                    attempted_accession="GCF_000001.1",
-                ),
-            ),
-        ),
-    )
-    assert "continuing with direct because auto mode now uses only the request-token count" in (
-        caplog.text
-    )
+    assert planning_shared_failures == ()
 
 
 def test_dry_run_logs_info_milestones(

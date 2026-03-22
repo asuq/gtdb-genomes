@@ -13,13 +13,11 @@ import polars as pl
 
 from gtdb_genomes.download import (
     DEFAULT_REQUESTED_DOWNLOAD_METHOD,
-    PreviewError,
     get_ordered_unique_accessions,
     run_preview_command,
     select_download_method,
     write_accession_input_file,
 )
-from gtdb_genomes.logging_utils import redact_text
 from gtdb_genomes.metadata import (
     AssemblyStatusInfo,
     find_incomplete_genbank_metadata_accessions,
@@ -425,11 +423,8 @@ def resolve_supported_accession_preferences(
 def plan_supported_downloads(
     supported_mapped_frame: pl.DataFrame,
     args: CliArgs,
-    logger: logging.Logger,
-    secrets: tuple[str, ...],
 ) -> tuple[tuple[AccessionPlan, ...], str, tuple[SharedFailureContext, ...]]:
     """Build supported-accession plans and resolve the effective method."""
-
     accession_plans = build_accession_plans(
         supported_mapped_frame,
         prefer_genbank=args.prefer_genbank,
@@ -438,53 +433,14 @@ def plan_supported_downloads(
     if not accession_plans:
         return (), DEFAULT_REQUESTED_DOWNLOAD_METHOD, ()
 
-    preview_accessions = get_ordered_unique_accessions(
-        plan.download_request_accession for plan in accession_plans
+    decision = select_download_method(
+        len(
+            get_ordered_unique_accessions(
+                plan.download_request_accession for plan in accession_plans
+            ),
+        ),
     )
-    preview_original_accessions = build_original_accession_scope(
-        tuple(plan.original_accession for plan in accession_plans),
-    )
-    with create_staging_directory("gtdb_genomes_preview_") as preview_directory:
-        preview_accession_file = write_accession_input_file(
-            Path(preview_directory) / "accessions.txt",
-            preview_accessions,
-        )
-        decision = select_download_method(
-            len(preview_accessions),
-        )
-        preview_shared_failures: tuple[SharedFailureContext, ...] = ()
-        try:
-            preview_result = run_preview_command(
-                preview_accession_file,
-                args.include,
-                ncbi_api_key=args.ncbi_api_key,
-                debug=args.debug,
-            )
-        except PreviewError as error:
-            if error.failures:
-                preview_shared_failures = (
-                    build_shared_failure_context(
-                        preview_original_accessions,
-                        error.failures,
-                        ";".join(preview_accessions),
-                    ),
-                )
-            logger.warning(
-                "datasets preview failed during automatic planning; continuing "
-                "with %s because auto mode now uses only the request-token count: %s",
-                decision.method_used,
-                redact_text(str(error), secrets),
-            )
-        else:
-            if preview_result.failures:
-                preview_shared_failures = (
-                    build_shared_failure_context(
-                        preview_original_accessions,
-                        preview_result.failures,
-                        ";".join(preview_accessions),
-                    ),
-                )
-    return accession_plans, decision.method_used, preview_shared_failures
+    return accession_plans, decision.method_used, ()
 
 
 def prepare_planning_inputs(
@@ -523,15 +479,11 @@ def prepare_planning_inputs(
         ],
         how="vertical",
     )
-    accession_plans, decision_method, preview_shared_failures = plan_supported_downloads(
+    accession_plans, decision_method, planning_shared_failures = plan_supported_downloads(
         supported_mapped_frame,
         args,
-        logger,
-        secrets,
     )
-    planning_shared_failures = (
-        metadata_shared_failures + preview_shared_failures
-    )
+    planning_shared_failures = metadata_shared_failures + planning_shared_failures
     logger.info(
         "Automatic planning selected %s for %d supported accession(s)",
         decision_method,

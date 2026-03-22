@@ -1,4 +1,4 @@
-"""Contract-level edge-case tests for output manifests and previews."""
+"""Contract-level edge-case tests for output manifests and planning."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from gtdb_genomes.cli import main
 from gtdb_genomes.download import (
     CommandFailureRecord,
     PreviewCommandResult,
-    PreviewError,
 )
 from gtdb_genomes.layout import (
     ACCESSION_MAP_COLUMNS,
@@ -101,11 +100,11 @@ def build_shared_preferred_summary_lookup_result() -> SummaryLookupResult:
     )
 
 
-def test_auto_preview_failure_in_dry_run_does_not_abort_planning(
+def test_auto_planning_skips_preview_in_dry_run(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Preview failures in dry-run should warn and still avoid output creation."""
+    """Count-based dry-run planning should not call the old preview step."""
 
     monkeypatch.setattr(
         "gtdb_genomes.workflow_selection.check_required_tools",
@@ -123,10 +122,12 @@ def test_auto_preview_failure_in_dry_run_does_not_abort_planning(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: (_ for _ in ()).throw(PreviewError("preview failed")),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("preview should not run"),
+        ),
     )
 
-    output_dir = tmp_path / "preview-failure"
+    output_dir = tmp_path / "dry-run-no-preview"
     exit_code = main(
         [
             "--gtdb-release",
@@ -143,78 +144,11 @@ def test_auto_preview_failure_in_dry_run_does_not_abort_planning(
     assert not output_dir.exists()
 
 
-def test_auto_preview_uses_accession_input_file_and_keeps_output_absent(
+def test_successful_real_run_does_not_record_preview_failures(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Auto preview should use a temporary input file outside the output tree."""
-
-    preview_inputs: list[Path] = []
-    preview_contents: list[str] = []
-
-    def fake_run_preview_command(
-        accession_file: Path,
-        include: str,
-        ncbi_api_key: str | None = None,
-        datasets_bin: str = "datasets",
-        debug: bool = False,
-        sleep_func=None,
-        runner=None,
-    ) -> PreviewCommandResult:
-        """Capture the preview input file used by auto mode."""
-
-        del ncbi_api_key, datasets_bin, debug, sleep_func, runner
-        preview_inputs.append(accession_file)
-        preview_contents.append(accession_file.read_text(encoding="ascii"))
-        assert include == "genome"
-        assert accession_file.is_file()
-        assert accession_file.parent.name.startswith("gtdb_genomes_preview_")
-        return successful_preview_result()
-
-    monkeypatch.setattr(
-        "gtdb_genomes.workflow_selection.check_required_tools",
-        lambda required_tools: None,
-    )
-    monkeypatch.setattr(
-        "gtdb_genomes.workflow_selection.load_release_taxonomy",
-        lambda resolution: build_multi_accession_taxonomy_frame(
-            "d__Bacteria;p__Proteobacteria;g__Escherichia",
-        ),
-    )
-    monkeypatch.setattr(
-        "gtdb_genomes.workflow_planning.run_summary_lookup_with_retries",
-        lambda *args, **kwargs: SummaryLookupResult(summary_map={}, failures=()),
-    )
-    monkeypatch.setattr(
-        "gtdb_genomes.workflow_planning.run_preview_command",
-        fake_run_preview_command,
-    )
-
-    output_dir = tmp_path / "preview-input-file"
-    exit_code = main(
-        [
-            "--gtdb-release",
-            "202",
-            "--gtdb-taxon",
-            "g__Escherichia",
-            "--outdir",
-            str(output_dir),
-            "--dry-run",
-        ],
-    )
-
-    assert exit_code == 0
-    assert not output_dir.exists()
-    assert len(preview_inputs) == 1
-    assert preview_contents == ["GCF_000001.1\nGCF_000002.1\n"]
-    assert not preview_inputs[0].exists()
-
-
-def test_successful_real_run_records_preview_retry_failures(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """Successful real runs should serialise preview retry provenance."""
+    """Successful real runs should not serialise removed preview failures."""
 
     payload_directory = tmp_path / "payload"
     payload_directory.mkdir()
@@ -236,18 +170,8 @@ def test_successful_real_run_records_preview_retry_failures(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: PreviewCommandResult(
-            preview_text="Package size: 1.0 GB\n",
-            failures=(
-                CommandFailureRecord(
-                    stage="preview",
-                    attempt_index=1,
-                    max_attempts=4,
-                    error_type="subprocess",
-                    error_message="temporary preview failure",
-                    final_status="retry_scheduled",
-                ),
-            ),
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("preview should not run"),
         ),
     )
 
@@ -300,112 +224,8 @@ def test_successful_real_run_records_preview_retry_failures(
 
     assert exit_code == 0
     failure_header, failure_rows = parse_tsv(output_dir / "download_failures.tsv")
-    assert len(failure_rows) == 1
-    failure = dict(zip(failure_header, failure_rows[0], strict=True))
-    assert failure["stage"] == "preview"
-    assert failure["attempted_accession"] == "GCF_000001.1"
-    assert failure["final_status"] == "retry_scheduled"
-    assert failure["final_accession"] == "GCF_000001.1"
-
-
-def test_real_run_continues_after_preview_failure_and_records_it(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """Preview failure should not return exit 5 by itself in real runs."""
-
-    payload_directory = tmp_path / "payload-preview-failure"
-    payload_directory.mkdir()
-    (payload_directory / "genome.fna").write_text(">seq\nACGT\n", encoding="ascii")
-
-    monkeypatch.setattr(
-        "gtdb_genomes.workflow_selection.check_required_tools",
-        lambda required_tools: None,
-    )
-    monkeypatch.setattr(
-        "gtdb_genomes.workflow_selection.load_release_taxonomy",
-        lambda resolution: build_taxonomy_frame(
-            "d__Bacteria;p__Proteobacteria;g__Escherichia",
-        ),
-    )
-    monkeypatch.setattr(
-        "gtdb_genomes.workflow_planning.run_summary_lookup_with_retries",
-        lambda *args, **kwargs: SummaryLookupResult(summary_map={}, failures=()),
-    )
-    monkeypatch.setattr(
-        "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            PreviewError(
-                "preview failed",
-                failures=(
-                    CommandFailureRecord(
-                        stage="preview",
-                        attempt_index=4,
-                        max_attempts=4,
-                        error_type="subprocess",
-                        error_message="preview failed",
-                        final_status="retry_exhausted",
-                    ),
-                ),
-            ),
-        ),
-    )
-
-    def fake_execute_accession_plans(
-        plans,
-        args,
-        decision_method: str,
-        run_directories,
-        logger,
-        secrets,
-    ) -> DownloadExecutionResult:
-        """Return one successful direct execution for the supported accession."""
-
-        del args, run_directories, logger, secrets
-        assert decision_method == "direct"
-        assert [plan.original_accession for plan in plans] == ["GCF_000001.1"]
-        return DownloadExecutionResult(
-            executions={
-                "GCF_000001.1": AccessionExecution(
-                    original_accession="GCF_000001.1",
-                    final_accession="GCF_000001.1",
-                    conversion_status="unchanged_original",
-                    download_status="downloaded",
-                    download_batch="direct_batch_1",
-                    payload_directory=payload_directory,
-                    failures=(),
-                ),
-            },
-            method_used="direct",
-            download_concurrency_used=1,
-            rehydrate_workers_used=0,
-        )
-
-    monkeypatch.setattr(
-        "gtdb_genomes.workflow_execution.execute_accession_plans",
-        fake_execute_accession_plans,
-    )
-
-    output_dir = tmp_path / "preview-failure-real-run"
-    exit_code = main(
-        [
-            "--gtdb-release",
-            "95",
-            "--gtdb-taxon",
-            "g__Escherichia",
-            "--outdir",
-            str(output_dir),
-        ],
-    )
-
-    assert exit_code == 0
-    failure_header, failure_rows = parse_tsv(output_dir / "download_failures.tsv")
-    assert len(failure_rows) == 1
-    failure = dict(zip(failure_header, failure_rows[0], strict=True))
-    assert failure["stage"] == "preview"
-    assert failure["attempted_accession"] == "GCF_000001.1"
-    assert failure["final_status"] == "retry_exhausted"
-    assert failure["final_accession"] == "GCF_000001.1"
+    assert failure_header[0] == "requested_taxon"
+    assert failure_rows == []
 
 
 def test_mixed_uba_real_run_records_failed_unsupported_rows(

@@ -524,11 +524,11 @@ def test_build_suppressed_accession_notes_prefers_selected_accession_status() ->
     assert notes["GCF_000001.1"].suppression_reason == "removed by submitter"
 
 
-def test_prepare_planning_inputs_combines_metadata_and_preview_failures(
+def test_prepare_planning_inputs_combines_metadata_and_planning_failures(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Planning should preserve both metadata and preview shared failures."""
+    """Planning should preserve metadata and additional shared failures."""
 
     supported_selected_frame = pl.DataFrame(
         {
@@ -562,16 +562,16 @@ def test_prepare_planning_inputs_combines_metadata_and_preview_failures(
             ),
         ),
     )
-    preview_shared_failures = (
+    additional_shared_failures = (
         SharedFailureContext(
             affected_original_accessions=("GCF_000001.1",),
             failures=(
                 CommandFailureRecord(
-                    stage="preview",
+                    stage="planning",
                     attempt_index=1,
                     max_attempts=4,
-                    error_type="subprocess",
-                    error_message="temporary preview failure",
+                    error_type="local_filesystem",
+                    error_message="temporary planning failure",
                     final_status="retry_scheduled",
                     attempted_accession="GCF_000001.1",
                 ),
@@ -592,7 +592,7 @@ def test_prepare_planning_inputs_combines_metadata_and_preview_failures(
         lambda *args, **kwargs: (
             (),
             "direct",
-            preview_shared_failures,
+            additional_shared_failures,
         ),
     )
     monkeypatch.setattr(
@@ -617,7 +617,7 @@ def test_prepare_planning_inputs_combines_metadata_and_preview_failures(
     assert prepared_frame.equals(mapped_frame)
     assert planning_shared_failures == (
         metadata_shared_failures[0],
-        preview_shared_failures[0],
+        additional_shared_failures[0],
     )
     assert suppressed_notes == {}
     assert accession_plans == ()
