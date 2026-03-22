@@ -298,7 +298,7 @@ def parse_preview_size_bytes(preview_text: str) -> int | None:
         if found_file_size:
             json_sizes_mb.append(record_total_mb)
     if json_sizes_mb:
-        return int(max(json_sizes_mb) * SIZE_UNITS["MB"])
+        return int(sum(json_sizes_mb) * SIZE_UNITS["MB"])
 
     labelled_matches = re.findall(
         r"(?im)^\s*(?:package|download)\s+size\s*:\s*(\d+(?:\.\d+)?)\s*([KMGT]?B)\b",

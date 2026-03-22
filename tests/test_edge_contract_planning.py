@@ -311,6 +311,52 @@ def test_auto_method_keeps_versioned_requests_by_default_with_prefer_genbank(
     assert decision_method == "direct"
 
 
+def test_plan_supported_downloads_uses_total_json_preview_size_across_records(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Multi-record JSON preview output should bias auto mode toward dehydrate."""
+
+    supported_mapped_frame = pl.DataFrame(
+        {
+            "ncbi_accession": ["GCF_000001.1", "GCF_000002.1"],
+            "final_accession": ["GCF_000001.1", "GCF_000002.1"],
+            "conversion_status": ["unchanged_original", "unchanged_original"],
+        },
+    )
+    args = CliArgs(
+        gtdb_release="95",
+        gtdb_taxa=("g__Escherichia",),
+        outdir=tmp_path / "output",
+        prefer_genbank=False,
+        version_latest=False,
+        threads=4,
+        ncbi_api_key=None,
+        include="genome",
+        debug=False,
+        keep_temp=False,
+        dry_run=False,
+    )
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_planning.run_preview_command",
+        lambda *args, **kwargs: (
+            '{"included_data_files":{"genome":{"size_mb":8000.0}}}\n'
+            '{"included_data_files":{"genome":{"size_mb":8000.0}}}\n'
+        ),
+    )
+
+    plans, decision_method = plan_supported_downloads(
+        supported_mapped_frame,
+        args,
+        logging.getLogger("test-auto-multi-record-preview"),
+        (),
+    )
+
+    assert len(plans) == 2
+    assert decision_method == "dehydrate"
+
+
 def test_dry_run_logs_info_milestones(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

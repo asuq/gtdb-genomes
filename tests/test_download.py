@@ -199,6 +199,28 @@ def test_parse_preview_size_bytes_sums_json_file_sizes_when_needed() -> None:
     assert parse_preview_size_bytes(preview) == int(640.5 * 1024**2)
 
 
+def test_parse_preview_size_bytes_sums_multiple_json_records() -> None:
+    """Preview parsing should sum sizes across JSON preview records."""
+
+    preview = (
+        '{"included_data_files":{"genome":{"size_mb":8000.0}}}\n'
+        '{"included_data_files":{"genome":{"size_mb":8000.0}}}\n'
+    )
+
+    assert parse_preview_size_bytes(preview) == int(16000.0 * 1024**2)
+
+
+def test_select_download_method_uses_total_json_preview_size_across_records() -> None:
+    """Auto mode should use the total parsed JSON preview size across records."""
+
+    preview = (
+        '{"included_data_files":{"genome":{"size_mb":8000.0}}}\n'
+        '{"included_data_files":{"genome":{"size_mb":8000.0}}}\n'
+    )
+
+    assert select_download_method("auto", 5, preview).method_used == "dehydrate"
+
+
 def test_parse_preview_size_bytes_rejects_ambiguous_unlabelled_sizes() -> None:
     """Preview parsing should reject multi-size text without package labels."""
 
