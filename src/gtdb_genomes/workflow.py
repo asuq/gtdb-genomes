@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from gtdb_genomes.cli import CliArgs
 
 
+PLANNING_FAILURE_EXIT_CODE = 7
 OUTPUT_MATERIALISATION_FAILURE_EXIT_CODE = 8
 
 
@@ -54,6 +55,20 @@ def log_output_materialisation_failure(
     return OUTPUT_MATERIALISATION_FAILURE_EXIT_CODE
 
 
+def log_planning_staging_failure(
+    logger: logging.Logger,
+    error: OSError | shutil.Error,
+    secrets: tuple[str, ...],
+) -> int:
+    """Log one planning-stage local filesystem failure and return exit code 7."""
+
+    logger.error(
+        "Workflow planning failed due to local staging error: %s",
+        redact_text(str(error), secrets),
+    )
+    return PLANNING_FAILURE_EXIT_CODE
+
+
 def run_workflow(args: CliArgs) -> int:
     """Run the workflow and return the process exit code."""
 
@@ -63,11 +78,20 @@ def run_workflow(args: CliArgs) -> int:
     log_run_start(logger, args)
 
     try:
-        # Selection and early preflight
         resolution, selected_frame, supported_selected_frame, unsupported_selected_frame = (
             workflow_selection.prepare_selection_frames(args, logger)
         )
         workflow_selection.run_early_dry_run_unzip_check(args, logger)
+    except BundledDataError as error:
+        logger.error("%s", error)
+        close_logger(logger)
+        return 3
+    except (OSError, shutil.Error) as error:
+        exit_code = log_planning_staging_failure(logger, error, secrets)
+        close_logger(logger)
+        return exit_code
+
+    try:
         zero_match_exit, zero_match_logger = workflow_selection.handle_zero_match_exit(
             args,
             logger,
@@ -75,19 +99,23 @@ def run_workflow(args: CliArgs) -> int:
             selected_frame,
             started_at,
         )
-        if zero_match_exit is not None:
-            if zero_match_logger is not None:
-                close_logger(zero_match_logger)
-            return zero_match_exit
+    except (OSError, shutil.Error) as error:
+        exit_code = log_output_materialisation_failure(logger, error, secrets)
+        close_logger(logger)
+        return exit_code
+    if zero_match_exit is not None:
+        if zero_match_logger is not None:
+            close_logger(zero_match_logger)
+        return zero_match_exit
 
-        if not unsupported_selected_frame.is_empty():
-            logger.warning(
-                workflow_selection.build_unsupported_uba_warning(
-                    unsupported_selected_frame,
-                ),
-            )
+    if not unsupported_selected_frame.is_empty():
+        logger.warning(
+            workflow_selection.build_unsupported_uba_warning(
+                unsupported_selected_frame,
+            ),
+        )
 
-        # Supported-accession planning
+    try:
         workflow_selection.run_supported_preflight(args, supported_selected_frame)
         (
             mapped_frame,
@@ -104,23 +132,20 @@ def run_workflow(args: CliArgs) -> int:
                 secrets,
             )
         )
-        planning_warning = workflow_planning.build_planning_suppressed_warning(
-            suppressed_notes,
-        )
-        if planning_warning is not None:
-            logger.warning("%s", planning_warning)
-    except BundledDataError as error:
-        logger.error("%s", error)
-        close_logger(logger)
-        return 3
     except MetadataLookupError as error:
         logger.error("%s", redact_text(str(error), secrets))
         close_logger(logger)
         return 5
     except (OSError, shutil.Error) as error:
-        exit_code = log_output_materialisation_failure(logger, error, secrets)
+        exit_code = log_planning_staging_failure(logger, error, secrets)
         close_logger(logger)
         return exit_code
+
+    planning_warning = workflow_planning.build_planning_suppressed_warning(
+        suppressed_notes,
+    )
+    if planning_warning is not None:
+        logger.warning("%s", planning_warning)
 
     # Dry-runs stop after planning and report the planned workload
     if args.dry_run:

@@ -448,3 +448,46 @@ def test_real_run_initial_output_directory_failure_returns_exit_eight(
         log_stream.getvalue()
     )
     assert not output_dir.exists()
+
+
+def test_planning_staging_failure_returns_exit_seven(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Planning-stage local staging failures should not be reported as output failures."""
+
+    log_stream = install_capture_logger(monkeypatch)
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.check_required_tools",
+        lambda required_tools: None,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.load_release_taxonomy",
+        lambda resolution: build_taxonomy_frame(
+            "d__Bacteria;p__Proteobacteria;g__Escherichia",
+        ),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_planning.create_staging_directory",
+        lambda prefix: (_ for _ in ()).throw(PermissionError("permission denied")),
+    )
+
+    output_dir = tmp_path / "planning-staging-failure"
+    exit_code = main(
+        [
+            "--gtdb-release",
+            "95",
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--prefer-genbank",
+            "--outdir",
+            str(output_dir),
+            "--dry-run",
+        ],
+    )
+
+    assert exit_code == 7
+    assert "Workflow planning failed due to local staging error: permission denied" in (
+        log_stream.getvalue()
+    )
+    assert not output_dir.exists()
