@@ -92,14 +92,14 @@ def test_resolve_supported_accession_preferences_falls_back_when_candidate_metad
         if len(lookup_calls) == 1:
             return SummaryLookupResult(
                 summary_map={
-                    "GCF_000001.1": {
-                        "GCF_000001.1",
+                    "GCF_000001.2": {
+                        "GCF_000001.2",
                         "GCA_000001.2",
                         "GCA_000001.3",
                     },
                 },
                 status_map={
-                    "GCF_000001.1": AssemblyStatusInfo(
+                    "GCF_000001.2": AssemblyStatusInfo(
                         assembly_status="current",
                         suppression_reason=None,
                         paired_accession=None,
@@ -111,16 +111,8 @@ def test_resolve_supported_accession_preferences_falls_back_when_candidate_metad
         return SummaryLookupResult(
             summary_map={
                 "GCA_000001.2": {"GCA_000001.2"},
-                "GCA_000001.3": {"GCA_000001.3"},
             },
-            status_map={
-                "GCA_000001.2": AssemblyStatusInfo(
-                    assembly_status="current",
-                    suppression_reason=None,
-                    paired_accession=None,
-                    paired_assembly_status=None,
-                ),
-            },
+            status_map={},
             failures=(
                 CommandFailureRecord(
                     stage="metadata_lookup",
@@ -129,7 +121,7 @@ def test_resolve_supported_accession_preferences_falls_back_when_candidate_metad
                     error_type="metadata_lookup",
                     error_message="partial paired-GCA metadata",
                     final_status="retry_exhausted",
-                    attempted_accession="GCA_000001.2;GCA_000001.3",
+                    attempted_accession="GCA_000001.2",
                 ),
             ),
         )
@@ -143,8 +135,8 @@ def test_resolve_supported_accession_preferences_falls_back_when_candidate_metad
         {
             "requested_taxon": ["g__Escherichia"],
             "taxon_slug": ["g__Escherichia"],
-            "gtdb_accession": ["RS_GCF_000001.1"],
-            "ncbi_accession": ["GCF_000001.1"],
+            "gtdb_accession": ["RS_GCF_000001.2"],
+            "ncbi_accession": ["GCF_000001.2"],
             "lineage": ["d__Bacteria;p__Proteobacteria;g__Escherichia"],
             "taxonomy_file": ["bac120_taxonomy_r95.tsv"],
         },
@@ -159,27 +151,20 @@ def test_resolve_supported_accession_preferences_falls_back_when_candidate_metad
         )
     )
 
-    assert lookup_calls[0] == ("GCF_000001.1",)
-    assert set(lookup_calls[1]) == {"GCA_000001.2", "GCA_000001.3"}
+    assert lookup_calls[0] == ("GCF_000001.2",)
+    assert lookup_calls[1] == ("GCA_000001.2",)
     assert metadata_shared_failures[0].affected_original_accessions == (
-        "GCF_000001.1",
+        "GCF_000001.2",
     )
-    assert (
-        metadata_shared_failures[0].failures[0].attempted_accession
-        == "GCA_000001.2;GCA_000001.3"
+    assert metadata_shared_failures[0].failures[0].attempted_accession == (
+        "GCA_000001.2"
     )
-    assert set(
-        metadata_shared_failures[0].failures[0].attempted_accession.split(";"),
-    ) == {
-        "GCA_000001.2",
-        "GCA_000001.3",
-    }
     assert suppressed_notes == {}
     assert mapped_frame.select("final_accession", "conversion_status").rows(
         named=True,
     ) == [
         {
-            "final_accession": "GCF_000001.1",
+            "final_accession": "GCF_000001.2",
             "conversion_status": "paired_gca_metadata_incomplete_fallback_original",
         },
     ]
@@ -209,14 +194,14 @@ def test_resolve_supported_accession_preferences_falls_back_when_candidate_looku
         if len(lookup_calls) == 1:
             return SummaryLookupResult(
                 summary_map={
-                    "GCF_000001.1": {
-                        "GCF_000001.1",
+                    "GCF_000001.2": {
+                        "GCF_000001.2",
                         "GCA_000001.2",
                         "GCA_000001.3",
                     },
                 },
                 status_map={
-                    "GCF_000001.1": AssemblyStatusInfo(
+                    "GCF_000001.2": AssemblyStatusInfo(
                         assembly_status="current",
                         suppression_reason=None,
                         paired_accession=None,
@@ -226,18 +211,9 @@ def test_resolve_supported_accession_preferences_falls_back_when_candidate_looku
                 failures=(),
             )
         return SummaryLookupResult(
-            summary_map={
-                "GCA_000001.2": {"GCA_000001.2"},
-            },
-            status_map={
-                "GCA_000001.2": AssemblyStatusInfo(
-                    assembly_status="current",
-                    suppression_reason=None,
-                    paired_accession=None,
-                    paired_assembly_status=None,
-                ),
-            },
-            incomplete_accessions=("GCA_000001.3",),
+            summary_map={},
+            status_map={},
+            incomplete_accessions=("GCA_000001.2",),
             failures=(),
         )
 
@@ -250,8 +226,8 @@ def test_resolve_supported_accession_preferences_falls_back_when_candidate_looku
         {
             "requested_taxon": ["g__Escherichia"],
             "taxon_slug": ["g__Escherichia"],
-            "gtdb_accession": ["RS_GCF_000001.1"],
-            "ncbi_accession": ["GCF_000001.1"],
+            "gtdb_accession": ["RS_GCF_000001.2"],
+            "ncbi_accession": ["GCF_000001.2"],
             "lineage": ["d__Bacteria;p__Proteobacteria;g__Escherichia"],
             "taxonomy_file": ["bac120_taxonomy_r95.tsv"],
         },
@@ -266,15 +242,15 @@ def test_resolve_supported_accession_preferences_falls_back_when_candidate_looku
         )
     )
 
-    assert lookup_calls[0] == ("GCF_000001.1",)
-    assert set(lookup_calls[1]) == {"GCA_000001.2", "GCA_000001.3"}
+    assert lookup_calls[0] == ("GCF_000001.2",)
+    assert lookup_calls[1] == ("GCA_000001.2",)
     assert metadata_shared_failures == ()
     assert suppressed_notes == {}
     assert mapped_frame.select("final_accession", "conversion_status").rows(
         named=True,
     ) == [
         {
-            "final_accession": "GCF_000001.1",
+            "final_accession": "GCF_000001.2",
             "conversion_status": "paired_gca_metadata_incomplete_fallback_original",
         },
     ]
@@ -304,16 +280,16 @@ def test_resolve_supported_accession_preferences_falls_back_when_candidate_looku
         if len(lookup_calls) == 1:
             return SummaryLookupResult(
                 summary_map={
-                    "GCF_000001.1": {
-                        "GCF_000001.1",
+                    "GCF_000001.2": {
+                        "GCF_000001.2",
                         "GCA_000001.2",
                     },
                 },
                 status_map={
-                    "GCF_000001.1": AssemblyStatusInfo(
+                    "GCF_000001.2": AssemblyStatusInfo(
                         assembly_status="current",
                         suppression_reason=None,
-                        paired_accession="GCA_000001.2",
+                        paired_accession=None,
                         paired_assembly_status=None,
                     ),
                 },
@@ -343,8 +319,8 @@ def test_resolve_supported_accession_preferences_falls_back_when_candidate_looku
         {
             "requested_taxon": ["g__Escherichia"],
             "taxon_slug": ["g__Escherichia"],
-            "gtdb_accession": ["RS_GCF_000001.1"],
-            "ncbi_accession": ["GCF_000001.1"],
+            "gtdb_accession": ["RS_GCF_000001.2"],
+            "ncbi_accession": ["GCF_000001.2"],
             "lineage": ["d__Bacteria;p__Proteobacteria;g__Escherichia"],
             "taxonomy_file": ["bac120_taxonomy_r95.tsv"],
         },
@@ -360,12 +336,12 @@ def test_resolve_supported_accession_preferences_falls_back_when_candidate_looku
     )
 
     assert lookup_calls == [
-        ("GCF_000001.1",),
+        ("GCF_000001.2",),
         ("GCA_000001.2",),
     ]
     assert metadata_shared_failures == (
         SharedFailureContext(
-            affected_original_accessions=("GCF_000001.1",),
+            affected_original_accessions=("GCF_000001.2",),
             failures=(
                 CommandFailureRecord(
                     stage="metadata_lookup",
@@ -384,7 +360,7 @@ def test_resolve_supported_accession_preferences_falls_back_when_candidate_looku
         named=True,
     ) == [
         {
-            "final_accession": "GCF_000001.1",
+            "final_accession": "GCF_000001.2",
             "conversion_status": "paired_gca_metadata_incomplete_fallback_original",
         },
     ]
@@ -414,14 +390,14 @@ def test_resolve_supported_accession_preferences_scopes_candidate_lookup_failure
         if len(lookup_calls) == 1:
             return SummaryLookupResult(
                 summary_map={
-                    "GCF_000001.1": {"GCF_000001.1", "GCA_000001.2"},
+                    "GCF_000001.2": {"GCF_000001.2", "GCA_000001.2"},
                     "GCF_000002.1": {"GCF_000002.1"},
                 },
                 status_map={
-                    "GCF_000001.1": AssemblyStatusInfo(
+                    "GCF_000001.2": AssemblyStatusInfo(
                         assembly_status="current",
                         suppression_reason=None,
-                        paired_accession="GCA_000001.2",
+                        paired_accession=None,
                         paired_assembly_status=None,
                     ),
                     "GCF_000002.1": AssemblyStatusInfo(
@@ -457,8 +433,8 @@ def test_resolve_supported_accession_preferences_scopes_candidate_lookup_failure
         {
             "requested_taxon": ["g__Escherichia", "g__Bacillus"],
             "taxon_slug": ["g__Escherichia", "g__Bacillus"],
-            "gtdb_accession": ["RS_GCF_000001.1", "RS_GCF_000002.1"],
-            "ncbi_accession": ["GCF_000001.1", "GCF_000002.1"],
+            "gtdb_accession": ["RS_GCF_000001.2", "RS_GCF_000002.1"],
+            "ncbi_accession": ["GCF_000001.2", "GCF_000002.1"],
             "lineage": [
                 "d__Bacteria;p__Proteobacteria;g__Escherichia",
                 "d__Bacteria;p__Firmicutes;g__Bacillus",
@@ -477,12 +453,12 @@ def test_resolve_supported_accession_preferences_scopes_candidate_lookup_failure
     )
 
     assert lookup_calls == [
-        ("GCF_000001.1", "GCF_000002.1"),
+        ("GCF_000001.2", "GCF_000002.1"),
         ("GCA_000001.2",),
     ]
     assert metadata_shared_failures == (
         SharedFailureContext(
-            affected_original_accessions=("GCF_000001.1",),
+            affected_original_accessions=("GCF_000001.2",),
             failures=(
                 CommandFailureRecord(
                     stage="metadata_lookup",
@@ -503,8 +479,8 @@ def test_resolve_supported_accession_preferences_scopes_candidate_lookup_failure
         "conversion_status",
     ).rows(named=True) == [
         {
-            "ncbi_accession": "GCF_000001.1",
-            "final_accession": "GCF_000001.1",
+            "ncbi_accession": "GCF_000001.2",
+            "final_accession": "GCF_000001.2",
             "conversion_status": "paired_gca_metadata_incomplete_fallback_original",
         },
         {

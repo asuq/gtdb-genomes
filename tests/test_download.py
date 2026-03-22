@@ -137,22 +137,15 @@ def test_command_builders_match_datasets_cli_shape() -> None:
 def test_select_download_method_uses_count_only_threshold() -> None:
     """Auto mode should switch to dehydrate only above the count threshold."""
 
-    assert select_download_method("auto", 5).method_used == "direct"
+    assert select_download_method(5).method_used == "direct"
     assert (
-        select_download_method("auto", DEHYDRATE_ACCESSION_THRESHOLD).method_used
+        select_download_method(DEHYDRATE_ACCESSION_THRESHOLD).method_used
         == "direct"
     )
     assert (
-        select_download_method("auto", DEHYDRATE_ACCESSION_THRESHOLD + 1).method_used
+        select_download_method(DEHYDRATE_ACCESSION_THRESHOLD + 1).method_used
         == "dehydrate"
     )
-
-
-def test_select_download_method_preserves_non_auto_request() -> None:
-    """Explicit methods should pass through unchanged."""
-
-    assert select_download_method("direct", 5000).method_used == "direct"
-    assert select_download_method("dehydrate", 1).method_used == "dehydrate"
 
 
 def test_worker_caps_and_accession_input_file_follow_documented_limits(

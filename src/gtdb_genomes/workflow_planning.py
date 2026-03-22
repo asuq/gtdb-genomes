@@ -13,18 +13,17 @@ import polars as pl
 
 from gtdb_genomes.download import (
     DEFAULT_REQUESTED_DOWNLOAD_METHOD,
-    PreviewCommandResult,
     PreviewError,
-    build_preview_command,
     get_ordered_unique_accessions,
     run_preview_command,
     select_download_method,
     write_accession_input_file,
 )
-from gtdb_genomes.logging_utils import redact_command, redact_text
+from gtdb_genomes.logging_utils import redact_text
 from gtdb_genomes.metadata import (
     AssemblyStatusInfo,
     find_incomplete_genbank_metadata_accessions,
+    find_matching_genbank_accessions,
     MetadataLookupError,
     SUPPRESSED_ASSEMBLY_NOTE,
     apply_accession_preferences,
@@ -131,6 +130,26 @@ def build_candidate_accession_scope(
             candidate_accession in candidate_accession_set
             for candidate_accession in discovered_accessions
         )
+    )
+
+
+def build_candidate_metadata_accessions(
+    summary_map: dict[str, set[str]],
+    status_map: dict[str, AssemblyStatusInfo],
+    *,
+    version_latest: bool,
+) -> tuple[str, ...]:
+    """Return the GenBank candidates that still need metadata lookup."""
+
+    return get_ordered_unique_accessions(
+        accession
+        for requested_accession, discovered_accessions in summary_map.items()
+        for accession in find_matching_genbank_accessions(
+            requested_accession,
+            discovered_accessions,
+            version_latest=version_latest,
+        )
+        if accession not in status_map
     )
 
 
@@ -269,6 +288,7 @@ def resolve_supported_accession_preferences(
                 {},
                 status_map={},
                 prefer_genbank=args.prefer_genbank,
+                version_latest=args.version_latest,
             ),
             (),
             {},
@@ -281,6 +301,7 @@ def resolve_supported_accession_preferences(
                 {},
                 status_map={},
                 prefer_genbank=False,
+                version_latest=args.version_latest,
             ),
             (),
             {},
@@ -326,11 +347,10 @@ def resolve_supported_accession_preferences(
             "Metadata lookup finished with %d preferred mapping(s)",
             len(summary_map),
         )
-        candidate_accessions = get_ordered_unique_accessions(
-            accession
-            for discovered_accessions in summary_map.values()
-            for accession in discovered_accessions
-            if accession.startswith("GCA_") and accession not in status_map
+        candidate_accessions = build_candidate_metadata_accessions(
+            summary_map,
+            status_map,
+            version_latest=args.version_latest,
         )
         if candidate_accessions:
             candidate_original_accessions = build_candidate_accession_scope(
@@ -382,6 +402,7 @@ def resolve_supported_accession_preferences(
                 find_incomplete_genbank_metadata_accessions(
                     summary_map,
                     status_map,
+                    version_latest=args.version_latest,
                 )
             )
     mapped_frame = apply_accession_preferences(
@@ -390,6 +411,7 @@ def resolve_supported_accession_preferences(
         status_map=status_map,
         incomplete_genbank_accessions=incomplete_genbank_accessions,
         prefer_genbank=args.prefer_genbank,
+        version_latest=args.version_latest,
     )
     return (
         mapped_frame,
@@ -397,21 +419,7 @@ def resolve_supported_accession_preferences(
         build_suppressed_accession_notes(mapped_frame, status_map),
     )
 
-
 # Automatic method planning.
-
-
-def normalise_preview_command_result(
-    preview_result: PreviewCommandResult | str,
-) -> PreviewCommandResult:
-    """Return a structured preview result for real runs and test doubles."""
-
-    if isinstance(preview_result, PreviewCommandResult):
-        return preview_result
-    return PreviewCommandResult(
-        preview_text=preview_result,
-        failures=(),
-    )
 
 
 def plan_supported_downloads(
@@ -442,25 +450,15 @@ def plan_supported_downloads(
             preview_accessions,
         )
         decision = select_download_method(
-            DEFAULT_REQUESTED_DOWNLOAD_METHOD,
             len(preview_accessions),
         )
-        preview_command = build_preview_command(
-            preview_accession_file,
-            args.include,
-            ncbi_api_key=args.ncbi_api_key,
-            debug=args.debug,
-        )
-        logger.debug("Running %s", redact_command(preview_command, secrets))
         preview_shared_failures: tuple[SharedFailureContext, ...] = ()
         try:
-            preview_result = normalise_preview_command_result(
-                run_preview_command(
-                    preview_accession_file,
-                    args.include,
-                    ncbi_api_key=args.ncbi_api_key,
-                    debug=args.debug,
-                ),
+            preview_result = run_preview_command(
+                preview_accession_file,
+                args.include,
+                ncbi_api_key=args.ncbi_api_key,
+                debug=args.debug,
             )
         except PreviewError as error:
             if error.failures:

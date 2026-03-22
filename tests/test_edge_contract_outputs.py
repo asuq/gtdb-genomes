@@ -55,20 +55,40 @@ def fake_release_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
     install_fake_release_resolution(monkeypatch)
 
 
+def successful_preview_result() -> PreviewCommandResult:
+    """Return one successful preview result for stubbed output tests."""
+
+    return PreviewCommandResult(
+        preview_text="Package size: 1.0 GB\n",
+        failures=(),
+    )
+
+
 def build_shared_preferred_summary_lookup_result() -> SummaryLookupResult:
     """Return metadata that prefers the paired GenBank accession."""
 
     return SummaryLookupResult(
         summary_map={
-            "GCF_001881595.2": {"GCF_001881595.2", "GCA_001881595.3"},
+            "GCF_001881595.2": {
+                "GCF_001881595.2",
+                "GCA_001881595.2",
+                "GCA_001881595.3",
+            },
+            "GCA_001881595.2": {"GCA_001881595.2"},
             "GCA_001881595.3": {"GCA_001881595.3"},
         },
         status_map={
             "GCF_001881595.2": AssemblyStatusInfo(
                 assembly_status="current",
                 suppression_reason=None,
-                paired_accession="GCA_001881595.3",
+                paired_accession="GCA_001881595.2",
                 paired_assembly_status="current",
+            ),
+            "GCA_001881595.2": AssemblyStatusInfo(
+                assembly_status="current",
+                suppression_reason=None,
+                paired_accession=None,
+                paired_assembly_status=None,
             ),
             "GCA_001881595.3": AssemblyStatusInfo(
                 assembly_status="current",
@@ -140,7 +160,7 @@ def test_auto_preview_uses_accession_input_file_and_keeps_output_absent(
         debug: bool = False,
         sleep_func=None,
         runner=None,
-    ) -> str:
+    ) -> PreviewCommandResult:
         """Capture the preview input file used by auto mode."""
 
         del ncbi_api_key, datasets_bin, debug, sleep_func, runner
@@ -149,7 +169,7 @@ def test_auto_preview_uses_accession_input_file_and_keeps_output_absent(
         assert include == "genome"
         assert accession_file.is_file()
         assert accession_file.parent.name.startswith("gtdb_genomes_preview_")
-        return "Package size: 1.0 GB\n"
+        return successful_preview_result()
 
     monkeypatch.setattr(
         "gtdb_genomes.workflow_selection.check_required_tools",
@@ -414,7 +434,7 @@ def test_mixed_uba_real_run_records_failed_unsupported_rows(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     def fake_execute_accession_plans(
@@ -586,7 +606,7 @@ def test_mixed_real_run_writes_zero_match_taxon_outputs(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     def fake_execute_accession_plans(
@@ -691,7 +711,7 @@ def test_real_run_output_copy_failure_returns_exit_code_eight(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_outputs.copy_accession_payload",
@@ -778,7 +798,7 @@ def test_shared_preferred_direct_manifest_uses_preferred_download_batch(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     def fake_execute_accession_plans(
@@ -865,7 +885,7 @@ def test_real_run_records_provenance_and_download_request_accessions(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_outputs.build_runtime_provenance",
@@ -897,13 +917,16 @@ def test_real_run_records_provenance_and_download_request_accessions(
             "GCA_001881595.3",
         }
         request_accession = (
-            "GCA_001881595" if args.version_latest else "GCA_001881595.3"
+            "GCA_001881595" if args.version_latest else "GCA_001881595.2"
+        )
+        selected_accession = (
+            "GCA_001881595.3" if args.version_latest else "GCA_001881595.2"
         )
         return DownloadExecutionResult(
             executions={
                 "GCF_001881595.2": AccessionExecution(
                     original_accession="GCF_001881595.2",
-                    final_accession="GCA_001881595.3",
+                    final_accession=selected_accession,
                     conversion_status="paired_to_gca",
                     download_status="downloaded",
                     download_batch="direct_batch_1",
@@ -996,13 +1019,15 @@ def test_real_run_records_provenance_and_download_request_accessions(
     assert fixed_summary["archaeal_taxonomy_sha256"] == ""
     assert fixed_summary["version_latest"] == "false"
 
-    assert fixed_accessions["GCF_001881595.2"]["selected_accession"] == "GCA_001881595.3"
-    assert fixed_accessions["GCF_001881595.2"]["download_request_accession"] == "GCA_001881595.3"
-    assert fixed_taxon_rows["GCF_001881595.2"]["selected_accession"] == "GCA_001881595.3"
-    assert fixed_taxon_rows["GCF_001881595.2"]["download_request_accession"] == "GCA_001881595.3"
+    assert fixed_accessions["GCF_001881595.2"]["selected_accession"] == "GCA_001881595.2"
+    assert fixed_accessions["GCF_001881595.2"]["download_request_accession"] == "GCA_001881595.2"
+    assert fixed_taxon_rows["GCF_001881595.2"]["selected_accession"] == "GCA_001881595.2"
+    assert fixed_taxon_rows["GCF_001881595.2"]["download_request_accession"] == "GCA_001881595.2"
 
     assert latest_summary["version_latest"] == "true"
+    assert latest_accessions["GCF_001881595.2"]["selected_accession"] == "GCA_001881595.3"
     assert latest_accessions["GCF_001881595.2"]["download_request_accession"] == "GCA_001881595"
+    assert latest_taxon_rows["GCF_001881595.2"]["selected_accession"] == "GCA_001881595.3"
     assert latest_taxon_rows["GCF_001881595.2"]["download_request_accession"] == "GCA_001881595"
 
 
@@ -1032,7 +1057,7 @@ def test_direct_fallback_manifest_uses_execution_request_accession_and_batch(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     def fake_execute_accession_plans(
@@ -1116,9 +1141,7 @@ def test_direct_fallback_manifest_uses_execution_request_accession_and_batch(
             for values in taxon_rows
         )
     }
-    assert accession_maps["RS_GCF_001881595.2"]["selected_accession"] == (
-        "GCA_001881595.3"
-    )
+    assert accession_maps["RS_GCF_001881595.2"]["selected_accession"] == "GCA_001881595.2"
     assert accession_maps["RS_GCF_001881595.2"]["download_request_accession"] == (
         "GCF_001881595.2"
     )
@@ -1162,7 +1185,7 @@ def test_latest_fallback_manifest_uses_original_fallback_request_accession(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     def fake_execute_accession_plans(
@@ -1277,7 +1300,7 @@ def test_failed_fallback_manifest_keeps_terminal_fallback_request_accession(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     def fake_execute_accession_plans(
@@ -1411,7 +1434,10 @@ def test_dehydrate_fallback_manifest_uses_direct_execution_request_accession(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 20.0 GB\n",
+        lambda *args, **kwargs: PreviewCommandResult(
+            preview_text="Package size: 20.0 GB\n",
+            failures=(),
+        ),
     )
 
     def fake_execute_accession_plans(
@@ -1578,7 +1604,7 @@ def test_direct_success_manifest_preserves_shared_retry_failures(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     def fake_execute_accession_plans(
@@ -1683,6 +1709,7 @@ def test_candidate_lookup_failure_falls_back_to_original_and_keeps_failure_rows(
                 summary_map={
                     "GCF_001881595.2": {
                         "GCF_001881595.2",
+                        "GCA_001881595.2",
                         "GCA_001881595.3",
                     },
                 },
@@ -1690,7 +1717,7 @@ def test_candidate_lookup_failure_falls_back_to_original_and_keeps_failure_rows(
                     "GCF_001881595.2": AssemblyStatusInfo(
                         assembly_status="current",
                         suppression_reason=None,
-                        paired_accession="GCA_001881595.3",
+                        paired_accession="GCA_001881595.2",
                         paired_assembly_status=None,
                     ),
                 },
@@ -1706,7 +1733,7 @@ def test_candidate_lookup_failure_falls_back_to_original_and_keeps_failure_rows(
                     error_type="metadata_lookup",
                     error_message="candidate lookup failed",
                     final_status="retry_scheduled",
-                    attempted_accession="GCA_001881595.3",
+                    attempted_accession="GCA_001881595.2",
                 ),
             ),
         )
@@ -1732,7 +1759,7 @@ def test_candidate_lookup_failure_falls_back_to_original_and_keeps_failure_rows(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     def fake_execute_accession_plans(
@@ -1789,7 +1816,7 @@ def test_candidate_lookup_failure_falls_back_to_original_and_keeps_failure_rows(
     assert exit_code == 0
     assert lookup_calls == [
         ("GCF_001881595.2",),
-        ("GCA_001881595.3",),
+        ("GCA_001881595.2",),
     ]
     accession_header, accession_rows = parse_tsv(output_dir / "accession_map.tsv")
     accession_map = dict(zip(accession_header, accession_rows[0], strict=True))
@@ -1803,7 +1830,7 @@ def test_candidate_lookup_failure_falls_back_to_original_and_keeps_failure_rows(
     failure_header, failure_rows = parse_tsv(output_dir / "download_failures.tsv")
     assert len(failure_rows) == 1
     failure = dict(zip(failure_header, failure_rows[0], strict=True))
-    assert failure["attempted_accession"] == "GCA_001881595.3"
+    assert failure["attempted_accession"] == "GCA_001881595.2"
     assert failure["stage"] == "metadata_lookup"
     assert failure["final_status"] == "retry_scheduled"
 
@@ -1830,7 +1857,7 @@ def test_failure_manifest_collapses_shared_accession_taxa(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     def fake_execute_accession_plans(

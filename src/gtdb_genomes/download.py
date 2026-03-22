@@ -267,23 +267,15 @@ def build_rehydrate_command(
 
 
 def select_download_method(
-    requested_method: str,
     accession_count: int,
 ) -> DownloadMethodDecision:
     """Resolve the effective download method from the request-token count."""
 
-    if requested_method != "auto":
-        return DownloadMethodDecision(
-            requested_method=requested_method,
-            method_used=requested_method,
-            accession_count=accession_count,
-            preview_size_bytes=None,
-        )
     method_used = "direct"
     if accession_count > DEHYDRATE_ACCESSION_THRESHOLD:
         method_used = "dehydrate"
     return DownloadMethodDecision(
-        requested_method=requested_method,
+        requested_method=DEFAULT_REQUESTED_DOWNLOAD_METHOD,
         method_used=method_used,
         accession_count=accession_count,
         preview_size_bytes=None,

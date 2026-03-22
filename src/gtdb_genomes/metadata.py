@@ -165,6 +165,26 @@ def get_assembly_accession_stem(accession: str) -> str:
     return f"{parsed_accession.prefix}_{parsed_accession.numeric_identifier}"
 
 
+def select_matching_genbank_candidates(
+    requested_accession: str,
+    matching_accessions: list[AssemblyAccession],
+    *,
+    version_latest: bool,
+) -> list[AssemblyAccession]:
+    """Return the GenBank candidates allowed by the version-selection mode."""
+
+    if version_latest:
+        return matching_accessions
+    requested_parts = parse_assembly_accession(requested_accession)
+    if requested_parts is None:
+        return []
+    return [
+        accession
+        for accession in matching_accessions
+        if accession.version == requested_parts.version
+    ]
+
+
 def build_download_request_accession(
     selected_accession: str,
     *,
@@ -505,6 +525,8 @@ def find_matching_genbank_accessions(
     requested_accession: str,
     discovered_accessions: set[str],
     status_map: dict[str, AssemblyStatusInfo] | None = None,
+    *,
+    version_latest: bool = False,
 ) -> tuple[str, ...]:
     """Return matching GenBank accessions for one RefSeq assembly accession."""
 
@@ -512,13 +534,17 @@ def find_matching_genbank_accessions(
     requested_parts = parse_assembly_accession(requested_accession)
     if requested_parts is None:
         return ()
-    matching_accessions = [
-        parsed_accession
-        for accession in discovered_accessions
-        if (parsed_accession := parse_assembly_accession(accession)) is not None
-        and parsed_accession.prefix == "GCA"
-        and parsed_accession.numeric_identifier == requested_parts.numeric_identifier
-    ]
+    matching_accessions = select_matching_genbank_candidates(
+        requested_accession,
+        [
+            parsed_accession
+            for accession in discovered_accessions
+            if (parsed_accession := parse_assembly_accession(accession)) is not None
+            and parsed_accession.prefix == "GCA"
+            and parsed_accession.numeric_identifier == requested_parts.numeric_identifier
+        ],
+        version_latest=version_latest,
+    )
     matching_accessions.sort(
         key=lambda accession: (
             is_suppressed_status(
@@ -537,6 +563,8 @@ def find_matching_genbank_accessions(
 def find_incomplete_genbank_metadata_accessions(
     summary_map: dict[str, set[str]],
     status_map: dict[str, AssemblyStatusInfo],
+    *,
+    version_latest: bool,
 ) -> set[str]:
     """Return requested accessions with unresolved paired-GenBank metadata."""
 
@@ -547,6 +575,7 @@ def find_incomplete_genbank_metadata_accessions(
         matching_genbank = find_matching_genbank_accessions(
             requested_accession,
             discovered_accessions,
+            version_latest=version_latest,
         )
         if matching_genbank and any(
             not has_complete_assembly_status_info(status_map.get(accession))
@@ -562,6 +591,7 @@ def choose_preferred_accession(
     status_map: dict[str, AssemblyStatusInfo] | None = None,
     incomplete_genbank_accessions: Set[str] | None = None,
     prefer_genbank: bool = True,
+    version_latest: bool = False,
 ) -> tuple[str, str]:
     """Choose the final accession and conversion status for one request."""
 
@@ -580,6 +610,7 @@ def choose_preferred_accession(
         requested_accession,
         discovered_accessions,
         status_map=status_map,
+        version_latest=version_latest,
     )
     if paired_genbank:
         preferred_accession = paired_genbank[0]
@@ -610,6 +641,7 @@ def build_accession_preference_table(
     status_map: dict[str, AssemblyStatusInfo] | None = None,
     incomplete_genbank_accessions: Set[str] | None = None,
     prefer_genbank: bool = True,
+    version_latest: bool = False,
 ) -> pl.DataFrame:
     """Build a Polars table describing the chosen accession for each request."""
 
@@ -621,6 +653,7 @@ def build_accession_preference_table(
             status_map=status_map,
             incomplete_genbank_accessions=incomplete_genbank_accessions,
             prefer_genbank=prefer_genbank,
+            version_latest=version_latest,
         )
         rows.append(
             {
@@ -651,6 +684,7 @@ def apply_accession_preferences(
     status_map: dict[str, AssemblyStatusInfo] | None = None,
     incomplete_genbank_accessions: Set[str] | None = None,
     prefer_genbank: bool = True,
+    version_latest: bool = False,
 ) -> pl.DataFrame:
     """Attach preferred-accession metadata to a selected taxonomy frame."""
 
@@ -667,6 +701,7 @@ def apply_accession_preferences(
         status_map=status_map,
         incomplete_genbank_accessions=incomplete_genbank_accessions,
         prefer_genbank=prefer_genbank,
+        version_latest=version_latest,
     )
     return selection_frame.join(
         preference_frame,

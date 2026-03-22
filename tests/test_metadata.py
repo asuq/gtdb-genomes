@@ -177,11 +177,11 @@ def test_choose_preferred_accession_keeps_native_genbank_on_metadata_failure() -
     )
 
 
-def test_choose_preferred_accession_prefers_unsuppressed_gca_over_newer_suppressed() -> None:
-    """Suppression metadata should outrank raw version ordering for GCA matches."""
+def test_choose_preferred_accession_keeps_exact_matching_gca_version_by_default() -> None:
+    """Default GenBank preference should keep the matching versioned accession."""
 
     discovered_accessions = {
-        "GCF_000001.1",
+        "GCF_000001.2",
         "GCA_000001.2",
         "GCA_000001.3",
     }
@@ -201,12 +201,79 @@ def test_choose_preferred_accession_prefers_unsuppressed_gca_over_newer_suppress
     }
 
     assert choose_preferred_accession(
-        "GCF_000001.1",
+        "GCF_000001.2",
         discovered_accessions,
         status_map=status_map,
     ) == (
         "GCA_000001.2",
         "paired_to_gca",
+    )
+
+
+def test_choose_preferred_accession_version_latest_prefers_unsuppressed_gca_over_newer_suppressed() -> None:
+    """Latest-mode should still prefer an unsuppressed candidate over a newer suppressed one."""
+
+    discovered_accessions = {
+        "GCF_000001.1",
+        "GCA_000001.2",
+        "GCA_000001.3",
+    }
+    status_map = {
+        "GCA_000001.2": AssemblyStatusInfo(
+            assembly_status="current",
+            suppression_reason=None,
+            paired_accession=None,
+            paired_assembly_status=None,
+        ),
+        "GCA_000001.3": AssemblyStatusInfo(
+            assembly_status="suppressed",
+            suppression_reason="replaced by newer record",
+            paired_accession=None,
+            paired_assembly_status=None,
+        ),
+    }
+
+    assert choose_preferred_accession(
+        "GCF_000001.1",
+        discovered_accessions,
+        status_map=status_map,
+        version_latest=True,
+    ) == (
+        "GCA_000001.2",
+        "paired_to_gca",
+    )
+
+
+def test_choose_preferred_accession_keeps_original_when_exact_gca_version_is_absent() -> None:
+    """Default GenBank preference should not upgrade to a different revision."""
+
+    discovered_accessions = {
+        "GCF_000001.2",
+        "GCA_000001.1",
+        "GCA_000001.3",
+    }
+    status_map = {
+        "GCA_000001.1": AssemblyStatusInfo(
+            assembly_status="current",
+            suppression_reason=None,
+            paired_accession=None,
+            paired_assembly_status=None,
+        ),
+        "GCA_000001.3": AssemblyStatusInfo(
+            assembly_status="current",
+            suppression_reason=None,
+            paired_accession=None,
+            paired_assembly_status=None,
+        ),
+    }
+
+    assert choose_preferred_accession(
+        "GCF_000001.2",
+        discovered_accessions,
+        status_map=status_map,
+    ) == (
+        "GCF_000001.2",
+        "unchanged_original",
     )
 
 
@@ -237,26 +304,27 @@ def test_choose_preferred_accession_falls_back_when_all_gca_matches_are_suppress
         "GCF_000001.1",
         discovered_accessions,
         status_map=status_map,
+        version_latest=True,
     ) == (
         "GCF_000001.1",
         "paired_gca_suppressed_fallback_original",
     )
 
 
-def test_choose_preferred_accession_falls_back_when_preferred_gca_status_is_unknown() -> None:
-    """Unknown candidate metadata should never be treated as safe to promote."""
+def test_choose_preferred_accession_falls_back_when_exact_gca_status_is_unknown() -> None:
+    """Unknown exact-version metadata should never be treated as safe to promote."""
 
     discovered_accessions = {
-        "GCF_000001.1",
+        "GCF_000001.2",
         "GCA_000001.2",
     }
 
     assert choose_preferred_accession(
-        "GCF_000001.1",
+        "GCF_000001.2",
         discovered_accessions,
         status_map={},
     ) == (
-        "GCF_000001.1",
+        "GCF_000001.2",
         "paired_gca_metadata_incomplete_fallback_original",
     )
 
@@ -376,8 +444,8 @@ def test_apply_accession_preferences_emits_fixed_status_values() -> None:
     ]
 
 
-def test_apply_accession_preferences_uses_shared_numeric_identifier() -> None:
-    """Only GCA accessions with the same numeric identifier should pair."""
+def test_apply_accession_preferences_uses_shared_numeric_identifier_in_latest_mode() -> None:
+    """Latest-mode should pair only accessions with the same numeric identifier."""
 
     selection_frame = pl.DataFrame(
         {
@@ -410,6 +478,7 @@ def test_apply_accession_preferences_uses_shared_numeric_identifier() -> None:
                 paired_assembly_status=None,
             ),
         },
+        version_latest=True,
     )
 
     assert mapped.select("final_accession", "conversion_status").rows(
@@ -458,6 +527,7 @@ def test_parse_summary_json_lines_ignores_unrelated_accession_text() -> None:
                 paired_assembly_status=None,
             ),
         },
+        version_latest=True,
     ) == (
         "GCA_000001.3",
         "paired_to_gca",

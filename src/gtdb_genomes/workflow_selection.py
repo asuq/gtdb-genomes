@@ -42,12 +42,6 @@ UNSUPPORTED_UBA_WARNING_EXAMPLES = 5
 # Selection and unsupported-accession helpers.
 
 
-def is_unsupported_uba_accession(accession: str) -> bool:
-    """Return whether one legacy GTDB accession starts with `UBA`."""
-
-    return accession.startswith(UNSUPPORTED_UBA_PREFIX)
-
-
 def count_unique_accessions(frame: pl.DataFrame) -> int:
     """Return the number of unique accession values in one selection frame."""
 

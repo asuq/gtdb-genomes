@@ -53,6 +53,15 @@ def fake_release_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
     install_fake_release_resolution(monkeypatch)
 
 
+def successful_preview_result() -> PreviewCommandResult:
+    """Return one successful preview result for stubbed planning tests."""
+
+    return PreviewCommandResult(
+        preview_text="Package size: 1.0 GB\n",
+        failures=(),
+    )
+
+
 def test_build_unsupported_uba_warning_mentions_examples_and_bioproject() -> None:
     """The UBA warning builder should produce deterministic user guidance."""
 
@@ -206,19 +215,17 @@ def test_auto_method_uses_unique_download_request_count_after_stem_collapse_in_l
 
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     observed_counts: list[int] = []
 
     def fake_select_download_method(
-        requested_method: str,
         accession_count: int,
     ) -> DownloadMethodDecision:
         """Capture the accession count passed into method selection."""
 
         observed_counts.append(accession_count)
-        assert requested_method == "auto"
         return DownloadMethodDecision(
             requested_method="auto",
             method_used="direct",
@@ -274,19 +281,17 @@ def test_auto_method_keeps_versioned_requests_by_default_with_prefer_genbank(
 
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     observed_counts: list[int] = []
 
     def fake_select_download_method(
-        requested_method: str,
         accession_count: int,
     ) -> DownloadMethodDecision:
         """Capture the accession count passed into method selection."""
 
         observed_counts.append(accession_count)
-        assert requested_method == "auto"
         return DownloadMethodDecision(
             requested_method="auto",
             method_used="direct",
@@ -351,7 +356,7 @@ def test_plan_supported_downloads_switches_to_dehydrate_only_above_request_thres
 
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 MB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     plans, decision_method, preview_shared_failures = plan_supported_downloads(
@@ -538,7 +543,7 @@ def test_dry_run_logs_info_milestones(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     output_dir = tmp_path / "dry-run-info"
@@ -603,7 +608,7 @@ def test_dry_run_warns_for_suppressed_planned_accession(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     output_dir = tmp_path / "dry-run-suppressed-warning"
@@ -651,7 +656,7 @@ def test_real_run_logs_info_milestones(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_execution_direct.run_retryable_command",
@@ -753,7 +758,7 @@ def test_metadata_lookup_uses_accession_input_file_and_cleans_it_up(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     output_dir = tmp_path / "metadata-input-file"
@@ -816,7 +821,7 @@ def test_total_runtime_failure_leaves_final_accession_blank(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     def fake_execute_accession_plans(
@@ -921,7 +926,7 @@ def test_failed_suppressed_accession_repeats_warning_and_failure_note(
     )
     monkeypatch.setattr(
         "gtdb_genomes.workflow_planning.run_preview_command",
-        lambda *args, **kwargs: "Package size: 1.0 GB\n",
+        lambda *args, **kwargs: successful_preview_result(),
     )
 
     def fake_execute_accession_plans(
