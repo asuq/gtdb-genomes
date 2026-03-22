@@ -8,14 +8,14 @@
 [![Code licence: MIT](https://img.shields.io/badge/code-MIT-green.svg)](LICENSE)
 [![Bundled data licence: CC BY-SA 4.0](https://img.shields.io/badge/bundled%20data-CC--BY--SA%204.0-blue.svg)](licenses/CC-BY-SA-4.0.txt)
 
-`gtdb-genomes` downloads NCBI genomes from GTDB taxon selections.
+`gtdb-genomes` downloads NCBI genomes from GTDB taxon selections, using GTDB taxonomy tables and [NCBI datasets CLI](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/getting_started/).
 
 The detailed runtime contract, output layout, retry rules, and bundled-data notes live in [docs/usage-details.md](docs/usage-details.md).
 
 
 ## Installation
 
-Install the packaged release from Bioconda:
+Install from Bioconda:
 
 ```bash
 mamba create -n gtdb-genomes -c conda-forge -c bioconda gtdb-genomes
