@@ -33,6 +33,10 @@ Built wheel and sdist metadata also advertise `Requires-External` hints for
 remains the authoritative runtime check, and exits with code `5` when the
 installed runtime falls outside this supported window.
 
+For community packaging and downstream redistribution, use the tagged release
+`sdist` as the source input. A plain repository checkout is a maintainer and
+source-checkout development input, not the supported packaging boundary.
+
 The pytest matrix runs on Linux, macOS, and Windows. Clean packaged-runtime
 and real-data validation currently run on Linux. For now, use the
 source-checkout workflow in Development And Packaging below.
@@ -124,9 +128,11 @@ gtdb-genomes \
   accept a unique same-family realised version from the extracted payload.
 - `--prefer-genbank` and `--version-latest` consult current NCBI metadata, so
   they are time-dependent rather than frozen to one GTDB release snapshot. Use
-  `run_summary.tsv` timestamps plus `selected_accession`,
-  `download_request_accession`, and `final_accession` as the audit trail for
-  those live decisions.
+  `run_summary.tsv` timestamps, `accession_decision_sha256`, and
+  `selected_accession`, `download_request_accession`, and `final_accession` as
+  the audit trail for those live decisions. `run_id` now incorporates that
+  accession-decision digest so it changes when the realised biological output
+  changes under the same top-level request.
 - Direct downloads remain serial in the current workflow.
 - `--debug` cannot be combined with an effective NCBI API key because
   upstream `datasets` debug output may expose the secret header.
@@ -174,7 +180,7 @@ data notes, see [docs/usage-details.md](docs/usage-details.md).
 Supported workflows:
 
 - maintainer and source-checkout development through `uv`
-- packaged wheel and sdist validation in CI on Linux
+- packaged wheel and tagged-release-style `sdist` validation in CI on Linux
 - maintainer manifest refresh through
   `uv run python -m gtdb_genomes.refresh_taxonomy_manifest`
 - a draft Bioconda recipe template is kept at
@@ -195,9 +201,12 @@ in the manifest, verifies them against the published `MD5SUM` listing, and
 materialises the local `data/gtdb_taxonomy/<release>/*.tsv.gz` layout used by
 a source checkout and source build. Run that bootstrap step before any source
 checkout CLI invocation. This is a maintainer and source-checkout workflow,
-not the recommended end-user install path. The bootstrap authenticity boundary
-is therefore limited by the upstream MD5 listing; packaged runtime integrity
-uses the bundled local SHA-256 and row-count manifest instead.
+not the recommended end-user install path and not the supported community
+packaging boundary. The bootstrap authenticity boundary is therefore limited by
+the upstream MD5 listing; packaged runtime integrity uses the bundled local
+SHA-256 and row-count manifest instead. Community packaging and downstream
+builds should start from the tagged self-contained `sdist`, which is validated
+in CI without rerunning `bootstrap_taxonomy`.
 
 `uv` is a development tool only. Packaged runtime use should not depend on it.
 

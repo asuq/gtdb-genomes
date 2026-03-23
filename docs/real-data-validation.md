@@ -107,7 +107,9 @@ integrity uses the bundled local SHA-256 and row-count manifest.
 
 This bootstrap step is a maintainer and source-checkout workflow only.
 Packaged runtimes already include the generated taxonomy payload and should be
-the preferred path for end users once a public release exists.
+the preferred path for end users once a public release exists. Community
+packaging and downstream builds should use the tagged release `sdist`, not a
+repository snapshot plus bootstrap.
 
 Optional environment:
 
@@ -202,18 +204,20 @@ runner, GitHub Actions runs:
 
 - `uv run python -m gtdb_genomes.bootstrap_taxonomy`
 
-The packaged-runtime `C` coverage is split into separate build and runtime
-jobs. The build job uses `uv` to bootstrap and build the wheel, while the
-runtime job installs that wheel into a clean mamba environment with no `uv` on
-`PATH` before running the remote cases. The runtime sanity check also loads the
-bundled taxonomy tables so the installed payload is exercised, not just the
-manifest header. In workflow terms, that check resolves `latest` and then
-calls `load_release_taxonomy()`.
+The packaged-runtime `C` coverage is split into separate build and clean-runtime
+jobs. The build job uses `uv` to bootstrap and build the wheel and `sdist`.
+The wheel runtime job installs the built wheel into a clean mamba environment
+with no `uv` on `PATH` before running the remote cases. The `sdist` runtime
+job installs the exact built source archive into a clean runtime without
+rerunning `bootstrap_taxonomy` and then loads the bundled taxonomy tables so
+the installed payload is exercised, not just the manifest header. In workflow
+terms, that check resolves `latest` and then calls `load_release_taxonomy()`.
 
 When `--prefer-genbank` or `--version-latest` is enabled during validation,
-use the generated `run_summary.tsv` timestamps together with
-`selected_accession`, `download_request_accession`, and `final_accession` as
-the audit trail for live NCBI-driven identity decisions.
+use the generated `run_summary.tsv` timestamps,
+`accession_decision_sha256`, `selected_accession`,
+`download_request_accession`, and `final_accession` as the audit trail for
+live NCBI-driven identity decisions.
 
 The CI workflow excludes:
 

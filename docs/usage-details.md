@@ -318,7 +318,7 @@ Status values:
 Fixed TSV columns:
 
 - `run_summary.tsv`
-  - `run_id`, `started_at`, `finished_at`, `requested_release`,
+  - `run_id`, `accession_decision_sha256`, `started_at`, `finished_at`, `requested_release`,
     `resolved_release`, `download_method_requested`, `download_method_used`,
     `threads_requested`, `download_concurrency_used`,
     `rehydrate_workers_used`, `include`, `prefer_genbank`, `version_latest`,
@@ -388,7 +388,8 @@ against the release `MD5SUM` or `MD5SUM.txt` listing, and materialises the
 local `.tsv.gz` runtime layout. That source-checkout bootstrap authenticity
 boundary is limited by the upstream-published MD5 listing. This bootstrap path
 is for maintainers and source checkouts; packaged runtimes already ship the
-generated payload.
+generated payload. Community packaging and downstream redistribution should use
+the tagged release `sdist`, not a repository snapshot.
 
 Maintainers can refresh the build-only mirror metadata for the existing release
 rows with:
@@ -426,8 +427,9 @@ accessions are warned about, skipped, and recorded as failed in manifests for
 non-dry runs.
 
 When `--prefer-genbank` or `--version-latest` is enabled, reproducibility is
-limited by current NCBI metadata. Use `run_summary.tsv` timestamps together
-with `selected_accession`, `download_request_accession`, and `final_accession`
+limited by current NCBI metadata. Use `run_summary.tsv` timestamps,
+`accession_decision_sha256`, `selected_accession`,
+`download_request_accession`, and `final_accession`
 from the accession manifests as the audit trail for those live decisions.
 
 ## Known Limitations

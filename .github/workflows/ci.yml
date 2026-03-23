@@ -211,3 +211,46 @@ jobs:
           name: validation-c-evidence
           path: /tmp/gtdb-realtests/ci-c/_evidence
           if-no-files-found: warn
+
+  validation-c-sdist-runtime:
+    name: Validation C sdist runtime
+    runs-on: ubuntu-latest
+    needs: validation-c-build
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Download built distribution
+        uses: actions/download-artifact@v7
+        with:
+          name: validation-c-dist
+          path: dist
+
+      - name: Install micromamba
+        run: bash bin/install-micromamba-ci.sh
+
+      - name: Create sdist runtime environment
+        run: >-
+          micromamba create -y -n gtdb-genome-runtime-sdist
+          python=3.12 pip hatchling polars
+          ncbi-datasets-cli=18.21.0 unzip=6.0
+
+      - name: Install built sdist into clean runtime
+        run: >-
+          micromamba run -n gtdb-genome-runtime-sdist
+          python -m pip install --force-reinstall --no-deps
+          --no-build-isolation dist/*.tar.gz
+
+      - name: Verify installed bundled taxonomy from sdist
+        run: |
+          micromamba run -n gtdb-genome-runtime-sdist \
+            python -c "import shutil; assert shutil.which('uv') is None"
+          micromamba run -n gtdb-genome-runtime-sdist python - <<'PY'
+          from gtdb_genomes.release_resolver import resolve_and_validate_release
+          from gtdb_genomes.taxonomy import load_release_taxonomy
+
+          resolution = resolve_and_validate_release('latest')
+          frame = load_release_taxonomy(resolution)
+          assert resolution.bacterial_taxonomy is not None, resolution
+          assert frame.height > 0, frame
+          PY

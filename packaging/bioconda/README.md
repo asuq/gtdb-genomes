@@ -12,5 +12,10 @@ exercised without a live download. The `resolve_and_validate_release()` smoke
 test now performs full bundled-payload validation before `load_release_taxonomy()`
 checks that the packaged tables really load.
 
+For community packaging, the supported source input is the tagged release
+`sdist`, not a repository snapshot. The repository bootstrap path exists for
+maintainers and source checkouts, and its MD5-anchored mirror verification is
+outside the community packaging trust boundary.
+
 Do not submit or publish this template unchanged. Copy it to `meta.yaml` only
 when a tagged release archive exists and the final `sha256` has been verified.
