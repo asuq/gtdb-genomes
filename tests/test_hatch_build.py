@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
+import base64
+import csv
 import gzip
 import hashlib
+import io
 from pathlib import Path
+import zipfile
 
 import pytest
 
 pytest.importorskip("hatchling.builders.hooks.plugin.interface")
 
-from hatch_build import CustomBuildHook, append_requires_external_metadata
+from hatch_build import (
+    CustomBuildHook,
+    append_requires_external_metadata,
+    patch_wheel_metadata,
+)
 from hatch_metadata import get_external_runtime_requirements
 from gtdb_genomes.release_resolver import BundledDataError
 
@@ -54,6 +62,71 @@ def write_release_manifest(
     )
 
 
+def write_minimal_wheel(wheel_path: Path) -> None:
+    """Write one minimal synthetic wheel with a placeholder `RECORD`."""
+
+    with zipfile.ZipFile(wheel_path, "w") as handle:
+        handle.writestr(
+            "gtdb_genomes/__init__.py",
+            "__version__ = '0.1.0'\n",
+        )
+        handle.writestr(
+            "gtdb_genomes-0.1.0.dist-info/WHEEL",
+            (
+                "Wheel-Version: 1.0\n"
+                "Generator: test\n"
+                "Root-Is-Purelib: true\n"
+                "Tag: py3-none-any\n"
+            ),
+        )
+        handle.writestr(
+            "gtdb_genomes-0.1.0.dist-info/METADATA",
+            "Metadata-Version: 2.4\nName: gtdb-genomes\nVersion: 0.1.0\n",
+        )
+        handle.writestr(
+            "gtdb_genomes-0.1.0.dist-info/RECORD",
+            "gtdb_genomes-0.1.0.dist-info/RECORD,,\n",
+        )
+
+
+def build_expected_record_hash(payload_bytes: bytes) -> str:
+    """Return the expected wheel `RECORD` hash for one payload."""
+
+    digest = hashlib.sha256(payload_bytes).digest()
+    return (
+        "sha256="
+        f"{base64.urlsafe_b64encode(digest).decode('ascii').rstrip('=')}"
+    )
+
+
+def read_wheel_record_rows(
+    wheel_path: Path,
+) -> tuple[dict[str, tuple[str, str]], dict[str, bytes]]:
+    """Return one wheel's `RECORD` rows plus the hashed file payloads."""
+
+    with zipfile.ZipFile(wheel_path) as handle:
+        payloads = {
+            info.filename: handle.read(info.filename)
+            for info in handle.infolist()
+            if not info.is_dir()
+        }
+    record_member_name = next(
+        member_name
+        for member_name in payloads
+        if member_name.endswith(".dist-info/RECORD")
+    )
+    record_rows = tuple(
+        csv.reader(io.StringIO(payloads[record_member_name].decode("utf-8"))),
+    )
+    return (
+        {
+            row[0]: (row[1], row[2])
+            for row in record_rows
+        },
+        payloads,
+    )
+
+
 def test_initialise_build_info_requires_force_include_dict(
     tmp_path: Path,
 ) -> None:
@@ -76,6 +149,42 @@ def test_append_requires_external_metadata_appends_known_runtime_requirements() 
     for requirement in get_external_runtime_requirements():
         assert f"Requires-External: {requirement}" in metadata_text
         assert metadata_text.count(f"Requires-External: {requirement}") == 1
+
+
+def test_patch_wheel_metadata_regenerates_record_entries(
+    tmp_path: Path,
+) -> None:
+    """Wheel metadata patching should keep `RECORD` hashes and sizes consistent."""
+
+    wheel_path = tmp_path / "gtdb_genomes-0.1.0-py3-none-any.whl"
+    write_minimal_wheel(wheel_path)
+
+    patch_wheel_metadata(wheel_path)
+
+    record_rows, payloads = read_wheel_record_rows(wheel_path)
+    metadata_member_name = next(
+        member_name
+        for member_name in payloads
+        if member_name.endswith(".dist-info/METADATA")
+    )
+    record_member_name = next(
+        member_name
+        for member_name in payloads
+        if member_name.endswith(".dist-info/RECORD")
+    )
+
+    metadata_text = payloads[metadata_member_name].decode("utf-8")
+    for requirement in get_external_runtime_requirements():
+        assert f"Requires-External: {requirement}" in metadata_text
+
+    for member_name, payload_bytes in payloads.items():
+        recorded_hash, recorded_size = record_rows[member_name]
+        if member_name == record_member_name:
+            assert recorded_hash == ""
+            assert recorded_size == ""
+            continue
+        assert recorded_hash == build_expected_record_hash(payload_bytes)
+        assert recorded_size == str(len(payload_bytes))
 
 
 def test_validate_bundled_taxonomy_accepts_complete_synthetic_payload(

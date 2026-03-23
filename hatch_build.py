@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import base64
+import csv
 import io
+import hashlib
 from pathlib import Path
 import sys
 import tarfile
@@ -56,6 +59,35 @@ def append_requires_external_metadata(metadata_text: str) -> str:
     return "\n".join([metadata_body, *appended_lines, ""])
 
 
+def build_wheel_record_hash(payload_bytes: bytes) -> str:
+    """Return the wheel `RECORD` hash field for one payload."""
+
+    digest = hashlib.sha256(payload_bytes).digest()
+    encoded_digest = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    return f"sha256={encoded_digest}"
+
+
+def build_wheel_record_text(
+    member_payloads: tuple[tuple[str, bytes], ...],
+    *,
+    record_member_name: str,
+) -> str:
+    """Return one regenerated wheel `RECORD` payload."""
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    for member_name, payload_bytes in member_payloads:
+        writer.writerow(
+            (
+                member_name,
+                build_wheel_record_hash(payload_bytes),
+                str(len(payload_bytes)),
+            ),
+        )
+    writer.writerow((record_member_name, "", ""))
+    return buffer.getvalue()
+
+
 def build_copied_tar_info(member: tarfile.TarInfo) -> tarfile.TarInfo:
     """Return a writable copy of one tar member descriptor."""
 
@@ -80,21 +112,48 @@ def patch_wheel_metadata(artifact_path: Path) -> None:
 
     temporary_path = artifact_path.with_suffix(".tmp.whl")
     metadata_patched = False
+    record_member: zipfile.ZipInfo | None = None
+    rewritten_members: list[tuple[zipfile.ZipInfo, bytes | None]] = []
     with zipfile.ZipFile(artifact_path) as source_archive:
-        with zipfile.ZipFile(temporary_path, "w") as rewritten_archive:
-            for member in source_archive.infolist():
-                payload_bytes = source_archive.read(member.filename)
-                if member.filename.endswith(".dist-info/METADATA"):
-                    payload_bytes = append_requires_external_metadata(
-                        payload_bytes.decode("utf-8"),
-                    ).encode("utf-8")
-                    metadata_patched = True
-                rewritten_archive.writestr(member, payload_bytes)
+        for member in source_archive.infolist():
+            if member.filename.endswith(".dist-info/RECORD"):
+                record_member = member
+                continue
+            if member.is_dir():
+                rewritten_members.append((member, None))
+                continue
+            payload_bytes = source_archive.read(member.filename)
+            if member.filename.endswith(".dist-info/METADATA"):
+                payload_bytes = append_requires_external_metadata(
+                    payload_bytes.decode("utf-8"),
+                ).encode("utf-8")
+                metadata_patched = True
+            rewritten_members.append((member, payload_bytes))
     if not metadata_patched:
         temporary_path.unlink(missing_ok=True)
         raise RuntimeError(
             f"Built wheel is missing a dist-info METADATA file: {artifact_path}",
         )
+    if record_member is None:
+        temporary_path.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"Built wheel is missing a dist-info RECORD file: {artifact_path}",
+        )
+    record_text = build_wheel_record_text(
+        tuple(
+            (member.filename, payload_bytes)
+            for member, payload_bytes in rewritten_members
+            if payload_bytes is not None
+        ),
+        record_member_name=record_member.filename,
+    )
+    with zipfile.ZipFile(temporary_path, "w") as rewritten_archive:
+        for member, payload_bytes in rewritten_members:
+            if payload_bytes is None:
+                rewritten_archive.writestr(member, b"")
+                continue
+            rewritten_archive.writestr(member, payload_bytes)
+        rewritten_archive.writestr(record_member, record_text.encode("utf-8"))
     temporary_path.replace(artifact_path)
 
 
