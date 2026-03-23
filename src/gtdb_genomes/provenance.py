@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import subprocess
 import tomllib
@@ -180,37 +179,3 @@ def build_runtime_provenance(
         archaeal_taxonomy_sha256=archaeal_taxonomy_sha256,
     )
 
-
-def build_deterministic_run_id(
-    *,
-    requested_release: str,
-    resolved_release: str,
-    requested_taxa: tuple[str, ...],
-    include: str,
-    prefer_genbank: bool,
-    version_latest: bool,
-    provenance: RuntimeProvenance,
-) -> str:
-    """Return a deterministic provenance identifier for one run."""
-
-    payload = {
-        "requested_release": requested_release.strip(),
-        "resolved_release": resolved_release,
-        "requested_taxa": list(requested_taxa),
-        "include": include,
-        "prefer_genbank": prefer_genbank,
-        "version_latest": version_latest,
-        "package_version": provenance.package_version,
-        "git_revision": provenance.git_revision,
-        "datasets_version": provenance.datasets_version,
-        "unzip_version": provenance.unzip_version,
-        "release_manifest_sha256": provenance.release_manifest_sha256,
-        "bacterial_taxonomy_sha256": provenance.bacterial_taxonomy_sha256,
-        "archaeal_taxonomy_sha256": provenance.archaeal_taxonomy_sha256,
-    }
-    encoded_payload = json.dumps(
-        payload,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return hashlib.sha256(encoded_payload).hexdigest()

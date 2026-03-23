@@ -44,6 +44,7 @@ class RunDirectories:
 
 RUN_SUMMARY_COLUMNS = (
     "run_id",
+    "accession_decision_sha256",
     "started_at",
     "finished_at",
     "requested_release",

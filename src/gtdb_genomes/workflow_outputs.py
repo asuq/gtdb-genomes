@@ -23,9 +23,10 @@ from gtdb_genomes.layout import (
 )
 from gtdb_genomes.logging_utils import attach_debug_log_handler, redact_text
 from gtdb_genomes.metadata import SUPPRESSED_ASSEMBLY_NOTE, get_accession_type
-from gtdb_genomes.provenance import (
+from gtdb_genomes.provenance import build_runtime_provenance
+from gtdb_genomes.run_identity import (
+    build_accession_decision_sha256,
     build_deterministic_run_id,
-    build_runtime_provenance,
 )
 from gtdb_genomes.selection import build_taxon_slug_map
 from gtdb_genomes.workflow_execution import (
@@ -47,6 +48,7 @@ class RunSummaryRow(TypedDict):
     """Structured row for `run_summary.tsv`."""
 
     run_id: str
+    accession_decision_sha256: str
     started_at: str
     finished_at: str
     requested_release: str
@@ -240,6 +242,7 @@ def build_run_summary_row(
         bacterial_taxonomy_sha256=resolution.bacterial_taxonomy_sha256,
         archaeal_taxonomy_sha256=resolution.archaeal_taxonomy_sha256,
     )
+    accession_decision_sha256 = build_accession_decision_sha256(accession_rows)
     return {
         "run_id": build_deterministic_run_id(
             requested_release=args.gtdb_release,
@@ -249,7 +252,9 @@ def build_run_summary_row(
             prefer_genbank=args.prefer_genbank,
             version_latest=args.version_latest,
             provenance=provenance,
+            accession_decision_sha256=accession_decision_sha256,
         ),
+        "accession_decision_sha256": accession_decision_sha256,
         "started_at": started_at,
         "finished_at": finished_at,
         "requested_release": args.gtdb_release,

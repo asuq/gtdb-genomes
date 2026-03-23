@@ -789,6 +789,14 @@ def test_real_run_records_provenance_and_download_request_accessions(
 
     assert fixed_summary["run_id"] == fixed_summary_repeat["run_id"]
     assert fixed_summary["run_id"] != latest_summary["run_id"]
+    assert (
+        fixed_summary["accession_decision_sha256"]
+        == fixed_summary_repeat["accession_decision_sha256"]
+    )
+    assert (
+        fixed_summary["accession_decision_sha256"]
+        != latest_summary["accession_decision_sha256"]
+    )
     assert fixed_summary["package_version"] == "1.2.3"
     assert fixed_summary["git_revision"] == "deadbeef"
     assert fixed_summary["datasets_version"] == "datasets 2.0"
