@@ -283,7 +283,7 @@ def test_auto_method_keeps_versioned_requests_by_default_with_prefer_genbank(
     assert decision_method == "direct"
 
 
-def test_plan_supported_downloads_switches_to_dehydrate_only_above_request_threshold(
+def test_plan_supported_downloads_switches_to_dehydrate_at_request_threshold(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -293,13 +293,13 @@ def test_plan_supported_downloads_switches_to_dehydrate_only_above_request_thres
         {
             "ncbi_accession": [
                 f"GCF_{accession_index:09d}.1"
-                for accession_index in range(1, 1002)
+                for accession_index in range(1, 1001)
             ],
             "final_accession": [
                 f"GCF_{accession_index:09d}.1"
-                for accession_index in range(1, 1002)
+                for accession_index in range(1, 1001)
             ],
-            "conversion_status": ["unchanged_original"] * 1001,
+            "conversion_status": ["unchanged_original"] * 1000,
         },
     )
     args = CliArgs(
@@ -318,7 +318,7 @@ def test_plan_supported_downloads_switches_to_dehydrate_only_above_request_thres
 
     plans, decision_method = plan_supported_downloads(supported_mapped_frame, args)
 
-    assert len(plans) == 1001
+    assert len(plans) == 1000
     assert decision_method == "dehydrate"
 
 

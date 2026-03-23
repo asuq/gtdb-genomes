@@ -32,9 +32,12 @@ def test_help_includes_documented_flags() -> None:
     assert "use and repeat as needed." in help_text
     assert "Quote species taxa with" in help_text
     assert 'spaces, for example "s__Altiarchaeum hamiconexum".' in help_text
+    assert "current NCBI metadata" in help_text
     assert "direct downloads remain serial" in help_text
     assert "Default: latest." in help_text
     assert "8." in help_text
+    assert "Cannot be used with --ncbi-api-" in help_text
+    assert "key." in help_text
 
 
 def test_parse_args_defaults_release_to_latest(tmp_path: Path) -> None:
@@ -370,6 +373,29 @@ def test_parse_args_accepts_ncbi_api_key_flag(tmp_path: Path) -> None:
     )
 
     assert args.ncbi_api_key == "secret"
+
+
+def test_parse_args_rejects_debug_with_ncbi_api_key(tmp_path: Path) -> None:
+    """Debug mode should be rejected when an NCBI API key is supplied."""
+
+    parser = build_parser()
+    with pytest.raises(SystemExit) as error:
+        parse_args(
+            parser,
+            [
+                "--gtdb-release",
+                "latest",
+                "--gtdb-taxon",
+                "g__Escherichia",
+                "--outdir",
+                str(tmp_path),
+                "--ncbi-api-key",
+                "secret",
+                "--debug",
+            ],
+        )
+
+    assert error.value.code == 2
 
 
 def test_parse_args_defaults_to_fixed_version_with_prefer_genbank(

@@ -9,6 +9,7 @@ import pytest
 from gtdb_genomes.cli import CliArgs
 from gtdb_genomes.download import CommandFailureRecord, RetryableCommandResult
 from gtdb_genomes.layout import LayoutError, initialise_run_directories
+from gtdb_genomes.subprocess_utils import NCBI_API_KEY_ENV_VAR
 from gtdb_genomes.workflow_execution import (
     AccessionExecution,
     AccessionPlan,
@@ -64,12 +65,13 @@ def test_direct_mode_downloads_shared_preferred_accession_once(
         stage: str,
         final_failure_status: str = "retry_exhausted",
         attempted_accession: str | None = None,
+        environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
     ) -> RetryableCommandResult:
         """Return one successful preferred download for the shared group."""
 
-        del command, final_failure_status, sleep_func, runner
+        del command, final_failure_status, environment, sleep_func, runner
         download_calls.append((stage, attempted_accession or ""))
         return RetryableCommandResult(
             succeeded=True,
@@ -154,6 +156,93 @@ def test_direct_mode_downloads_shared_preferred_accession_once(
     )
 
 
+def test_direct_mode_passes_api_key_via_child_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Direct downloads should pass the API key through the child environment."""
+
+    payload_directory = tmp_path / "payload"
+    payload_directory.mkdir()
+
+    def fake_run_retryable_command(
+        command: list[str],
+        stage: str,
+        final_failure_status: str = "retry_exhausted",
+        attempted_accession: str | None = None,
+        environment: dict[str, str] | None = None,
+        sleep_func=None,
+        runner=None,
+    ) -> RetryableCommandResult:
+        """Return one successful direct batch command."""
+
+        del final_failure_status, sleep_func, runner
+        assert stage == "preferred_download"
+        assert attempted_accession == "GCF_000001.1"
+        assert "--api-key" not in command
+        assert environment is not None
+        assert environment[NCBI_API_KEY_ENV_VAR] == "secret"
+        return RetryableCommandResult(
+            succeeded=True,
+            stdout="",
+            stderr="",
+            failures=(),
+        )
+
+    def fake_extract_archive(
+        archive_path: Path,
+        extraction_root: Path,
+    ) -> None:
+        """Create the extracted directory for one direct batch pass."""
+
+        del archive_path
+        extraction_root.mkdir(parents=True, exist_ok=True)
+
+    def fake_collect_payload_directories(
+        extraction_root: Path,
+    ) -> tuple[ResolvedPayloadDirectory, ...]:
+        """Return one resolved payload for the requested accession."""
+
+        assert extraction_root.name == "direct_batch_1"
+        return (
+            ResolvedPayloadDirectory(
+                final_accession="GCF_000001.1",
+                directory=payload_directory,
+            ),
+        )
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_execution_direct.run_retryable_command",
+        fake_run_retryable_command,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_execution_direct.extract_archive",
+        fake_extract_archive,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_execution_payloads.collect_payload_directories",
+        fake_collect_payload_directories,
+    )
+
+    args = build_cli_args(tmp_path / "out")
+    args.ncbi_api_key = "secret"
+    run_directories = initialise_run_directories(tmp_path / "direct-api-key-env")
+    result = execute_direct_accession_plans(
+        (
+            AccessionPlan(
+                original_accession="GCF_000001.1",
+                download_request_accession="GCF_000001.1",
+                conversion_status="unchanged_original",
+            ),
+        ),
+        args,
+        run_directories,
+        logging.getLogger("test-direct-api-key-env"),
+    )
+
+    assert result.executions["GCF_000001.1"].download_status == "downloaded"
+
+
 def test_direct_mode_retries_unresolved_accessions_in_later_batches(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -172,12 +261,13 @@ def test_direct_mode_retries_unresolved_accessions_in_later_batches(
         stage: str,
         final_failure_status: str = "retry_exhausted",
         attempted_accession: str | None = None,
+        environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
     ) -> RetryableCommandResult:
         """Return successful direct batch commands for both passes."""
 
-        del command, final_failure_status, sleep_func, runner
+        del command, final_failure_status, environment, sleep_func, runner
         download_calls.append((stage, attempted_accession or ""))
         return RetryableCommandResult(
             succeeded=True,
@@ -292,12 +382,13 @@ def test_direct_mode_falls_back_to_original_accession_after_preferred_phase(
         stage: str,
         final_failure_status: str = "retry_exhausted",
         attempted_accession: str | None = None,
+        environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
     ) -> RetryableCommandResult:
         """Return successful preferred and fallback batch commands."""
 
-        del command, final_failure_status, sleep_func, runner
+        del command, final_failure_status, environment, sleep_func, runner
         download_calls.append((stage, attempted_accession or ""))
         return RetryableCommandResult(
             succeeded=True,
@@ -412,12 +503,13 @@ def test_direct_mode_preserves_shared_retry_failures_after_success(
         stage: str,
         final_failure_status: str = "retry_exhausted",
         attempted_accession: str | None = None,
+        environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
     ) -> RetryableCommandResult:
         """Return one successful batch with preserved retry history."""
 
-        del command, final_failure_status, sleep_func, runner
+        del command, final_failure_status, environment, sleep_func, runner
         nonlocal call_count
         call_count += 1
         assert call_count == 1
@@ -516,12 +608,13 @@ def test_direct_mode_preserves_retry_history_when_extraction_fails(
         stage: str,
         final_failure_status: str = "retry_exhausted",
         attempted_accession: str | None = None,
+        environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
     ) -> RetryableCommandResult:
         """Return one successful batch with preserved retry history."""
 
-        del command, final_failure_status, sleep_func, runner
+        del command, final_failure_status, environment, sleep_func, runner
         assert stage == "preferred_download"
         assert attempted_accession == "GCF_000001.1"
         return RetryableCommandResult(
@@ -605,12 +698,13 @@ def test_direct_fallback_preserves_shared_retry_failures_after_success(
         stage: str,
         final_failure_status: str = "retry_exhausted",
         attempted_accession: str | None = None,
+        environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
     ) -> RetryableCommandResult:
         """Return one unresolved preferred batch and one retried fallback batch."""
 
-        del command, final_failure_status, sleep_func, runner
+        del command, final_failure_status, environment, sleep_func, runner
         nonlocal call_count
         call_count += 1
         if call_count == 1:
@@ -722,6 +816,7 @@ def test_direct_mode_records_failed_fallback_after_layout_exhaustion(
         stage: str,
         final_failure_status: str = "retry_exhausted",
         attempted_accession: str | None = None,
+        environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
     ) -> RetryableCommandResult:
@@ -729,6 +824,7 @@ def test_direct_mode_records_failed_fallback_after_layout_exhaustion(
 
         del command
         del final_failure_status
+        del environment
         del sleep_func
         del runner
         return RetryableCommandResult(
@@ -909,3 +1005,89 @@ def test_batch_dehydrate_failure_falls_back_to_direct(
     assert result.shared_failures[0].failures[0].attempted_accession == (
         "GCA_000001;GCA_000002"
     )
+
+
+def test_batch_dehydrate_passes_api_key_via_child_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Dehydrated download and rehydrate should use the child API-key environment."""
+
+    payload_directory = tmp_path / "payload"
+    payload_directory.mkdir()
+    observed_calls: list[tuple[str, dict[str, str] | None]] = []
+
+    def fake_run_retryable_command(
+        command: list[str],
+        stage: str,
+        final_failure_status: str = "retry_exhausted",
+        attempted_accession: str | None = None,
+        environment: dict[str, str] | None = None,
+        sleep_func=None,
+        runner=None,
+    ) -> RetryableCommandResult:
+        """Return successful dehydrated download and rehydrate stages."""
+
+        del final_failure_status, attempted_accession, sleep_func, runner
+        assert "--api-key" not in command
+        observed_calls.append((stage, environment))
+        return RetryableCommandResult(
+            succeeded=True,
+            stdout="",
+            stderr="",
+            failures=(),
+        )
+
+    def fake_extract_archive(
+        archive_path: Path,
+        extraction_root: Path,
+    ) -> None:
+        """Create the extracted directory for the dehydrated batch."""
+
+        del archive_path
+        extraction_root.mkdir(parents=True, exist_ok=True)
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_execution_dehydrate.run_retryable_command",
+        fake_run_retryable_command,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_execution_dehydrate.extract_archive",
+        fake_extract_archive,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_execution_dehydrate.locate_batch_payload_directories",
+        lambda extraction_root, requested_accessions: {
+            requested_accession: ResolvedPayloadDirectory(
+                final_accession=f"{requested_accession}.1",
+                directory=payload_directory,
+            )
+            for requested_accession in requested_accessions
+        },
+    )
+
+    args = build_cli_args(tmp_path / "out")
+    args.ncbi_api_key = "secret"
+    args.threads = 4
+    plans = (
+        AccessionPlan(
+            original_accession="GCF_000001.1",
+            download_request_accession="GCA_000001",
+            conversion_status="paired_to_gca",
+        ),
+    )
+    run_directories = initialise_run_directories(tmp_path / "dehydrate-api-key-env")
+    result = execute_batch_dehydrate_plans(
+        plans,
+        args,
+        run_directories,
+        logging.getLogger("test-dehydrate-api-key-env"),
+        ("secret",),
+    )
+
+    assert [stage for stage, _ in observed_calls] == ["preferred_download", "rehydrate"]
+    assert [environment[NCBI_API_KEY_ENV_VAR] for _, environment in observed_calls] == [
+        "secret",
+        "secret",
+    ]
+    assert result.method_used == "dehydrate"

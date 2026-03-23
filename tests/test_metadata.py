@@ -20,16 +20,16 @@ from gtdb_genomes.metadata import (
     parse_summary_status_map,
     run_summary_lookup_with_retries,
 )
+from gtdb_genomes.subprocess_utils import NCBI_API_KEY_ENV_VAR
 
 COMMAND_TEST_ACCESSION_FILE = Path("tmp") / "accessions.txt"
 
 
-def test_build_summary_command_includes_ncbi_api_key() -> None:
-    """The summary command should pass the requested API key through."""
+def test_build_summary_command_uses_input_file_without_api_key_argv() -> None:
+    """The summary command should rely on the input file and omit API-key argv."""
 
     command = build_summary_command(
         COMMAND_TEST_ACCESSION_FILE,
-        ncbi_api_key="secret",
         datasets_bin="datasets",
     )
 
@@ -41,8 +41,6 @@ def test_build_summary_command_includes_ncbi_api_key() -> None:
         "--inputfile",
         str(COMMAND_TEST_ACCESSION_FILE),
         "--as-json-lines",
-        "--api-key",
-        "secret",
     ]
 
 
@@ -61,6 +59,7 @@ def test_run_summary_lookup_with_retries_parses_requested_accessions(
         capture_output: bool,
         text: bool,
         check: bool,
+        env: dict[str, str] | None,
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return a fake successful datasets response."""
@@ -72,6 +71,8 @@ def test_run_summary_lookup_with_retries_parses_requested_accessions(
         assert capture_output is True
         assert text is True
         assert check is False
+        assert env is not None
+        assert NCBI_API_KEY_ENV_VAR not in env
         return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -117,11 +118,14 @@ def test_run_summary_lookup_with_retries_marks_silent_omissions_incomplete(
         capture_output: bool,
         text: bool,
         check: bool,
+        env: dict[str, str] | None,
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return one successful lookup with a silently omitted accession."""
 
         del capture_output, text, check, timeout
+        assert env is not None
+        assert NCBI_API_KEY_ENV_VAR not in env
         return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -147,10 +151,13 @@ def test_run_summary_lookup_with_retries_raises_on_command_failure(
         capture_output: bool,
         text: bool,
         check: bool,
+        env: dict[str, str] | None,
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return a fake failed datasets response."""
 
+        assert env is not None
+        assert NCBI_API_KEY_ENV_VAR not in env
         return subprocess.CompletedProcess(
             command,
             1,
@@ -166,6 +173,46 @@ def test_run_summary_lookup_with_retries_raises_on_command_failure(
             COMMAND_TEST_ACCESSION_FILE,
             sleep_func=lambda delay: None,
         )
+
+
+def test_run_summary_lookup_with_retries_passes_api_key_via_child_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Metadata lookup should pass the API key through the child environment."""
+
+    def fake_run(
+        command: list[str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+        env: dict[str, str] | None,
+        timeout: int,
+    ) -> subprocess.CompletedProcess[str]:
+        """Return one successful lookup and capture the child environment."""
+
+        del capture_output, text, check, timeout
+        assert command[:4] == ["datasets", "summary", "genome", "accession"]
+        assert "--api-key" not in command
+        assert env is not None
+        assert env[NCBI_API_KEY_ENV_VAR] == "secret"
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout='{"accession":"GCF_000001.1"}\n',
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    result = run_summary_lookup_with_retries(
+        ["GCF_000001.1"],
+        COMMAND_TEST_ACCESSION_FILE,
+        ncbi_api_key="secret",
+    )
+
+    assert result.summary_map == {
+        "GCF_000001.1": {"GCF_000001.1"},
+    }
 
 
 def test_choose_preferred_accession_keeps_native_genbank_on_metadata_failure() -> None:
@@ -652,10 +699,13 @@ def test_run_summary_lookup_with_retries_retries_invalid_json(
         capture_output: bool,
         text: bool,
         check: bool,
+        env: dict[str, str] | None,
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return retryable metadata responses."""
 
+        assert env is not None
+        assert NCBI_API_KEY_ENV_VAR not in env
         return next(attempts)
 
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -697,10 +747,13 @@ def test_run_summary_lookup_with_retries_raises_after_full_retry_budget(
         capture_output: bool,
         text: bool,
         check: bool,
+        env: dict[str, str] | None,
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return repeated metadata lookup failures."""
 
+        assert env is not None
+        assert NCBI_API_KEY_ENV_VAR not in env
         return subprocess.CompletedProcess(
             command,
             next(attempts),

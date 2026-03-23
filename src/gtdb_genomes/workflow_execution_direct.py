@@ -14,6 +14,7 @@ from gtdb_genomes.download import (
 )
 from gtdb_genomes.layout import LayoutError, RunDirectories, extract_archive
 from gtdb_genomes.logging_utils import redact_command
+from gtdb_genomes.subprocess_utils import build_datasets_subprocess_environment
 from gtdb_genomes.workflow_execution_models import (
     AccessionExecution,
     AccessionPlan,
@@ -69,6 +70,7 @@ def run_direct_batch_phase(
     """Execute one batch-based direct phase with shrinking retry inputs."""
 
     secrets = tuple(secret for secret in (args.ncbi_api_key,) if secret)
+    environment = build_datasets_subprocess_environment(args.ncbi_api_key)
     pending_groups = plan_groups
     executions: dict[str, AccessionExecution] = {}
     shared_failures: list[SharedFailureContext] = []
@@ -108,7 +110,6 @@ def run_direct_batch_phase(
             accession_file,
             archive_path,
             args.include,
-            ncbi_api_key=args.ncbi_api_key,
             debug=args.debug,
         )
         logger.debug(
@@ -120,6 +121,7 @@ def run_direct_batch_phase(
             download_command,
             stage=batch_stage,
             attempted_accession=batch_attempted_accessions,
+            environment=environment,
         )
         if not batch_result.succeeded:
             logger.warning(

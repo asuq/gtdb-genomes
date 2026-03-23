@@ -15,6 +15,7 @@ from gtdb_genomes.download import (
 )
 from gtdb_genomes.layout import LayoutError, RunDirectories, extract_archive
 from gtdb_genomes.logging_utils import redact_command
+from gtdb_genomes.subprocess_utils import build_datasets_subprocess_environment
 from gtdb_genomes.workflow_execution_direct import execute_direct_accession_plans
 from gtdb_genomes.workflow_execution_models import (
     AccessionExecution,
@@ -83,6 +84,7 @@ def execute_batch_dehydrate_plans(
             shared_failures=(),
         )
 
+    environment = build_datasets_subprocess_environment(args.ncbi_api_key)
     requested_accessions = get_ordered_unique_accessions(
         plan.download_request_accession for plan in plans
     )
@@ -103,7 +105,6 @@ def execute_batch_dehydrate_plans(
         accession_file,
         archive_path,
         args.include,
-        ncbi_api_key=args.ncbi_api_key,
         debug=args.debug,
     )
     logger.debug("Running %s", redact_command(download_command, secrets))
@@ -111,6 +112,7 @@ def execute_batch_dehydrate_plans(
         download_command,
         stage="preferred_download",
         attempted_accession=batch_attempted_accessions,
+        environment=environment,
     )
     if not batch_download.succeeded:
         return fallback_batch_to_direct(
@@ -152,7 +154,6 @@ def execute_batch_dehydrate_plans(
     rehydrate_command = build_rehydrate_command(
         extraction_root,
         rehydrate_workers,
-        ncbi_api_key=args.ncbi_api_key,
         debug=args.debug,
     )
     logger.debug("Running %s", redact_command(rehydrate_command, secrets))
@@ -160,6 +161,7 @@ def execute_batch_dehydrate_plans(
         rehydrate_command,
         stage="rehydrate",
         attempted_accession=batch_attempted_accessions,
+        environment=environment,
     )
     if not rehydrate_result.succeeded:
         return fallback_batch_to_direct(

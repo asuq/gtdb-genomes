@@ -85,7 +85,6 @@ def build_direct_batch_download_command(
     accession_file: Path,
     archive_path: Path,
     include: str,
-    ncbi_api_key: str | None = None,
     datasets_bin: str = "datasets",
     debug: bool = False,
 ) -> list[str]:
@@ -103,8 +102,6 @@ def build_direct_batch_download_command(
         "--include",
         validate_include_value(include),
     ]
-    if ncbi_api_key:
-        command.extend(["--api-key", ncbi_api_key])
     if debug:
         command.append("--debug")
     return command
@@ -114,7 +111,6 @@ def build_batch_dehydrate_command(
     accession_file: Path,
     archive_path: Path,
     include: str,
-    ncbi_api_key: str | None = None,
     datasets_bin: str = "datasets",
     debug: bool = False,
 ) -> list[str]:
@@ -133,8 +129,6 @@ def build_batch_dehydrate_command(
         validate_include_value(include),
         "--dehydrated",
     ]
-    if ncbi_api_key:
-        command.extend(["--api-key", ncbi_api_key])
     if debug:
         command.append("--debug")
     return command
@@ -158,7 +152,6 @@ def write_accession_input_file(
 def build_rehydrate_command(
     directory: Path,
     max_workers: int,
-    ncbi_api_key: str | None = None,
     datasets_bin: str = "datasets",
     debug: bool = False,
 ) -> list[str]:
@@ -172,8 +165,6 @@ def build_rehydrate_command(
         "--max-workers",
         str(max_workers),
     ]
-    if ncbi_api_key:
-        command.extend(["--api-key", ncbi_api_key])
     if debug:
         command.append("--debug")
     return command
@@ -185,7 +176,7 @@ def select_download_method(
     """Resolve the effective download method from the request-token count."""
 
     method_used = "direct"
-    if accession_count > DEHYDRATE_ACCESSION_THRESHOLD:
+    if accession_count >= DEHYDRATE_ACCESSION_THRESHOLD:
         method_used = "dehydrate"
     return DownloadMethodDecision(
         method_used=method_used,
@@ -204,6 +195,7 @@ def run_retryable_command(
     stage: str,
     final_failure_status: str = "retry_exhausted",
     attempted_accession: str | None = None,
+    environment: dict[str, str] | None = None,
     sleep_func: Callable[[float], None] = time.sleep,
     runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
 ) -> RetryableCommandResult:
@@ -222,6 +214,7 @@ def run_retryable_command(
                 capture_output=True,
                 text=True,
                 check=False,
+                env=environment,
                 timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
             )
         except subprocess.TimeoutExpired:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -17,6 +18,10 @@ from gtdb_genomes.download import (
     select_download_method,
     validate_include_value,
     write_accession_input_file,
+)
+from gtdb_genomes.subprocess_utils import (
+    NCBI_API_KEY_ENV_VAR,
+    build_datasets_subprocess_environment,
 )
 
 COMMAND_TEST_ACCESSION_FILE = Path("tmp") / "accessions.txt"
@@ -48,20 +53,17 @@ def test_command_builders_match_datasets_cli_shape() -> None:
         COMMAND_TEST_ACCESSION_FILE,
         COMMAND_TEST_ARCHIVE_FILE,
         "genome",
-        ncbi_api_key="secret",
         debug=True,
     )
     rehydrate_command = build_rehydrate_command(
         COMMAND_TEST_BAG_DIRECTORY,
         7,
-        ncbi_api_key="secret",
         debug=True,
     )
     batch_dehydrate_command = build_batch_dehydrate_command(
         COMMAND_TEST_ACCESSION_FILE,
         COMMAND_TEST_ARCHIVE_FILE,
         "genome",
-        ncbi_api_key="secret",
         debug=True,
     )
 
@@ -76,8 +78,6 @@ def test_command_builders_match_datasets_cli_shape() -> None:
         str(COMMAND_TEST_ARCHIVE_FILE),
         "--include",
         "genome",
-        "--api-key",
-        "secret",
         "--debug",
     ]
     assert rehydrate_command == [
@@ -87,8 +87,6 @@ def test_command_builders_match_datasets_cli_shape() -> None:
         str(COMMAND_TEST_BAG_DIRECTORY),
         "--max-workers",
         "7",
-        "--api-key",
-        "secret",
         "--debug",
     ]
     assert batch_dehydrate_command == [
@@ -103,25 +101,49 @@ def test_command_builders_match_datasets_cli_shape() -> None:
         "--include",
         "genome",
         "--dehydrated",
-        "--api-key",
-        "secret",
         "--debug",
     ]
 
 
 def test_select_download_method_uses_count_only_threshold() -> None:
-    """Auto mode should switch to dehydrate only above the count threshold."""
+    """Auto mode should switch to dehydrate at the documented count threshold."""
 
     assert select_download_method(5).method_used == "direct"
     assert select_download_method(5).accession_count == 5
     assert (
         select_download_method(DEHYDRATE_ACCESSION_THRESHOLD).method_used
-        == "direct"
+        == "dehydrate"
     )
     assert (
         select_download_method(DEHYDRATE_ACCESSION_THRESHOLD + 1).method_used
         == "dehydrate"
     )
+
+
+def test_build_datasets_subprocess_environment_overrides_child_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Child environments should honour the explicit CLI API key."""
+
+    monkeypatch.setenv(NCBI_API_KEY_ENV_VAR, "ambient-secret")
+
+    environment = build_datasets_subprocess_environment("cli-secret")
+
+    assert environment[NCBI_API_KEY_ENV_VAR] == "cli-secret"
+    assert os.environ[NCBI_API_KEY_ENV_VAR] == "ambient-secret"
+
+
+def test_build_datasets_subprocess_environment_clears_ambient_child_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Child environments should not inherit ambient API keys implicitly."""
+
+    monkeypatch.setenv(NCBI_API_KEY_ENV_VAR, "ambient-secret")
+
+    environment = build_datasets_subprocess_environment(None)
+
+    assert NCBI_API_KEY_ENV_VAR not in environment
+    assert os.environ[NCBI_API_KEY_ENV_VAR] == "ambient-secret"
 
 
 def test_worker_caps_and_accession_input_file_follow_documented_limits(
@@ -149,10 +171,12 @@ def test_run_retryable_command_records_retries_before_success() -> None:
         capture_output: bool,
         text: bool,
         check: bool,
+        env: dict[str, str] | None,
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return a sequence of fake command outcomes."""
 
+        assert env == {NCBI_API_KEY_ENV_VAR: "secret"}
         return subprocess.CompletedProcess(
             command,
             next(attempts),
@@ -163,6 +187,7 @@ def test_run_retryable_command_records_retries_before_success() -> None:
     result = run_retryable_command(
         ["datasets", "download"],
         stage="preferred_download",
+        environment={NCBI_API_KEY_ENV_VAR: "secret"},
         sleep_func=sleep_calls.append,
         runner=runner,
     )
@@ -183,10 +208,12 @@ def test_run_retryable_command_uses_stage_message_for_silent_failures() -> None:
         capture_output: bool,
         text: bool,
         check: bool,
+        env: dict[str, str] | None,
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Return one failed subprocess result without any output."""
 
+        assert env is None
         return subprocess.CompletedProcess(
             command,
             1,
@@ -216,10 +243,12 @@ def test_run_retryable_command_retries_timeouts_before_success() -> None:
         capture_output: bool,
         text: bool,
         check: bool,
+        env: dict[str, str] | None,
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Raise one timeout before returning a success."""
 
+        assert env is None
         attempt = next(attempts)
         if attempt == "timeout":
             raise subprocess.TimeoutExpired(command, timeout)
@@ -245,10 +274,12 @@ def test_run_retryable_command_returns_spawn_failure_without_retry() -> None:
         capture_output: bool,
         text: bool,
         check: bool,
+        env: dict[str, str] | None,
         timeout: int,
     ) -> subprocess.CompletedProcess[str]:
         """Raise a missing-executable error before a child process starts."""
 
+        assert env is None
         raise FileNotFoundError("datasets")
 
     result = run_retryable_command(

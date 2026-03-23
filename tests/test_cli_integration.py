@@ -173,3 +173,22 @@ def test_main_passes_version_latest_into_workflow(
             dry_run=False,
         ),
     ]
+
+
+def test_main_rejects_debug_with_ncbi_api_key(tmp_path: Path) -> None:
+    """The CLI boundary should reject the unsafe debug and API-key mix."""
+
+    with pytest.raises(SystemExit) as error:
+        main(
+            [
+                "--gtdb-taxon",
+                "g__Escherichia",
+                "--outdir",
+                str(tmp_path / "output"),
+                "--ncbi-api-key",
+                "secret",
+                "--debug",
+            ],
+        )
+
+    assert error.value.code == 2

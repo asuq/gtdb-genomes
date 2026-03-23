@@ -111,6 +111,11 @@ def parse_args(
         parser.error("argument --threads: value must be a positive integer")
     if namespace.version_latest and not namespace.prefer_genbank:
         parser.error("argument --version-latest: requires --prefer-genbank")
+    if namespace.debug and namespace.ncbi_api_key:
+        parser.error(
+            "argument --debug: cannot be used with --ncbi-api-key because "
+            "upstream datasets debug output may expose the API key",
+        )
     return CliArgs(
         gtdb_release=normalise_release(parser, namespace.gtdb_release),
         gtdb_taxa=normalise_taxa(parser, namespace.gtdb_taxon),
@@ -158,8 +163,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--prefer-genbank",
         action="store_true",
         help=(
-            "Prefer paired GenBank accessions and, by default, keep the exact "
-            "selected versioned accession."
+            "Prefer paired GenBank accessions discovered from current NCBI "
+            "metadata and, by default, keep the exact selected versioned "
+            "accession."
         ),
     )
     parser.add_argument(
@@ -167,7 +173,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=(
             "Request the latest available revision in the selected accession "
-            "family; requires --prefer-genbank."
+            "family from current NCBI metadata; requires --prefer-genbank."
         ),
     )
     parser.add_argument(
@@ -181,7 +187,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--ncbi-api-key",
-        help="NCBI API key used only for datasets commands. The tool never stores or logs it.",
+        help=(
+            "NCBI API key used only for datasets commands. The tool does not "
+            "write it to its own logs or manifests."
+        ),
     )
     parser.add_argument(
         "--include",
@@ -191,7 +200,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Enable debug logging.",
+        help="Enable debug logging. Cannot be used with --ncbi-api-key.",
     )
     parser.add_argument(
         "--keep-temp",

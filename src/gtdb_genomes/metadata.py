@@ -19,6 +19,7 @@ from gtdb_genomes.download import (
 )
 from gtdb_genomes.subprocess_utils import (
     DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+    build_datasets_subprocess_environment,
     build_spawn_error_message,
     build_subprocess_error_message,
     build_timeout_error_message,
@@ -110,7 +111,6 @@ UNKNOWN_ASSEMBLY_STATUS_INFO = AssemblyStatusInfo(
 
 def build_summary_command(
     accession_file: Path,
-    ncbi_api_key: str | None = None,
     datasets_bin: str = "datasets",
 ) -> list[str]:
     """Build the datasets summary command for assembly accessions."""
@@ -124,8 +124,6 @@ def build_summary_command(
         str(accession_file),
         "--as-json-lines",
     ]
-    if ncbi_api_key:
-        command.extend(["--api-key", ncbi_api_key])
     return command
 
 
@@ -277,9 +275,9 @@ def run_summary_lookup_with_retries(
     command_runner = subprocess.run if runner is None else runner
     command = build_summary_command(
         accession_file,
-        ncbi_api_key=ncbi_api_key,
         datasets_bin=datasets_bin,
     )
+    environment = build_datasets_subprocess_environment(ncbi_api_key)
     max_attempts = len(RETRY_DELAYS_SECONDS) + 1
     failures: list[CommandFailureRecord] = []
     for attempt_index in range(1, max_attempts + 1):
@@ -290,6 +288,7 @@ def run_summary_lookup_with_retries(
                 capture_output=True,
                 text=True,
                 check=False,
+                env=environment,
                 timeout=DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
             )
         except subprocess.TimeoutExpired:
