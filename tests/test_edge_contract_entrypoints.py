@@ -345,11 +345,11 @@ def test_supported_real_run_missing_tools_returns_exit_five(
     assert not output_dir.exists()
 
 
-def test_supported_prefer_genbank_total_metadata_failure_returns_exit_five(
+def test_supported_prefer_genbank_total_metadata_failure_falls_back_in_dry_run(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Total metadata lookup failure should now fail the workflow explicitly."""
+    """Total metadata lookup failure should still allow a dry-run to complete."""
 
     monkeypatch.setattr(
         "gtdb_genomes.workflow_selection.check_required_tools",
@@ -378,10 +378,12 @@ def test_supported_prefer_genbank_total_metadata_failure_returns_exit_five(
             "--prefer-genbank",
             "--outdir",
             str(output_dir),
+            "--dry-run",
         ],
     )
 
-    assert exit_code == 5
+    assert exit_code == 0
+    assert not output_dir.exists()
 
 
 def test_real_run_initial_output_directory_failure_returns_exit_eight(

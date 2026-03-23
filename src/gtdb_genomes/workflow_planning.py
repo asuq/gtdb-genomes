@@ -367,78 +367,94 @@ def resolve_supported_accession_preferences(
             Path(metadata_directory) / "accessions.txt",
             supported_accessions,
         )
-        summary_lookup = run_summary_lookup_with_retries(
-            supported_accessions,
-            metadata_accession_file,
-            ncbi_api_key=args.ncbi_api_key,
-        )
-        summary_map = summary_lookup.summary_map
-        status_map = summary_lookup.status_map
-        if summary_lookup.failures:
-            metadata_shared_failures.append(
-                build_shared_failure_context(
-                    build_original_accession_scope(supported_accessions),
-                    summary_lookup.failures,
-                    ";".join(supported_accessions),
-                ),
+        try:
+            summary_lookup = run_summary_lookup_with_retries(
+                supported_accessions,
+                metadata_accession_file,
+                ncbi_api_key=args.ncbi_api_key,
             )
-        logger.info(
-            "Metadata lookup finished with %d preferred mapping(s)",
-            len(summary_map),
-        )
-        candidate_accessions = build_candidate_metadata_accessions(
-            summary_map,
-            status_map,
-            version_latest=args.version_latest,
-        )
-        if candidate_accessions:
-            candidate_original_accessions = build_candidate_accession_scope(
-                summary_map,
-                status_map,
-                candidate_accessions,
-                version_latest=args.version_latest,
+        except MetadataLookupError as error:
+            logger.warning(
+                "Primary metadata lookup failed for %d supported accession(s); "
+                "keeping original accessions",
+                len(supported_accessions),
             )
-            logger.info(
-                "Running candidate metadata lookup for %d paired GenBank "
-                "accession(s)",
-                len(candidate_accessions),
-            )
-            candidate_accession_file = write_accession_input_file(
-                Path(metadata_directory) / "paired-gca-accessions.txt",
-                candidate_accessions,
-            )
-            try:
-                candidate_lookup = run_summary_lookup_with_retries(
-                    candidate_accessions,
-                    candidate_accession_file,
-                    ncbi_api_key=args.ncbi_api_key,
-                )
-            except MetadataLookupError as error:
-                logger.warning(
-                    "Candidate metadata lookup failed for %d paired GenBank "
-                    "accession(s); falling back to original accessions",
-                    len(candidate_accessions),
-                )
+            if error.failures:
                 metadata_shared_failures.append(
                     build_shared_failure_context(
-                        candidate_original_accessions,
+                        build_original_accession_scope(supported_accessions),
                         error.failures,
-                        ";".join(candidate_accessions),
+                        ";".join(supported_accessions),
                     ),
                 )
-            else:
-                if candidate_lookup.failures:
+        else:
+            summary_map = summary_lookup.summary_map
+            status_map = summary_lookup.status_map
+            if summary_lookup.failures:
+                metadata_shared_failures.append(
+                    build_shared_failure_context(
+                        build_original_accession_scope(supported_accessions),
+                        summary_lookup.failures,
+                        ";".join(supported_accessions),
+                    ),
+                )
+            logger.info(
+                "Metadata lookup finished with %d preferred mapping(s)",
+                len(summary_map),
+            )
+            candidate_accessions = build_candidate_metadata_accessions(
+                summary_map,
+                status_map,
+                version_latest=args.version_latest,
+            )
+            if candidate_accessions:
+                candidate_original_accessions = build_candidate_accession_scope(
+                    summary_map,
+                    status_map,
+                    candidate_accessions,
+                    version_latest=args.version_latest,
+                )
+                logger.info(
+                    "Running candidate metadata lookup for %d paired GenBank "
+                    "accession(s)",
+                    len(candidate_accessions),
+                )
+                candidate_accession_file = write_accession_input_file(
+                    Path(metadata_directory) / "paired-gca-accessions.txt",
+                    candidate_accessions,
+                )
+                try:
+                    candidate_lookup = run_summary_lookup_with_retries(
+                        candidate_accessions,
+                        candidate_accession_file,
+                        ncbi_api_key=args.ncbi_api_key,
+                    )
+                except MetadataLookupError as error:
+                    logger.warning(
+                        "Candidate metadata lookup failed for %d paired GenBank "
+                        "accession(s); falling back to original accessions",
+                        len(candidate_accessions),
+                    )
                     metadata_shared_failures.append(
                         build_shared_failure_context(
                             candidate_original_accessions,
-                            candidate_lookup.failures,
+                            error.failures,
                             ";".join(candidate_accessions),
                         ),
                     )
-                status_map = {
-                    **status_map,
-                    **candidate_lookup.status_map,
-                }
+                else:
+                    if candidate_lookup.failures:
+                        metadata_shared_failures.append(
+                            build_shared_failure_context(
+                                candidate_original_accessions,
+                                candidate_lookup.failures,
+                                ";".join(candidate_accessions),
+                            ),
+                        )
+                    status_map = {
+                        **status_map,
+                        **candidate_lookup.status_map,
+                    }
     mapped_frame = apply_accession_preferences(
         supported_selected_frame,
         summary_map,

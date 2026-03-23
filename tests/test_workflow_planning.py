@@ -68,6 +68,77 @@ def test_resolve_supported_accession_preferences_skips_metadata_by_default(
     ]
 
 
+def test_resolve_supported_accession_preferences_falls_back_when_primary_metadata_lookup_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Primary metadata lookup errors should degrade to the original accession."""
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_planning.run_summary_lookup_with_retries",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            MetadataLookupError(
+                "metadata lookup failed",
+                failures=(
+                    CommandFailureRecord(
+                        stage="metadata_lookup",
+                        attempt_index=4,
+                        max_attempts=4,
+                        error_type="metadata_lookup",
+                        error_message="metadata lookup failed",
+                        final_status="retry_exhausted",
+                        attempted_accession="GCF_000001.1",
+                    ),
+                ),
+            ),
+        ),
+    )
+    supported_selected_frame = pl.DataFrame(
+        {
+            "requested_taxon": ["g__Escherichia"],
+            "taxon_slug": ["g__Escherichia"],
+            "gtdb_accession": ["RS_GCF_000001.1"],
+            "ncbi_accession": ["GCF_000001.1"],
+            "lineage": ["d__Bacteria;p__Proteobacteria;g__Escherichia"],
+            "taxonomy_file": ["bac120_taxonomy_r95.tsv"],
+        },
+    )
+
+    mapped_frame, metadata_shared_failures, suppressed_notes = (
+        resolve_supported_accession_preferences(
+            supported_selected_frame,
+            build_cli_args(tmp_path / "output"),
+            logging.getLogger("test-planning-primary-metadata-error"),
+        )
+    )
+
+    assert metadata_shared_failures == (
+        SharedFailureContext(
+            affected_original_accessions=("GCF_000001.1",),
+            failures=(
+                CommandFailureRecord(
+                    stage="metadata_lookup",
+                    attempt_index=4,
+                    max_attempts=4,
+                    error_type="metadata_lookup",
+                    error_message="metadata lookup failed",
+                    final_status="retry_exhausted",
+                    attempted_accession="GCF_000001.1",
+                ),
+            ),
+        ),
+    )
+    assert suppressed_notes == {}
+    assert mapped_frame.select("final_accession", "conversion_status").rows(
+        named=True,
+    ) == [
+        {
+            "final_accession": "GCF_000001.1",
+            "conversion_status": "metadata_lookup_failed_fallback_original",
+        },
+    ]
+
+
 def test_resolve_supported_accession_preferences_falls_back_when_candidate_metadata_is_partial(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
