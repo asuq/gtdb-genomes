@@ -49,10 +49,6 @@ real_data_require_ncbi_api_key() {
 real_data_append_optional_ncbi_api_key() {
     local command=("$@")
 
-    if [ -n "${NCBI_API_KEY:-}" ]; then
-        command+=(--ncbi-api-key "${NCBI_API_KEY}")
-    fi
-
     printf '%s\0' "${command[@]}"
 }
 
@@ -96,10 +92,17 @@ real_data_redact_value() {
     local value=$1
 
     if [ -n "${NCBI_API_KEY:-}" ]; then
-        printf '%s' "${value//${NCBI_API_KEY}/[REDACTED]}"
-        return 0
+        value="${value//${NCBI_API_KEY}/[REDACTED]}"
     fi
-    printf '%s' "${value}"
+    printf '%s' "${value}" | sed -E \
+        -e 's/(NCBI_API_KEY=)([^[:space:]"'"'"';]+|"[^"]*"|'"'"'[^'"'"']*'"'"')/\1[REDACTED]/g' \
+        -e 's/(--ncbi-api-key=)([^[:space:]"'"'"';]+|"[^"]*"|'"'"'[^'"'"']*'"'"')/\1[REDACTED]/g' \
+        -e 's/(--ncbi-api-key[[:space:]]+)([^[:space:]"'"'"';]+|"[^"]*"|'"'"'[^'"'"']*'"'"')/\1[REDACTED]/g' \
+        -e 's/(--api-key=)([^[:space:]"'"'"';]+|"[^"]*"|'"'"'[^'"'"']*'"'"')/\1[REDACTED]/g' \
+        -e 's/(--api-key[[:space:]]+)([^[:space:]"'"'"';]+|"[^"]*"|'"'"'[^'"'"']*'"'"')/\1[REDACTED]/g' \
+        -e 's/(([Xx]-)?[Aa][Pp][Ii]-[Kk][Ee][Yy][[:space:]]*:[[:space:]]*)([^[:space:]"'"'"',;]+|"[^"]*"|'"'"'[^'"'"']*'"'"')/\1[REDACTED]/g' \
+        -e 's/("?(ncbi_api_key|api_key|api-key)"?[[:space:]]*:[[:space:]]*)"[^"]*"/\1"[REDACTED]"/g' \
+        -e "s/('?(ncbi_api_key|api_key|api-key)'?[[:space:]]*:[[:space:]]*)'[^']*'/\1'[REDACTED]'/g"
 }
 
 
@@ -206,6 +209,9 @@ real_data_copy_if_present() {
 real_data_command_uses_ncbi_api_key() {
     local argument=""
 
+    if [ -n "${NCBI_API_KEY:-}" ]; then
+        return 0
+    fi
     for argument in "$@"; do
         if [ "${argument}" = "--ncbi-api-key" ] || \
             [[ "${argument}" == --ncbi-api-key=* ]]; then

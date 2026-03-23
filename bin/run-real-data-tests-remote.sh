@@ -255,8 +255,7 @@ run_remote_case() {
                 --gtdb-taxon g__Bacteroides \
                 --prefer-genbank \
                 --threads 12 \
-                --include genome \
-                --ncbi-api-key "${NCBI_API_KEY}"
+                --include genome
             ;;
         *)
             real_data_die "Unknown remote case ID: ${case_id}"

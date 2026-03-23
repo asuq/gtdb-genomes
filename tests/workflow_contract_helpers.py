@@ -104,10 +104,12 @@ def install_capture_logger(
         debug: bool = False,
         dry_run: bool = False,
         output_root: Path | None = None,
+        *,
+        secrets=(),
     ) -> tuple[logging.Logger, Path | None]:
         """Return a predictable test logger backed by one string buffer."""
 
-        del dry_run, output_root
+        del dry_run, output_root, secrets
         logger = logging.getLogger(f"test-workflow-{id(stream)}")
         logger.handlers.clear()
         logger.setLevel(logging.DEBUG if debug else logging.INFO)

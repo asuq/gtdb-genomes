@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from gtdb_genomes.cli import CliArgs, main
+from gtdb_genomes.subprocess_utils import NCBI_API_KEY_ENV_VAR
 
 
 def test_main_passes_normalised_arguments_into_workflow(
@@ -23,6 +24,7 @@ def test_main_passes_normalised_arguments_into_workflow(
         captured_args.append(args)
         return 6
 
+    monkeypatch.delenv(NCBI_API_KEY_ENV_VAR, raising=False)
     monkeypatch.setattr("gtdb_genomes.workflow.run_workflow", fake_run_workflow)
 
     exit_code = main(
@@ -101,6 +103,7 @@ def test_main_defaults_release_to_latest_when_flag_is_omitted(
         captured_args.append(args)
         return 0
 
+    monkeypatch.delenv(NCBI_API_KEY_ENV_VAR, raising=False)
     monkeypatch.setattr("gtdb_genomes.workflow.run_workflow", fake_run_workflow)
 
     exit_code = main(
@@ -144,6 +147,7 @@ def test_main_passes_version_latest_into_workflow(
         captured_args.append(args)
         return 0
 
+    monkeypatch.delenv(NCBI_API_KEY_ENV_VAR, raising=False)
     monkeypatch.setattr("gtdb_genomes.workflow.run_workflow", fake_run_workflow)
 
     exit_code = main(
@@ -192,3 +196,33 @@ def test_main_rejects_debug_with_ncbi_api_key(tmp_path: Path) -> None:
         )
 
     assert error.value.code == 2
+
+
+def test_main_passes_ambient_ncbi_api_key_into_workflow(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    """The CLI should resolve ambient API keys before entering the workflow."""
+
+    captured_args: list[CliArgs] = []
+
+    def fake_run_workflow(args: CliArgs) -> int:
+        """Capture the parsed arguments and return a stubbed exit code."""
+
+        captured_args.append(args)
+        return 0
+
+    monkeypatch.setenv(NCBI_API_KEY_ENV_VAR, "ambient-secret")
+    monkeypatch.setattr("gtdb_genomes.workflow.run_workflow", fake_run_workflow)
+
+    exit_code = main(
+        [
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--outdir",
+            str(tmp_path / "output"),
+        ],
+    )
+
+    assert exit_code == 0
+    assert captured_args[0].ncbi_api_key == "ambient-secret"

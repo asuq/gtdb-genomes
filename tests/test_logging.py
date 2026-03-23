@@ -19,6 +19,15 @@ def test_redaction_helpers_hide_secrets() -> None:
     """Redaction helpers should remove secrets from text and commands."""
 
     assert redact_text("token secret value", ["secret"]) == "token [REDACTED] value"
+    assert redact_text('NCBI_API_KEY="secret"', []) == 'NCBI_API_KEY="[REDACTED]"'
+    assert (
+        redact_text('{"api_key":"secret"}', [])
+        == '{"api_key":"[REDACTED]"}'
+    )
+    assert (
+        redact_text("api-key: secret", [])
+        == "api-key: [REDACTED]"
+    )
     assert redact_command(
         ["datasets", "--api-key", "secret"],
         ["secret"],
@@ -32,12 +41,13 @@ def test_configure_logging_writes_debug_log_for_real_runs(tmp_path: Path) -> Non
         debug=True,
         dry_run=False,
         output_root=tmp_path,
+        secrets=("secret",),
     )
-    logger.debug("debug message")
+    logger.debug("debug message secret")
     close_logger(logger)
 
     assert debug_log_path == tmp_path / "debug.log"
-    assert debug_log_path.read_text().strip().endswith("DEBUG debug message")
+    assert debug_log_path.read_text().strip().endswith("DEBUG debug message [REDACTED]")
 
 
 def test_configure_logging_skips_debug_file_for_dry_run(tmp_path: Path) -> None:

@@ -6,7 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from gtdb_genomes.cli import DEFAULT_THREADS, CliArgs, build_parser, main, parse_args
+from gtdb_genomes.cli import (
+    DEFAULT_THREADS,
+    CliArgs,
+    build_parser,
+    main,
+    parse_args,
+)
+from gtdb_genomes.subprocess_utils import NCBI_API_KEY_ENV_VAR
 from gtdb_genomes.preflight import PreflightError
 
 
@@ -36,8 +43,7 @@ def test_help_includes_documented_flags() -> None:
     assert "direct downloads remain serial" in help_text
     assert "Default: latest." in help_text
     assert "8." in help_text
-    assert "Cannot be used with --ncbi-api-" in help_text
-    assert "key." in help_text
+    assert f"Overrides ambient {NCBI_API_KEY_ENV_VAR}." in help_text
 
 
 def test_parse_args_defaults_release_to_latest(tmp_path: Path) -> None:
@@ -375,6 +381,56 @@ def test_parse_args_accepts_ncbi_api_key_flag(tmp_path: Path) -> None:
     assert args.ncbi_api_key == "secret"
 
 
+def test_parse_args_uses_ambient_ncbi_api_key_when_flag_is_absent(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Ambient NCBI API keys should become the effective CLI secret."""
+
+    parser = build_parser()
+    monkeypatch.setenv(NCBI_API_KEY_ENV_VAR, "ambient-secret")
+
+    args = parse_args(
+        parser,
+        [
+            "--gtdb-release",
+            "latest",
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--outdir",
+            str(tmp_path),
+        ],
+    )
+
+    assert args.ncbi_api_key == "ambient-secret"
+
+
+def test_parse_args_prefers_cli_ncbi_api_key_over_ambient_value(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Explicit API keys should override ambient environment values."""
+
+    parser = build_parser()
+    monkeypatch.setenv(NCBI_API_KEY_ENV_VAR, "ambient-secret")
+
+    args = parse_args(
+        parser,
+        [
+            "--gtdb-release",
+            "latest",
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--outdir",
+            str(tmp_path),
+            "--ncbi-api-key",
+            "flag-secret",
+        ],
+    )
+
+    assert args.ncbi_api_key == "flag-secret"
+
+
 def test_parse_args_rejects_debug_with_ncbi_api_key(tmp_path: Path) -> None:
     """Debug mode should be rejected when an NCBI API key is supplied."""
 
@@ -391,6 +447,31 @@ def test_parse_args_rejects_debug_with_ncbi_api_key(tmp_path: Path) -> None:
                 str(tmp_path),
                 "--ncbi-api-key",
                 "secret",
+                "--debug",
+            ],
+        )
+
+    assert error.value.code == 2
+
+
+def test_parse_args_rejects_debug_with_ambient_ncbi_api_key(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Debug mode should be rejected when an ambient API key is active."""
+
+    parser = build_parser()
+    monkeypatch.setenv(NCBI_API_KEY_ENV_VAR, "ambient-secret")
+    with pytest.raises(SystemExit) as error:
+        parse_args(
+            parser,
+            [
+                "--gtdb-release",
+                "latest",
+                "--gtdb-taxon",
+                "g__Escherichia",
+                "--outdir",
+                str(tmp_path),
                 "--debug",
             ],
         )

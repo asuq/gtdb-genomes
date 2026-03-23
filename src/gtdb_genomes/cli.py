@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping, Sequence
+import os
 import sys
-from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from gtdb_genomes.download import validate_include_value
 from gtdb_genomes.preflight import PreflightError
+from gtdb_genomes.subprocess_utils import NCBI_API_KEY_ENV_VAR
 from gtdb_genomes.taxon_normalisation import (
     is_complete_requested_taxon,
     normalise_requested_taxon,
@@ -33,6 +35,17 @@ class CliArgs:
     debug: bool
     keep_temp: bool
     dry_run: bool
+
+
+def normalise_optional_api_key(api_key: str | None) -> str | None:
+    """Trim one optional API key value and normalise blank inputs to `None`."""
+
+    if api_key is None:
+        return None
+    value = api_key.strip()
+    if not value:
+        return None
+    return value
 
 
 def normalise_release(parser: argparse.ArgumentParser, release: str) -> str:
@@ -100,6 +113,19 @@ def validate_output_path(parser: argparse.ArgumentParser, output: str) -> Path:
     return path
 
 
+def resolve_effective_ncbi_api_key(
+    explicit_api_key: str | None,
+    environment: Mapping[str, str] | None = None,
+) -> str | None:
+    """Resolve the effective NCBI API key from CLI input or ambient environment."""
+
+    normalised_explicit_api_key = normalise_optional_api_key(explicit_api_key)
+    if normalised_explicit_api_key is not None:
+        return normalised_explicit_api_key
+    source_environment = os.environ if environment is None else environment
+    return normalise_optional_api_key(source_environment.get(NCBI_API_KEY_ENV_VAR))
+
+
 def parse_args(
     parser: argparse.ArgumentParser,
     argv: Sequence[str] | None = None,
@@ -107,14 +133,15 @@ def parse_args(
     """Parse, normalise, and validate command-line arguments."""
 
     namespace = parser.parse_args(argv)
+    effective_ncbi_api_key = resolve_effective_ncbi_api_key(namespace.ncbi_api_key)
     if namespace.threads <= 0:
         parser.error("argument --threads: value must be a positive integer")
     if namespace.version_latest and not namespace.prefer_genbank:
         parser.error("argument --version-latest: requires --prefer-genbank")
-    if namespace.debug and namespace.ncbi_api_key:
+    if namespace.debug and effective_ncbi_api_key:
         parser.error(
-            "argument --debug: cannot be used with --ncbi-api-key because "
-            "upstream datasets debug output may expose the API key",
+            "argument --debug: cannot be used while an NCBI API key is active "
+            "because upstream datasets debug output may expose the API key",
         )
     return CliArgs(
         gtdb_release=normalise_release(parser, namespace.gtdb_release),
@@ -123,7 +150,7 @@ def parse_args(
         prefer_genbank=namespace.prefer_genbank,
         version_latest=namespace.version_latest,
         threads=namespace.threads,
-        ncbi_api_key=namespace.ncbi_api_key,
+        ncbi_api_key=effective_ncbi_api_key,
         include=normalise_include(parser, namespace.include),
         debug=namespace.debug,
         keep_temp=namespace.keep_temp,
@@ -188,8 +215,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--ncbi-api-key",
         help=(
-            "NCBI API key used only for datasets commands. The tool does not "
-            "write it to its own logs or manifests."
+            "NCBI API key used only for datasets commands. Overrides ambient "
+            f"{NCBI_API_KEY_ENV_VAR}. The tool does not write it to its own "
+            "logs or manifests."
         ),
     )
     parser.add_argument(
@@ -200,7 +228,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--debug",
         action="store_true",
-        help="Enable debug logging. Cannot be used with --ncbi-api-key.",
+        help=(
+            "Enable debug logging. Cannot be used while an NCBI API key is "
+            "active."
+        ),
     )
     parser.add_argument(
         "--keep-temp",
@@ -217,15 +248,24 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the gtdb-genomes command-line interface."""
+
     parser = build_parser()
     args = parse_args(parser, argv)
     from gtdb_genomes.workflow import run_workflow
+    from gtdb_genomes.logging_utils import redact_text
 
     try:
         return run_workflow(args)
     except PreflightError as error:
         print(f"gtdb-genomes: error: {error}", file=sys.stderr)
         return 5
+    except Exception as error:  # pragma: no cover - last-resort guard
+        print(
+            "gtdb-genomes: error: unexpected internal failure: "
+            f"{redact_text(str(error), (args.ncbi_api_key,))}",
+            file=sys.stderr,
+        )
+        return 9
 
 
 if __name__ == "__main__":

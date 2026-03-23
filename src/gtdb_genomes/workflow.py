@@ -72,8 +72,12 @@ def log_planning_staging_failure(
 def run_workflow(args: CliArgs) -> int:
     """Run the workflow and return the process exit code."""
 
-    logger, _ = configure_logging(debug=args.debug, dry_run=args.dry_run)
     secrets = tuple(secret for secret in (args.ncbi_api_key,) if secret)
+    logger, _ = configure_logging(
+        debug=args.debug,
+        dry_run=args.dry_run,
+        secrets=secrets,
+    )
     started_at = datetime.now(UTC).isoformat()
     log_run_start(logger, args)
 

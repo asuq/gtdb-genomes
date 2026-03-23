@@ -215,6 +215,7 @@ def test_real_data_prepare_case_command_records_faulthandler_and_safe_debug(
     command_file = tmp_path / "command.sh"
     script = (
         f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        "unset NCBI_API_KEY\n"
         "export REAL_DATA_PYTHON_FAULTHANDLER=1\n"
         "export REAL_DATA_DEBUG_SAFE=1\n"
         "real_data_prepare_case_command "
@@ -238,18 +239,18 @@ def test_real_data_prepare_case_command_records_faulthandler_and_safe_debug(
 def test_real_data_prepare_case_command_skips_debug_for_api_key_case(
     tmp_path: Path,
 ) -> None:
-    """Safe debug mode should not add `--debug` to API-key cases."""
+    """Safe debug mode should not add `--debug` when an ambient API key exists."""
 
     command_file = tmp_path / "command.sh"
     script = (
         f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        "export NCBI_API_KEY=secret\n"
         "export REAL_DATA_PYTHON_FAULTHANDLER=1\n"
         "export REAL_DATA_DEBUG_SAFE=1\n"
         "real_data_prepare_case_command "
         "gtdb-genomes --gtdb-release 207 "
         "--gtdb-taxon g__Methanobrevibacter "
-        "--threads 4 --include genome,gff3 "
-        "--ncbi-api-key secret\n"
+        "--threads 4 --include genome,gff3\n"
         "real_data_write_command_file "
         f"{shlex.quote(str(command_file))} "
         '"${REAL_DATA_PREPARED_COMMAND[@]}" --outdir /tmp/out\n'
@@ -261,7 +262,7 @@ def test_real_data_prepare_case_command_skips_debug_for_api_key_case(
     command_text = command_file.read_text(encoding="utf-8")
     assert "env PYTHONFAULTHANDLER=1 gtdb-genomes" in command_text
     assert "--debug" not in command_text
-    assert "--ncbi-api-key" in command_text
+    assert "--ncbi-api-key" not in command_text
 
 
 def test_real_data_append_optional_ncbi_api_key_keeps_command_without_key() -> None:
@@ -281,8 +282,8 @@ def test_real_data_append_optional_ncbi_api_key_keeps_command_without_key() -> N
     assert result.stdout.splitlines() == ["gtdb-genomes", "--threads", "2"]
 
 
-def test_real_data_append_optional_ncbi_api_key_appends_key_when_set() -> None:
-    """Optional API-key helper should append the CLI flag when available."""
+def test_real_data_append_optional_ncbi_api_key_keeps_command_when_key_is_set() -> None:
+    """Optional API-key helper should leave ambient-secret usage unchanged."""
 
     script = (
         f"source {shlex.quote(str(COMMON_HELPERS))}\n"
@@ -295,13 +296,7 @@ def test_real_data_append_optional_ncbi_api_key_appends_key_when_set() -> None:
     result = run_bash(script)
 
     assert result.returncode == 0
-    assert result.stdout.splitlines() == [
-        "gtdb-genomes",
-        "--threads",
-        "2",
-        "--ncbi-api-key",
-        "secret",
-    ]
+    assert result.stdout.splitlines() == ["gtdb-genomes", "--threads", "2"]
 
 
 def test_real_data_assert_any_taxon_manifest_row_column_matches_finds_true_row(

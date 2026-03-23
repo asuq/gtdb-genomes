@@ -155,7 +155,11 @@ def configure_output_logger(
     """Attach the output-root debug log handler for real runs when needed."""
 
     if args.debug:
-        attach_debug_log_handler(logger, run_directories.output_root)
+        attach_debug_log_handler(
+            logger,
+            run_directories.output_root,
+            secrets=(args.ncbi_api_key,),
+        )
     return logger
 
 
