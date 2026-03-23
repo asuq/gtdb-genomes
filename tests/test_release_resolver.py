@@ -463,10 +463,8 @@ def test_load_release_taxonomy_raises_for_invalid_gzip_payload(
         ),
     )
 
-    resolution = resolve_and_validate_release("95", data_root=data_root)
-
     with pytest.raises(BundledDataError, match="could not be decoded as UTF-8"):
-        load_release_taxonomy(resolution)
+        resolve_and_validate_release("95", data_root=data_root)
 
 
 def test_load_release_manifest_raises_for_missing_manifest(tmp_path: Path) -> None:

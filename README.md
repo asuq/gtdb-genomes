@@ -58,8 +58,8 @@ In short:
 - `--version-latest`: paired with `--prefer-genbank`, opts into the latest available revision within the selected GenBank family from current NCBI metadata, e.g. `GCA_000005845.2` -> `GCA_000005845.3` if the latter is available
 - `--threads`: number of threads to run, defaults to 8
 - `--include`: locally supported tokens are `genome`, `gff3`, and `protein`, e.g. `genome,gff3,protein`, see [NCBI datasets documentation](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/how-tos/genomes/download-genome/#choosing-which-data-files-to-include-in-the-data-package)
-- `--ncbi-api-key`: NCBI API key, passed only to child `datasets` processes and not written to the tool's own logs or manifests
-- `--debug`: enables debug logging and cannot be combined with `--ncbi-api-key`
+- `--ncbi-api-key`: overrides ambient `NCBI_API_KEY`, passes the effective key only to child `datasets` processes, and does not write it to the tool's own logs or manifests
+- `--debug`: enables debug logging and cannot be combined with an effective NCBI API key
 - `--dry-run`: supported with automatic planning, resolves inputs without creating the final output tree
 
 ## Examples
@@ -76,11 +76,11 @@ Prefer paired GenBank accessions from current NCBI metadata, keep the exact
 selected version, and request extra annotation:
 
 ```bash
+export NCBI_API_KEY="your-ncbi-api-key"
 gtdb-genomes \
   --gtdb-taxon "p__Pseudomonadota" "c__Alphaproteobacteria" \
   --prefer-genbank \
   --include genome,gff3 \
-  --ncbi-api-key "${NCBI_API_KEY}" \
   --outdir results
 ```
 
@@ -120,8 +120,8 @@ gtdb-genomes \
 - `--prefer-genbank` and `--version-latest` consult current NCBI metadata, so
   they are time-dependent rather than frozen to one GTDB release snapshot.
 - Direct downloads remain serial in the current workflow.
-- `--debug` cannot be combined with `--ncbi-api-key` because upstream
-  `datasets` debug output may expose the secret header.
+- `--debug` cannot be combined with an effective NCBI API key because
+  upstream `datasets` debug output may expose the secret header.
 - `--include` accepts only `genome`, `gff3`, and `protein`; see [docs/usage-details.md](docs/usage-details.md) for the full runtime contract.
 - Clean packaged-runtime and real-data validation currently run on Linux only.
 
@@ -147,10 +147,12 @@ For detailed summary-file definitions, retry rules, runtime codes, and bundled
 data notes, see [docs/usage-details.md](docs/usage-details.md).
 
 > [!IMPORTANT]
-> `--ncbi-api-key` expects an NCBI API key. The tool passes it only to the
-> upstream `datasets` command through the child process environment and does
-> not use it for GTDB release resolution, local taxonomy loading, or any other
-> service. `--debug` cannot be combined with `--ncbi-api-key`.
+> `gtdb-genomes` honours ambient `NCBI_API_KEY` by default, and
+> `--ncbi-api-key` acts as an explicit override. The effective key is passed
+> only to the upstream `datasets` command through the child process
+> environment and is not used for GTDB release resolution, local taxonomy
+> loading, or any other service. `--debug` cannot be combined with an
+> effective API key.
 
 > [!NOTE]
 > Some legacy GTDB releases include genome accessions starting with `UBA`.

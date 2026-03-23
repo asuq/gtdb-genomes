@@ -547,8 +547,8 @@ def resolve_and_validate_release(
     requested_release: str,
     data_root: Path | None = None,
 ) -> ReleaseResolution:
-    """Resolve a release alias and validate the bundled taxonomy files."""
+    """Resolve a release alias and fully validate the bundled taxonomy payload."""
 
-    return validate_release_resolution(
+    return validate_release_payload(
         resolve_release(requested_release, data_root=data_root),
     )

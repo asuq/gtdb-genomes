@@ -499,7 +499,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "The planner intentionally stays count-only for this project.",
             "Direct downloads remain serial in the current workflow.",
             "consult current NCBI metadata",
-            "cannot be combined with `--ncbi-api-key`",
+            "cannot be combined with an effective NCBI API key",
             "`genome`, `gff3`, and `protein`",
             "`ncbi-datasets-cli >=18.4.0,<18.22.0`",
             "`unzip >=6.0,<7.0`",
@@ -592,6 +592,8 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
                     "--version-latest",
                     "current NCBI",
                     "GTDB-release-preserving transform",
+                "first uses explicit",
+                "paired-assembly metadata from the RefSeq summary record",
                 "candidate metadata lookup fails or stays incomplete",
                 "1,000 or more",
                 "generic `datasets` `> 15 GB` heuristic",
@@ -600,7 +602,8 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "MD5SUM",
             "--threads",
             "child process environment",
-            "forbids `--debug` together with `--ncbi-api-key`",
+            "Ambient `NCBI_API_KEY` is the normal workflow path",
+            "forbids `--debug` while an effective NCBI API key is active",
         ),
     )
     assert_not_contains_any(usage_details_text, ("--download-method", "--no-prefer-genbank"))
@@ -640,6 +643,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "polars >=1.31.0,<2.0.0",
             "- ncbi-datasets-cli",
             "resolve_and_validate_release('latest')",
+            "load_release_taxonomy",
             "g__NoSuchTaxon",
             "'--dry-run'",
         ),
@@ -652,6 +656,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "quarantined",
             "final `sha256`",
             "polars >=1.31.0,<2.0.0",
+            "bundled taxonomy loading",
             "offline zero-match dry-run path",
         ),
     )
@@ -786,6 +791,7 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
             "`NCBI_API_KEY` for `C7`",
             "`NCBI_API_KEY` for `C2` and `C3`",
             "C5` runs without `NCBI_API_KEY` and uses it opportunistically",
+            "leaves `NCBI_API_KEY` ambient",
             "Required environment for `full-large` coverage:",
             "packaged-runtime `C` coverage is split into separate build and runtime",
             "validates both the wheel and `sdist`",
@@ -807,6 +813,7 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
             "latest / s__Thermoflexus hugenholtzii",
             "latest / g__Methanobrevibacter",
             "`NCBI_API_KEY` for `C5`",
+            "passes `NCBI_API_KEY` to the CLI as `--ncbi-api-key`",
         ),
     )
 

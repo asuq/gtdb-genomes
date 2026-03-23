@@ -40,12 +40,13 @@ gtdb-genomes \
   network.
 
 - `--prefer-genbank`: Disabled by default. When enabled, a requested `GCF_*`
-  accession triggers NCBI metadata lookup and prefers a `GCA_*` accession only
-  when it shares the same numeric assembly identifier. If several matching
-  `GCA_*` versions exist, the highest version is selected from the current NCBI
-  metadata view. The download request then keeps that exact selected versioned
-  accession by default. This is a live NCBI optimisation, not a frozen
-  GTDB-release-preserving transform.
+  accession triggers NCBI metadata lookup and first uses explicit
+  paired-assembly metadata from the RefSeq summary record when it is complete
+  and usable. If explicit pairing is unavailable, the workflow falls back to
+  the current NCBI candidate set for `GCA_*` accessions that share the same
+  numeric assembly identifier. The download request then keeps the exact
+  selected versioned accession by default. This is a live NCBI optimisation,
+  not a frozen GTDB-release-preserving transform.
 
 - `--version-latest`: Disabled by default. Requires `--prefer-genbank`. Drops
   the version suffix from the selected accession and asks `datasets` for the
@@ -83,10 +84,12 @@ gtdb-genomes \
 - `--threads`: Choose how many CPUs to use for the supported workflow steps.
   Default: 8. Direct downloads remain serial in the current workflow.
 
-- `--ncbi-api-key`: This option expects an NCBI API key. The tool passes it
-  only to child `datasets` processes through the child process environment and
-  does not use it for GTDB release resolution, local taxonomy loading, or any
-  other service.
+- `--ncbi-api-key`: This option expects an NCBI API key. The CLI also honours
+  ambient `NCBI_API_KEY`, and `--ncbi-api-key` overrides that ambient value
+  when both are present. The tool passes only the effective key to child
+  `datasets` processes through the child process environment and does not use
+  it for GTDB release resolution, local taxonomy loading, or any other
+  service.
 
 - `--include`: Defaults to `genome`.
 
@@ -107,11 +110,12 @@ gtdb-genomes \
   - enables debug-level logging
   - emits redacted command traces
   - writes a redacted `OUTPUT/debug.log`
-  - cannot be combined with `--ncbi-api-key` because upstream `datasets`
-    debug output may expose the API key header
+  - cannot be combined with an effective NCBI API key because upstream
+    `datasets` debug output may expose the API key header
 
-  `--debug --dry-run` is allowed when `--ncbi-api-key` is not set, but dry-run
-  keeps debug output on the console only and does not create `OUTPUT/debug.log`.
+  `--debug --dry-run` is allowed when no effective NCBI API key is active, but
+  dry-run keeps debug output on the console only and does not create
+  `OUTPUT/debug.log`.
 
 - `--dry-run`: Resolves inputs without creating the final output tree.
 
@@ -128,22 +132,23 @@ gtdb-genomes \
 
 ## API Key Handling
 
-`--ncbi-api-key` is passed to child `datasets` processes through the child
-environment and is not written to project files.
+Ambient `NCBI_API_KEY` is the normal workflow path. `--ncbi-api-key` is an
+explicit override and is passed only to child `datasets` processes through the
+child environment.
 
 The tool:
 
-- never prints the API key in logs
 - never writes the API key into manifests or its own debug log
-- redacts the API key from recorded command traces and error messages
-- forbids `--debug` together with `--ncbi-api-key` because upstream
+- redacts recognised key-bearing forms and known literal API-key values from
+  recorded command traces and error messages
+- forbids `--debug` while an effective NCBI API key is active because upstream
   `datasets` debug output can expose the raw API key header
 
 Known limitation:
 
 - if a user types the API key directly on the shell command line, shell history
   or inspection of the parent `gtdb-genomes` process may still expose it
-  outside the control of this tool
+  outside the control of this tool, so ambient `NCBI_API_KEY` is preferred
 
 ## Output Layout
 
@@ -383,7 +388,9 @@ payload, so installed package runtimes remain offline and do not need a
 post-install bootstrap step. Missing taxonomy for a requested release is
 treated as a local bootstrap or packaging error. Packaged runtime integrity is
 validated locally from the bundled SHA-256 and expected row counts recorded in
-`releases.tsv`.
+`releases.tsv`. Internal callers that need an explicit release gate should use
+`resolve_and_validate_release()`, which now performs that full bundled-payload
+validation before runtime taxonomy loading.
 
 Published distribution archives include MIT-licensed project code plus bundled
 GTDB taxonomy data under CC BY-SA 4.0. The bundled taxonomy payload is shipped
