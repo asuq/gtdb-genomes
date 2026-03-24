@@ -6,11 +6,12 @@ submission.
 It is intentionally quarantined from merge-ready packaging because the source
 archive URL and final `sha256` must be filled from a tagged GitHub release.
 The template also mirrors the current runtime floors from `pyproject.toml`,
-including `polars >=1.31.0,<2.0.0`. Its smoke tests cover bundled taxonomy loading
-plus one offline zero-match dry-run path so the packaged CLI contract is
-exercised without a live download. The `resolve_and_validate_release()` smoke
-test now performs full bundled-payload validation before `load_release_taxonomy()`
-checks that the packaged tables really load.
+including `polars >=1.31.0,<2.0.0` and `tqdm >=4.67.1,<5.0.0`. Its smoke tests
+cover bundled taxonomy loading plus one offline zero-match dry-run path so the
+packaged CLI contract is exercised without a live download. The
+`resolve_and_validate_release()` smoke test now performs full bundled-payload
+validation before `load_release_taxonomy()` checks that the packaged tables
+really load.
 
 For community packaging, the supported source input is the tagged release
 `sdist`, not a repository snapshot. The repository bootstrap path exists for

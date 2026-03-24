@@ -32,6 +32,7 @@ The checked-in recipe is a draft, not a published installation path.
 The packaged runtime is currently checked with:
 
 - `polars >=1.31.0,<2.0.0`
+- `tqdm >=4.67.1,<5.0.0`
 - `ncbi-datasets-cli >=18.4.0,<18.22.0`
 - `unzip >=6.0,<7.0`
 
