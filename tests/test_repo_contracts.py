@@ -995,9 +995,9 @@ def test_citation_file_uses_canonical_release_metadata() -> None:
             'given-names: "Akito"',
             "orcid: 'https://orcid.org/0000-0002-7092-7720'",
             "abstract: CLI to download genomes by GTDB taxon and GTDB release",
-            "# identifiers:",
-            "#   - type: doi",
-            "#     value: xx.yyyy/zenodo.zzzz",
+            "identifiers:",
+            "  - type: doi",
+            "    value: 10.5281/zenodo.19198946",
         ),
     )
 
