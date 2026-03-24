@@ -192,6 +192,18 @@ def parse_tsv(path: Path) -> tuple[list[str], list[list[str]]]:
     return header, rows
 
 
+def parse_summary_log(path: Path) -> dict[str, str]:
+    """Return the labelled values from one `run_summary.log` file."""
+
+    values: dict[str, str] = {}
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line or ": " not in line:
+            continue
+        key, value = line.split(": ", 1)
+        values[key] = value
+    return values
+
+
 def build_cli_args(
     output_dir: Path,
     *,

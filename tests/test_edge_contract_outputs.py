@@ -41,6 +41,7 @@ from tests.workflow_contract_helpers import (
     build_uba_only_taxonomy_frame,
     install_fake_release_resolution,
     install_capture_logger,
+    parse_summary_log,
     parse_tsv,
 )
 
@@ -260,7 +261,7 @@ def test_successful_real_run_does_not_record_removed_planning_failures(
 
     assert exit_code == 0
     failure_header, failure_rows = parse_tsv(output_dir / "download_failures.tsv")
-    assert failure_header[0] == "requested_taxon"
+    assert failure_header[0] == "accession"
     assert failure_rows == []
 
 
@@ -343,14 +344,10 @@ def test_mixed_uba_real_run_records_failed_unsupported_rows(
         for row in accession_rows
     ]
     unsupported_row = next(
-        row for row in accession_maps if row["gtdb_accession"] == "UBA11131"
+        row for row in accession_maps if row["gtdb_accessions"] == "UBA11131"
     )
     assert unsupported_row["final_accession"] == ""
-    assert unsupported_row["accession_type_original"] == "unknown"
-    assert unsupported_row["accession_type_final"] == ""
     assert unsupported_row["conversion_status"] == "failed_no_usable_accession"
-    assert unsupported_row["download_method_used"] == ""
-    assert unsupported_row["download_batch"] == ""
     assert unsupported_row["download_status"] == "failed"
 
     taxon_header, taxon_rows = parse_tsv(
@@ -367,13 +364,12 @@ def test_mixed_uba_real_run_records_failed_unsupported_rows(
     failure_header, failure_rows = parse_tsv(output_dir / "download_failures.tsv")
     assert len(failure_rows) == 1
     failure = dict(zip(failure_header, failure_rows[0], strict=True))
-    assert failure["gtdb_accession"] == "UBA11131"
-    assert failure["attempted_accession"] == "UBA11131"
-    assert failure["final_accession"] == ""
+    assert failure["accession"] == "UBA11131"
+    assert failure["gtdb_accessions"] == "UBA11131"
     assert failure["stage"] == "preflight"
     assert failure["error_type"] == "unsupported_accession"
-    assert failure["final_status"] == "unsupported_input"
-    assert "PRJNA417962" in failure["error_message_redacted"]
+    assert failure["status"] == "unsupported_input"
+    assert "PRJNA417962" in failure["reason"]
 
 
 def test_uba_only_real_run_writes_failed_manifests_and_exits_seven(
@@ -416,20 +412,17 @@ def test_uba_only_real_run_writes_failed_manifests_and_exits_seven(
     assert exit_code == 7
     accession_header, accession_rows = parse_tsv(output_dir / "accession_map.tsv")
     accession_map = dict(zip(accession_header, accession_rows[0], strict=True))
-    assert accession_map["gtdb_accession"] == "UBA11131"
+    assert accession_map["gtdb_accessions"] == "UBA11131"
     assert accession_map["final_accession"] == ""
-    assert accession_map["download_method_used"] == ""
-    assert accession_map["download_batch"] == ""
     assert accession_map["download_status"] == "failed"
 
     failure_header, failure_rows = parse_tsv(output_dir / "download_failures.tsv")
     failure = dict(zip(failure_header, failure_rows[0], strict=True))
     assert failure["stage"] == "preflight"
     assert failure["error_type"] == "unsupported_accession"
-    assert failure["final_status"] == "unsupported_input"
+    assert failure["status"] == "unsupported_input"
 
-    run_summary_header, run_summary_rows = parse_tsv(output_dir / "run_summary.tsv")
-    run_summary = dict(zip(run_summary_header, run_summary_rows[0], strict=True))
+    run_summary = parse_summary_log(output_dir / "run_summary.log")
     assert run_summary["download_method_used"] == "auto"
     assert run_summary["download_concurrency_used"] == "0"
 
@@ -521,9 +514,7 @@ def test_mixed_real_run_writes_zero_match_taxon_outputs(
     bacillus_summary = next(
         row for row in taxon_summaries if row["requested_taxon"] == "g__Bacillus"
     )
-    assert bacillus_summary["matched_rows"] == "0"
     assert bacillus_summary["unique_gtdb_accessions"] == "0"
-    assert bacillus_summary["final_accessions"] == "0"
     assert bacillus_summary["successful_accessions"] == "0"
     assert bacillus_summary["failed_accessions"] == "0"
 
@@ -1015,7 +1006,7 @@ def test_real_run_output_copy_failure_returns_exit_code_eight(
 
     assert exit_code == 8
     assert "Real-run output materialisation failed: disk full" in log_stream.getvalue()
-    assert not (output_dir / "run_summary.tsv").exists()
+    assert not (output_dir / "run_summary.log").exists()
 
 
 def test_real_run_output_move_failure_returns_exit_code_eight(
@@ -1099,14 +1090,14 @@ def test_real_run_output_move_failure_returns_exit_code_eight(
 
     assert exit_code == 8
     assert "Real-run output materialisation failed: disk full" in log_stream.getvalue()
-    assert not (output_dir / "run_summary.tsv").exists()
+    assert not (output_dir / "run_summary.log").exists()
 
 
-def test_shared_preferred_direct_manifest_uses_preferred_download_batch(
+def test_shared_preferred_direct_manifest_collapses_to_realised_accessions(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Shared preferred direct success should record the preferred download batch."""
+    """Shared preferred direct success should collapse to one realised accession row."""
 
     payload_directory = tmp_path / "shared-preferred-payload"
     payload_directory.mkdir()
@@ -1182,7 +1173,11 @@ def test_shared_preferred_direct_manifest_uses_preferred_download_batch(
         dict(zip(accession_header, row, strict=True))
         for row in accession_rows
     ]
-    assert {row["download_batch"] for row in accession_maps} == {"direct_batch_1"}
+    assert len(accession_maps) == 1
+    assert accession_maps[0]["final_accession"] == "GCA_001881595.3"
+    assert accession_maps[0]["gtdb_accessions"] == (
+        "GB_GCA_001881595.3;RS_GCF_001881595.2"
+    )
 
 
 def test_real_run_records_provenance_and_download_request_accessions(
@@ -1279,7 +1274,11 @@ def test_real_run_records_provenance_and_download_request_accessions(
         fake_execute_accession_plans,
     )
 
-    def run_case(output_dir: Path, *, version_latest: bool) -> tuple[dict[str, str], dict[str, dict[str, str]], dict[str, dict[str, str]]]:
+    def run_case(
+        output_dir: Path,
+        *,
+        version_latest: bool,
+    ) -> tuple[dict[str, str], dict[str, dict[str, str]], dict[str, dict[str, str]]]:
         """Run one workflow case and return the parsed output manifests."""
 
         args = [
@@ -1296,15 +1295,15 @@ def test_real_run_records_provenance_and_download_request_accessions(
         exit_code = main(args)
         assert exit_code == 0
 
-        run_summary_header, run_summary_rows = parse_tsv(output_dir / "run_summary.tsv")
+        run_summary = parse_summary_log(output_dir / "run_summary.log")
         accession_header, accession_rows = parse_tsv(output_dir / "accession_map.tsv")
         taxon_header, taxon_rows = parse_tsv(
             output_dir / "taxa" / "g__Bacillus" / "taxon_accessions.tsv",
         )
         return (
-            dict(zip(run_summary_header, run_summary_rows[0], strict=True)),
+            run_summary,
             {
-                row_dict["ncbi_accession"]: row_dict
+                row_dict["final_accession"] or row_dict["gtdb_accessions"]: row_dict
                 for row_dict in (
                     dict(zip(accession_header, row, strict=True))
                     for row in accession_rows
@@ -1351,19 +1350,25 @@ def test_real_run_records_provenance_and_download_request_accessions(
     assert fixed_summary["archaeal_taxonomy_sha256"] == ""
     assert fixed_summary["version_latest"] == "false"
 
-    assert fixed_accessions["GCF_001881595.2"]["selected_accession"] == "GCA_001881595.2"
-    assert fixed_accessions["GCF_001881595.2"]["download_request_accession"] == "GCA_001881595.2"
+    assert fixed_accessions["GCA_001881595.2"]["selected_accessions"] == "GCA_001881595.2"
+    assert (
+        fixed_accessions["GCA_001881595.2"]["download_request_accessions"]
+        == "GCA_001881595.2"
+    )
     assert fixed_taxon_rows["GCF_001881595.2"]["selected_accession"] == "GCA_001881595.2"
     assert fixed_taxon_rows["GCF_001881595.2"]["download_request_accession"] == "GCA_001881595.2"
 
     assert latest_summary["version_latest"] == "true"
-    assert latest_accessions["GCF_001881595.2"]["selected_accession"] == "GCA_001881595.3"
-    assert latest_accessions["GCF_001881595.2"]["download_request_accession"] == "GCA_001881595"
+    assert latest_accessions["GCA_001881595.3"]["selected_accessions"] == "GCA_001881595.3"
+    assert (
+        latest_accessions["GCA_001881595.3"]["download_request_accessions"]
+        == "GCA_001881595"
+    )
     assert latest_taxon_rows["GCF_001881595.2"]["selected_accession"] == "GCA_001881595.3"
     assert latest_taxon_rows["GCF_001881595.2"]["download_request_accession"] == "GCA_001881595"
 
 
-def test_direct_fallback_manifest_uses_execution_request_accession_and_batch(
+def test_direct_fallback_manifest_uses_execution_request_accession(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -1451,17 +1456,9 @@ def test_direct_fallback_manifest_uses_execution_request_accession_and_batch(
     )
 
     assert exit_code == 6
-    accession_header, accession_rows = parse_tsv(output_dir / "accession_map.tsv")
     taxon_header, taxon_rows = parse_tsv(
         output_dir / "taxa" / "g__Bacillus" / "taxon_accessions.tsv",
     )
-    accession_maps = {
-        row["gtdb_accession"]: row
-        for row in (
-            dict(zip(accession_header, values, strict=True))
-            for values in accession_rows
-        )
-    }
     taxon_maps = {
         row["gtdb_accession"]: row
         for row in (
@@ -1469,22 +1466,13 @@ def test_direct_fallback_manifest_uses_execution_request_accession_and_batch(
             for values in taxon_rows
         )
     }
-    assert accession_maps["RS_GCF_001881595.2"]["selected_accession"] == "GCA_001881595.2"
-    assert accession_maps["RS_GCF_001881595.2"]["download_request_accession"] == (
-        "GCF_001881595.2"
-    )
-    assert accession_maps["RS_GCF_001881595.2"]["final_accession"] == (
-        "GCF_001881595.2"
-    )
-    assert accession_maps["RS_GCF_001881595.2"]["accession_type_final"] == "GCF"
-    assert accession_maps["RS_GCF_001881595.2"]["conversion_status"] == (
-        "paired_to_gca_fallback_original_on_download_failure"
-    )
-    assert accession_maps["RS_GCF_001881595.2"]["download_batch"] == "direct_fallback_batch_1"
     assert taxon_maps["RS_GCF_001881595.2"]["download_request_accession"] == (
         "GCF_001881595.2"
     )
-    assert accession_maps["GB_GCA_001881595.3"]["download_batch"] == "direct_batch_1"
+    assert taxon_maps["RS_GCF_001881595.2"]["final_accession"] == "GCF_001881595.2"
+    assert taxon_maps["RS_GCF_001881595.2"]["conversion_status"] == (
+        "paired_to_gca_fallback_original_on_download_failure"
+    )
 
 
 def test_latest_fallback_manifest_uses_original_fallback_request_accession(
@@ -1578,27 +1566,23 @@ def test_latest_fallback_manifest_uses_original_fallback_request_accession(
     assert exit_code == 6
     accession_header, accession_rows = parse_tsv(output_dir / "accession_map.tsv")
     accession_maps = {
-        row["gtdb_accession"]: row
+        row["final_accession"] or row["gtdb_accessions"]: row
         for row in (
             dict(zip(accession_header, values, strict=True))
             for values in accession_rows
         )
     }
-    assert accession_maps["RS_GCF_001881595.2"]["selected_accession"] == (
+    assert accession_maps["GCF_001881595.2"]["selected_accessions"] == (
         "GCA_001881595.3"
     )
-    assert accession_maps["RS_GCF_001881595.2"]["download_request_accession"] == (
+    assert accession_maps["GCF_001881595.2"]["download_request_accessions"] == (
         "GCF_001881595.2"
     )
-    assert accession_maps["RS_GCF_001881595.2"]["final_accession"] == (
+    assert accession_maps["GCF_001881595.2"]["final_accession"] == (
         "GCF_001881595.2"
     )
-    assert accession_maps["RS_GCF_001881595.2"]["accession_type_final"] == "GCF"
-    assert accession_maps["RS_GCF_001881595.2"]["conversion_status"] == (
+    assert accession_maps["GCF_001881595.2"]["conversion_status"] == (
         "paired_to_gca_fallback_original_on_download_failure"
-    )
-    assert accession_maps["RS_GCF_001881595.2"]["download_batch"] == (
-        "direct_fallback_batch_1"
     )
 
 
@@ -1707,7 +1691,7 @@ def test_failed_fallback_manifest_keeps_terminal_fallback_request_accession(
     assert exit_code == 7
     accession_header, accession_rows = parse_tsv(output_dir / "accession_map.tsv")
     accession_maps = {
-        row["gtdb_accession"]: row
+        row["final_accession"] or row["gtdb_accessions"]: row
         for row in (
             dict(zip(accession_header, values, strict=True))
             for values in accession_rows
@@ -1717,15 +1701,13 @@ def test_failed_fallback_manifest_keeps_terminal_fallback_request_accession(
     gcf_failures = [
         dict(zip(failure_header, values, strict=True))
         for values in failure_rows
-        if values[failure_header.index("gtdb_accession")] == "RS_GCF_001881595.2"
+        if values[failure_header.index("gtdb_accessions")] == "RS_GCF_001881595.2"
     ]
-    assert accession_maps["RS_GCF_001881595.2"]["download_request_accession"] == (
+    assert accession_maps["RS_GCF_001881595.2"]["download_request_accessions"] == (
         "GCF_001881595.2"
     )
-    assert [row["attempted_accession"] for row in gcf_failures] == [
-        "GCA_001881595",
-        "GCF_001881595.2",
-    ]
+    assert [row["accession"] for row in gcf_failures] == ["GCF_001881595.2"]
+    assert [row["reason"] for row in gcf_failures] == ["fallback unresolved"]
 
 
 def test_dehydrate_fallback_manifest_uses_direct_execution_request_accession(
@@ -1818,16 +1800,13 @@ def test_dehydrate_fallback_manifest_uses_direct_execution_request_accession(
     assert exit_code == 6
     accession_header, accession_rows = parse_tsv(output_dir / "accession_map.tsv")
     accession_maps = {
-        row["gtdb_accession"]: row
+        row["final_accession"] or row["gtdb_accessions"]: row
         for row in (
             dict(zip(accession_header, values, strict=True))
             for values in accession_rows
         )
     }
-    assert accession_maps["RS_GCF_001881595.2"]["download_method_used"] == (
-        "dehydrate_fallback_direct"
-    )
-    assert accession_maps["RS_GCF_001881595.2"]["download_request_accession"] == (
+    assert accession_maps["GCF_001881595.2"]["download_request_accessions"] == (
         "GCF_001881595.2"
     )
 
@@ -1887,7 +1866,6 @@ def test_build_enriched_output_rows_uses_execution_request_accession(
     assert enriched_rows[0]["selected_accession"] == "GCA_001881595.3"
     assert enriched_rows[0]["download_request_accession"] == "GCF_001881595.2"
     assert enriched_rows[0]["final_accession"] == "GCF_001881595.2"
-    assert enriched_rows[0]["accession_type_final"] == "GCF"
 
 
 def test_direct_success_manifest_preserves_shared_retry_failures(
@@ -1976,23 +1954,18 @@ def test_direct_success_manifest_preserves_shared_retry_failures(
     accession_header, accession_rows = parse_tsv(output_dir / "accession_map.tsv")
     accession_map = dict(zip(accession_header, accession_rows[0], strict=True))
     assert accession_map["download_status"] == "downloaded"
-    assert accession_map["download_request_accession"] == "GCF_000001.1"
+    assert accession_map["download_request_accessions"] == "GCF_000001.1"
 
     failure_header, failure_rows = parse_tsv(output_dir / "download_failures.tsv")
-    assert len(failure_rows) == 1
-    failure = dict(zip(failure_header, failure_rows[0], strict=True))
-    assert failure["gtdb_accession"] == "RS_GCF_000001.1"
-    assert failure["attempted_accession"] == "GCF_000001.1"
-    assert failure["final_accession"] == "GCF_000001.1"
-    assert failure["stage"] == "preferred_download"
-    assert failure["final_status"] == "retry_scheduled"
+    assert failure_header[0] == "accession"
+    assert failure_rows == []
 
 
-def test_candidate_lookup_failure_falls_back_to_original_and_keeps_failure_rows(
+def test_candidate_lookup_failure_falls_back_to_original_without_failure_rows(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Candidate metadata lookup failures should degrade without aborting."""
+    """Candidate metadata lookup fallbacks should not write terminal failure rows."""
 
     payload_directory = tmp_path / "candidate-lookup-fallback-payload"
     payload_directory.mkdir()
@@ -2124,19 +2097,16 @@ def test_candidate_lookup_failure_falls_back_to_original_and_keeps_failure_rows(
     ]
     accession_header, accession_rows = parse_tsv(output_dir / "accession_map.tsv")
     accession_map = dict(zip(accession_header, accession_rows[0], strict=True))
-    assert accession_map["selected_accession"] == "GCF_001881595.2"
-    assert accession_map["download_request_accession"] == "GCF_001881595.2"
+    assert accession_map["selected_accessions"] == "GCF_001881595.2"
+    assert accession_map["download_request_accessions"] == "GCF_001881595.2"
     assert accession_map["final_accession"] == "GCF_001881595.2"
     assert accession_map["conversion_status"] == (
         "paired_gca_metadata_incomplete_fallback_original"
     )
 
     failure_header, failure_rows = parse_tsv(output_dir / "download_failures.tsv")
-    assert len(failure_rows) == 1
-    failure = dict(zip(failure_header, failure_rows[0], strict=True))
-    assert failure["attempted_accession"] == "GCA_001881595.2"
-    assert failure["stage"] == "metadata_lookup"
-    assert failure["final_status"] == "retry_scheduled"
+    assert failure_header[0] == "accession"
+    assert failure_rows == []
 
 
 def test_failure_manifest_collapses_shared_accession_taxa(
@@ -2216,12 +2186,12 @@ def test_failure_manifest_collapses_shared_accession_taxa(
     failure_header, failure_rows = parse_tsv(output_dir / "download_failures.tsv")
     assert len(failure_rows) == 1
     failure = dict(zip(failure_header, failure_rows[0], strict=True))
-    assert failure["requested_taxon"] == "g__Escherichia;s__Escherichia coli"
-    assert failure["attempted_accession"] == "GCF_000001.1"
+    assert failure["requested_taxa"] == "g__Escherichia;s__Escherichia coli"
+    assert failure["accession"] == "GCF_000001.1"
 
 
-def test_failure_manifest_collapses_shared_metadata_attempts() -> None:
-    """Shared metadata retries should be written once per command attempt."""
+def test_failure_manifest_ignores_shared_metadata_attempts_without_terminal_failures() -> None:
+    """Shared metadata retries should not appear without failed accessions."""
 
     enriched_rows = [
         {
@@ -2286,25 +2256,14 @@ def test_failure_manifest_collapses_shared_metadata_attempts() -> None:
     failure_rows = build_failure_rows(
         enriched_rows,
         executions,
-        metadata_shared_failures,
-        (),
         (),
     )
 
-    assert len(failure_rows) == 2
-    assert failure_rows[0]["requested_taxon"] == (
-        "g__Escherichia;s__Escherichia coli"
-    )
-    assert failure_rows[0]["attempted_accession"] == (
-        "GCF_000001.1;GCF_000002.1"
-    )
-    assert failure_rows[0]["final_accession"] == (
-        "GCF_000001.1;GCF_000002.1"
-    )
+    assert failure_rows == []
 
 
-def test_failure_manifest_preserves_metadata_candidate_accession_set() -> None:
-    """Metadata failure rows should keep the paired-GCA candidate accession set."""
+def test_failure_manifest_ignores_metadata_candidate_accession_set() -> None:
+    """Metadata-only candidate failures should not populate the final failure file."""
 
     metadata_shared_failures = (
         SharedFailureContext(
@@ -2345,16 +2304,14 @@ def test_failure_manifest_preserves_metadata_candidate_accession_set() -> None:
                 failures=(),
             ),
         },
-        metadata_shared_failures,
-        (),
         (),
     )
 
-    assert failure_rows[0]["attempted_accession"] == "GCA_000001.2;GCA_000001.3"
+    assert failure_rows == []
 
 
 def test_failure_manifest_scopes_candidate_metadata_failures_to_affected_rows() -> None:
-    """Candidate metadata failures should not leak onto unrelated supported rows."""
+    """Candidate metadata-only failures should not populate terminal rows."""
 
     enriched_rows = [
         {
@@ -2412,14 +2369,7 @@ def test_failure_manifest_scopes_candidate_metadata_failures_to_affected_rows() 
     failure_rows = build_failure_rows(
         enriched_rows,
         executions,
-        metadata_shared_failures,
-        (),
         (),
     )
 
-    assert len(failure_rows) == 1
-    assert failure_rows[0]["requested_taxon"] == "g__Escherichia"
-    assert failure_rows[0]["taxon_slug"] == "g__Escherichia"
-    assert failure_rows[0]["gtdb_accession"] == "RS_GCF_000001.1"
-    assert failure_rows[0]["attempted_accession"] == "GCA_000001.2"
-    assert failure_rows[0]["final_accession"] == "GCF_000001.1"
+    assert failure_rows == []

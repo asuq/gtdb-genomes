@@ -62,6 +62,52 @@ def extract_bash_function(script_path: Path, function_name: str) -> str:
     return script_text[start_index:end_index]
 
 
+def build_run_summary_log(
+    *,
+    exit_code: int,
+    download_method_used: str,
+    successful_accessions: int,
+    failed_accessions: int,
+) -> str:
+    """Build a minimal `run_summary.log` fixture for shell-helper tests."""
+
+    return (
+        "Run Identity\n"
+        "run_id: run1\n"
+        "accession_decision_sha256: digest\n"
+        "started_at: 2026-03-24T00:00:00+00:00\n"
+        "finished_at: 2026-03-24T00:00:01+00:00\n\n"
+        "Release And Provenance\n"
+        "requested_release: 95\n"
+        "resolved_release: 95.0\n"
+        "download_method_requested: auto\n"
+        f"download_method_used: {download_method_used}\n"
+        "threads_requested: 4\n"
+        "download_concurrency_used: 1\n"
+        "rehydrate_workers_used: 0\n"
+        "include: genome\n"
+        "prefer_genbank: false\n"
+        "version_latest: false\n"
+        "package_version: 1.0.0\n"
+        "git_revision: deadbeef\n"
+        "datasets_version: datasets 2.0\n"
+        "unzip_version: UnZip 6.00\n"
+        "release_manifest_sha256: 0\n"
+        "bacterial_taxonomy_sha256: 1\n"
+        "archaeal_taxonomy_sha256: \n"
+        "debug_enabled: false\n\n"
+        "Counts\n"
+        "requested_taxa_count: 1\n"
+        "matched_rows: 1\n"
+        "unique_gtdb_accessions: 1\n"
+        f"successful_accessions: {successful_accessions}\n"
+        f"failed_accessions: {failed_accessions}\n\n"
+        "Paths And Exit\n"
+        "output_dir: /tmp/output\n"
+        f"exit_code: {exit_code}\n"
+    )
+
+
 def test_real_data_write_command_file_redacts_ncbi_api_key(
     tmp_path: Path,
 ) -> None:
@@ -338,11 +384,11 @@ def test_real_data_assert_any_taxon_manifest_row_column_matches_handles_crlf(
     manifest_path.parent.mkdir(parents=True)
     manifest_path.write_bytes(
         (
-            "requested_taxon\ttaxon_slug\tlineage\tgtdb_accession\tfinal_accession\t"
-            "conversion_status\toutput_relpath\tdownload_status\tduplicate_across_taxa\r\n"
-            "g__Thermoflexus\tg__Thermoflexus\tlineage\tRS_GCF_000001.1\t"
-            "GCF_000001.1\tsuccess\ttaxa/g__Thermoflexus/GCF_000001.1\t"
-            "downloaded\ttrue\r\n"
+            "final_accession\trequested_taxon\tlineage\tgtdb_accession\t"
+            "conversion_status\toutput_relpath\tdownload_status\t"
+            "duplicate_across_taxa\r\n"
+            "GCF_000001.1\tg__Thermoflexus\tlineage\tRS_GCF_000001.1\t"
+            "success\ttaxa/g__Thermoflexus/GCF_000001.1\tdownloaded\ttrue\r\n"
         ).encode("ascii")
     )
     script = (
@@ -361,7 +407,7 @@ def test_real_data_assert_any_taxon_manifest_row_column_matches_handles_crlf(
 def test_real_data_tsv_value_strips_crlf_from_last_column(tmp_path: Path) -> None:
     """TSV value extraction should normalise CRLF line endings."""
 
-    tsv_path = tmp_path / "run_summary.tsv"
+    tsv_path = tmp_path / "generic.tsv"
     tsv_path.write_bytes(
         (
             "run_id\texit_code\r\n"
@@ -387,7 +433,7 @@ def test_real_data_unique_tsv_values_for_match_strips_crlf_from_last_column(
     tsv_path = tmp_path / "accession_map.tsv"
     tsv_path.write_bytes(
         (
-            "ncbi_accession\tdownload_status\r\n"
+            "final_accession\tdownload_status\r\n"
             "GCF_000001.1\tdownloaded\r\n"
             "GCF_003670205.1\tfailed\r\n"
             "GCF_003670205.1\tfailed\r\n"
@@ -397,7 +443,7 @@ def test_real_data_unique_tsv_values_for_match_strips_crlf_from_last_column(
         f"source {shlex.quote(str(COMMON_HELPERS))}\n"
         "real_data_unique_tsv_values_for_match "
         f"{shlex.quote(str(tsv_path))} "
-        "ncbi_accession download_status failed\n"
+        "final_accession download_status failed\n"
     )
 
     result = run_bash(script)
@@ -497,20 +543,26 @@ def test_remote_check_dehydrate_suppressed_partial_result_accepts_suppressed_onl
 
     output_root = tmp_path / "c5-output"
     output_root.mkdir()
-    (output_root / "run_summary.tsv").write_text(
-        "run_id\texit_code\tdownload_method_used\tsuccessful_accessions\tfailed_accessions\n"
-        "run1\t6\tdehydrate\t1024\t1\n",
+    (output_root / "run_summary.log").write_text(
+        build_run_summary_log(
+            exit_code=6,
+            download_method_used="dehydrate",
+            successful_accessions=1024,
+            failed_accessions=1,
+        ),
         encoding="utf-8",
     )
     (output_root / "accession_map.tsv").write_text(
-        "requested_taxon\tncbi_accession\tdownload_status\n"
-        "g__Bacteroides\tGCF_000001.1\tdownloaded\n"
-        "g__Bacteroides\tGCF_003670205.1\tfailed\n",
+        "final_accession\trequested_taxa\tgtdb_accessions\tselected_accessions\t"
+        "download_request_accessions\tconversion_status\tdownload_status\t"
+        "output_relpaths\tduplicate_across_taxa\n"
+        "\tg__Bacteroides\tRS_GCF_003670205.1\tGCF_003670205.1\tGCF_003670205.1\t"
+        "failed_no_usable_accession\tfailed\t\tfalse\n",
         encoding="utf-8",
     )
     (output_root / "download_failures.tsv").write_text(
-        "requested_taxon\tattempted_accession\terror_message_redacted\n"
-        "g__Bacteroides\tGCF_003670205.1\tNCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\n",
+        "accession\trequested_taxa\tgtdb_accessions\tsuppressed\tstage\terror_type\treason\tstatus\n"
+        "GCF_003670205.1\tg__Bacteroides\tRS_GCF_003670205.1\ttrue\tpreferred_download\tsubprocess\tNCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\tretry_exhausted\n",
         encoding="utf-8",
     )
     function_text = extract_bash_function(
@@ -529,29 +581,36 @@ def test_remote_check_dehydrate_suppressed_partial_result_accepts_suppressed_onl
     assert result.returncode == 0
 
 
-def test_remote_check_dehydrate_suppressed_partial_result_accepts_collapsed_download_request_failures(
+def test_remote_check_dehydrate_suppressed_partial_result_accepts_multiple_failed_accession_rows(
     tmp_path: Path,
 ) -> None:
     """C5 should accept one shared suppression failure for multiple requests."""
 
     output_root = tmp_path / "c5-output"
     output_root.mkdir()
-    (output_root / "run_summary.tsv").write_text(
-        "run_id\texit_code\tdownload_method_used\tsuccessful_accessions\tfailed_accessions\n"
-        "run1\t6\tdehydrate\t1024\t2\n",
+    (output_root / "run_summary.log").write_text(
+        build_run_summary_log(
+            exit_code=6,
+            download_method_used="dehydrate",
+            successful_accessions=1024,
+            failed_accessions=2,
+        ),
         encoding="utf-8",
     )
     (output_root / "accession_map.tsv").write_text(
-        "requested_taxon\tncbi_accession\tdownload_request_accession\tdownload_status\n"
-        "g__Bacteroides\tGCF_000001.1\tGCF_000001.1\tdownloaded\n"
-        "g__Bacteroides\tGCF_003670205.1\tGCA_003670205\tfailed\n"
-        "g__Bacteroides\tGCF_003670206.1\tGCA_003670206\tfailed\n",
+        "final_accession\trequested_taxa\tgtdb_accessions\tselected_accessions\t"
+        "download_request_accessions\tconversion_status\tdownload_status\t"
+        "output_relpaths\tduplicate_across_taxa\n"
+        "\tg__Bacteroides\tRS_GCF_003670205.1\tGCF_003670205.1\tGCA_003670205\t"
+        "failed_no_usable_accession\tfailed\t\tfalse\n"
+        "\tg__Bacteroides\tRS_GCF_003670206.1\tGCF_003670206.1\tGCA_003670206\t"
+        "failed_no_usable_accession\tfailed\t\tfalse\n",
         encoding="utf-8",
     )
     (output_root / "download_failures.tsv").write_text(
-        "requested_taxon\tattempted_accession\terror_message_redacted\n"
-        "g__Bacteroides\tGCA_003670205;GCA_003670206\t"
-        "NCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\n",
+        "accession\trequested_taxa\tgtdb_accessions\tsuppressed\tstage\terror_type\treason\tstatus\n"
+        "GCA_003670205\tg__Bacteroides\tRS_GCF_003670205.1\ttrue\tpreferred_download\tsubprocess\tNCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\tretry_exhausted\n"
+        "GCA_003670206\tg__Bacteroides\tRS_GCF_003670206.1\ttrue\tpreferred_download\tsubprocess\tNCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\tretry_exhausted\n",
         encoding="utf-8",
     )
     function_text = extract_bash_function(
@@ -577,23 +636,29 @@ def test_remote_check_dehydrate_suppressed_partial_result_accepts_crlf_tsvs(
 
     output_root = tmp_path / "c5-output"
     output_root.mkdir()
-    (output_root / "run_summary.tsv").write_text(
-        "run_id\texit_code\tdownload_method_used\tsuccessful_accessions\tfailed_accessions\n"
-        "run1\t6\tdehydrate\t1024\t1\n",
+    (output_root / "run_summary.log").write_text(
+        build_run_summary_log(
+            exit_code=6,
+            download_method_used="dehydrate",
+            successful_accessions=1024,
+            failed_accessions=1,
+        ),
         encoding="utf-8",
     )
     (output_root / "accession_map.tsv").write_bytes(
         (
-            "requested_taxon\tncbi_accession\tdownload_status\r\n"
-            "g__Bacteroides\tGCF_000001.1\tdownloaded\r\n"
-            "g__Bacteroides\tGCF_003670205.1\tfailed\r\n"
+            "final_accession\trequested_taxa\tgtdb_accessions\tselected_accessions\t"
+            "download_request_accessions\tconversion_status\tdownload_status\t"
+            "output_relpaths\tduplicate_across_taxa\r\n"
+            "\tg__Bacteroides\tRS_GCF_003670205.1\tGCF_003670205.1\tGCF_003670205.1\t"
+            "failed_no_usable_accession\tfailed\t\tfalse\r\n"
         ).encode("ascii")
     )
     (output_root / "download_failures.tsv").write_bytes(
         (
-            "requested_taxon\tattempted_accession\terror_message_redacted\r\n"
-            "g__Bacteroides\tGCF_003670205.1\t"
-            "NCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\r\n"
+            "accession\trequested_taxa\tgtdb_accessions\tsuppressed\tstage\terror_type\treason\tstatus\r\n"
+            "GCF_003670205.1\tg__Bacteroides\tRS_GCF_003670205.1\ttrue\tpreferred_download\tsubprocess\t"
+            "NCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\tretry_exhausted\r\n"
         ).encode("ascii")
     )
     function_text = extract_bash_function(
@@ -635,20 +700,26 @@ def test_remote_check_dehydrate_suppressed_partial_result_requires_exact_downloa
 
     output_root = tmp_path / "c5-output"
     output_root.mkdir()
-    (output_root / "run_summary.tsv").write_text(
-        "run_id\texit_code\tdownload_method_used\tsuccessful_accessions\tfailed_accessions\n"
-        "run1\t6\tdehydrate\t1024\t1\n",
+    (output_root / "run_summary.log").write_text(
+        build_run_summary_log(
+            exit_code=6,
+            download_method_used="dehydrate",
+            successful_accessions=1024,
+            failed_accessions=1,
+        ),
         encoding="utf-8",
     )
     (output_root / "accession_map.tsv").write_text(
-        "requested_taxon\tncbi_accession\tdownload_request_accession\tdownload_status\n"
-        "g__Bacteroides\tGCF_000001.1\tGCF_000001.1\tdownloaded\n"
-        "g__Bacteroides\tGCF_003670205.1\tGCA_003670205\tfailed\n",
+        "final_accession\trequested_taxa\tgtdb_accessions\tselected_accessions\t"
+        "download_request_accessions\tconversion_status\tdownload_status\t"
+        "output_relpaths\tduplicate_across_taxa\n"
+        "\tg__Bacteroides\tRS_GCF_003670205.1\tGCF_003670205.1\tGCA_003670205\t"
+        "failed_no_usable_accession\tfailed\t\tfalse\n",
         encoding="utf-8",
     )
     (output_root / "download_failures.tsv").write_text(
-        "requested_taxon\tattempted_accession\terror_message_redacted\n"
-        "g__Bacteroides\tGCA_0036702050\tNCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\n",
+        "accession\trequested_taxa\tgtdb_accessions\tsuppressed\tstage\terror_type\treason\tstatus\n"
+        "GCA_0036702050\tg__Bacteroides\tRS_GCF_003670205.1\ttrue\tpreferred_download\tsubprocess\tNCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable.\tretry_exhausted\n",
         encoding="utf-8",
     )
     function_text = extract_bash_function(
@@ -675,20 +746,26 @@ def test_remote_check_dehydrate_suppressed_partial_result_rejects_generic_partia
 
     output_root = tmp_path / "c5-output"
     output_root.mkdir()
-    (output_root / "run_summary.tsv").write_text(
-        "run_id\texit_code\tdownload_method_used\tsuccessful_accessions\tfailed_accessions\n"
-        "run1\t6\tdehydrate_fallback_direct\t1024\t1\n",
+    (output_root / "run_summary.log").write_text(
+        build_run_summary_log(
+            exit_code=6,
+            download_method_used="dehydrate_fallback_direct",
+            successful_accessions=1024,
+            failed_accessions=1,
+        ),
         encoding="utf-8",
     )
     (output_root / "accession_map.tsv").write_text(
-        "requested_taxon\tncbi_accession\tdownload_status\n"
-        "g__Bacteroides\tGCF_000001.1\tdownloaded\n"
-        "g__Bacteroides\tGCF_003670205.1\tfailed\n",
+        "final_accession\trequested_taxa\tgtdb_accessions\tselected_accessions\t"
+        "download_request_accessions\tconversion_status\tdownload_status\t"
+        "output_relpaths\tduplicate_across_taxa\n"
+        "\tg__Bacteroides\tRS_GCF_003670205.1\tGCF_003670205.1\tGCF_003670205.1\t"
+        "failed_no_usable_accession\tfailed\t\tfalse\n",
         encoding="utf-8",
     )
     (output_root / "download_failures.tsv").write_text(
-        "requested_taxon\tattempted_accession\terror_message_redacted\n"
-        "g__Bacteroides\tGCF_003670205.1\tdownload failed after retries\n",
+        "accession\trequested_taxa\tgtdb_accessions\tsuppressed\tstage\terror_type\treason\tstatus\n"
+        "GCF_003670205.1\tg__Bacteroides\tRS_GCF_003670205.1\tfalse\tpreferred_download\tsubprocess\tdownload failed after retries\tretry_exhausted\n",
         encoding="utf-8",
     )
     function_text = extract_bash_function(

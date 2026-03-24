@@ -65,7 +65,7 @@ remote_check_dehydrate_result() {
 remote_check_dehydrate_suppressed_partial_result() {
     local output_root=$1
     local exit_code=""
-    local failed_accession_column="download_request_accession"
+    local failed_accession_column="download_request_accessions"
     local failed_accessions=()
     local accession=""
     local suppression_note="NCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable."
@@ -76,7 +76,7 @@ remote_check_dehydrate_suppressed_partial_result() {
         '^(dehydrate|dehydrate_fallback_direct)$' \
         "remote dehydrate method" || return 1
 
-    exit_code=$(real_data_tsv_value "${output_root}/run_summary.tsv" "exit_code")
+    exit_code=$(real_data_log_value "${output_root}/run_summary.log" "exit_code")
     if [ "${exit_code}" = "0" ]; then
         return 0
     fi
@@ -111,13 +111,13 @@ remote_check_dehydrate_suppressed_partial_result() {
     if ! real_data_tsv_has_column \
         "${output_root}/accession_map.tsv" \
         "${failed_accession_column}"; then
-        failed_accession_column="ncbi_accession"
+        failed_accession_column="selected_accessions"
     fi
     if ! real_data_tsv_has_column \
         "${output_root}/accession_map.tsv" \
         "${failed_accession_column}"; then
         real_data_fail_message \
-            "remote dehydrate suppressed partial: accession_map.tsv is missing download-request and original accession columns"
+            "remote dehydrate suppressed partial: accession_map.tsv is missing the failed-accession columns"
         return 1
     fi
 
@@ -142,9 +142,9 @@ remote_check_dehydrate_suppressed_partial_result() {
     for accession in "${failed_accessions[@]}"; do
         if ! real_data_tsv_any_row_matches_exact_token_and_substring \
             "${output_root}/download_failures.tsv" \
-            "attempted_accession" \
+            "accession" \
             "${accession}" \
-            "error_message_redacted" \
+            "reason" \
             "${suppression_note}"; then
             real_data_fail_message \
                 "remote dehydrate suppressed partial: failed accession ${accession} lacks suppression note"

@@ -248,8 +248,8 @@ real_data_record_output_evidence() {
     fi
 
     real_data_copy_if_present \
-        "${output_root}/run_summary.tsv" \
-        "${evidence_root}/run_summary.tsv"
+        "${output_root}/run_summary.log" \
+        "${evidence_root}/run_summary.log"
     real_data_copy_if_present \
         "${output_root}/taxon_summary.tsv" \
         "${evidence_root}/taxon_summary.tsv"
@@ -259,6 +259,9 @@ real_data_record_output_evidence() {
     real_data_copy_if_present \
         "${output_root}/download_failures.tsv" \
         "${evidence_root}/download_failures.tsv"
+    real_data_copy_if_present \
+        "${output_root}/duplicated_genomes.tsv" \
+        "${evidence_root}/duplicated_genomes.tsv"
     real_data_copy_if_present \
         "${output_root}/debug.log" \
         "${evidence_root}/debug.log"
@@ -428,6 +431,27 @@ real_data_assert_file_contains() {
 }
 
 
+real_data_log_value() {
+    local log_path=$1
+    local key_name=$2
+
+    awk -v key_name="${key_name}" '
+        {
+            line = $0
+            sub(/\r$/, "", line)
+            prefix = key_name ": "
+            if (index(line, prefix) == 1) {
+                print substr(line, length(prefix) + 1)
+                exit 0
+            }
+        }
+        END {
+            exit 1
+        }
+    ' "${log_path}"
+}
+
+
 real_data_assert_header_only() {
     local file_path=$1
     local description=$2
@@ -453,11 +477,11 @@ real_data_assert_run_summary_matches() {
     local description=$4
     local value=""
 
-    if [ ! -f "${output_root}/run_summary.tsv" ]; then
-        real_data_fail_message "${description}: missing run_summary.tsv"
+    if [ ! -f "${output_root}/run_summary.log" ]; then
+        real_data_fail_message "${description}: missing run_summary.log"
         return 1
     fi
-    value=$(real_data_tsv_value "${output_root}/run_summary.tsv" "${column_name}")
+    value=$(real_data_log_value "${output_root}/run_summary.log" "${column_name}")
     if ! printf '%s\n' "${value}" | grep -E -q "${pattern}"; then
         real_data_fail_message \
             "${description}: value '${value}' does not match ${pattern}"

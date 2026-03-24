@@ -12,8 +12,9 @@ import pytest
 from gtdb_genomes.layout import (
     ACCESSION_MAP_COLUMNS,
     DOWNLOAD_FAILURE_COLUMNS,
+    DUPLICATED_GENOMES_COLUMNS,
     LayoutError,
-    RUN_SUMMARY_COLUMNS,
+    RUN_SUMMARY_KEYS,
     TAXON_ACCESSION_COLUMNS,
     build_unzip_command,
     copy_accession_payload,
@@ -24,6 +25,7 @@ from gtdb_genomes.layout import (
     write_root_manifests,
     write_zero_match_outputs,
 )
+from tests.workflow_contract_helpers import parse_summary_log
 
 
 def write_test_archive(
@@ -178,7 +180,8 @@ def test_write_root_manifests_and_zero_match_outputs(tmp_path: Path) -> None:
     run_directories = initialise_run_directories(tmp_path / "output")
     write_root_manifests(
         run_directories,
-        [{"run_id": "run-1", "exit_code": 4}],
+        "Run Identity\nrun_id: run-1\nexit_code: 4\n",
+        [],
         [],
         [],
         [],
@@ -190,26 +193,30 @@ def test_write_root_manifests_and_zero_match_outputs(tmp_path: Path) -> None:
             "g__Escherichia": "g__Escherichia",
             "s__Escherichia coli": "s__Escherichia_coli",
         },
-        [{"run_id": "run-1", "exit_code": 4}],
+        "Run Identity\nrun_id: run-1\nexit_code: 4\n",
         [],
     )
 
-    run_summary_lines = (
-        run_directories.output_root / "run_summary.tsv"
-    ).read_text().splitlines()
+    run_summary = parse_summary_log(run_directories.output_root / "run_summary.log")
     accession_map_lines = (
         run_directories.output_root / "accession_map.tsv"
     ).read_text().splitlines()
     failure_lines = (
         run_directories.output_root / "download_failures.tsv"
     ).read_text().splitlines()
+    duplicate_lines = (
+        run_directories.output_root / "duplicated_genomes.tsv"
+    ).read_text().splitlines()
     taxon_lines = (
         run_directories.taxa_root / "g__Escherichia" / "taxon_accessions.tsv"
     ).read_text().splitlines()
 
-    assert run_summary_lines[0].split("\t") == list(RUN_SUMMARY_COLUMNS)
+    assert set(run_summary) <= set(RUN_SUMMARY_KEYS)
+    assert run_summary["run_id"] == "run-1"
+    assert run_summary["exit_code"] == "4"
     assert accession_map_lines == ["\t".join(ACCESSION_MAP_COLUMNS)]
     assert failure_lines == ["\t".join(DOWNLOAD_FAILURE_COLUMNS)]
+    assert duplicate_lines == ["\t".join(DUPLICATED_GENOMES_COLUMNS)]
     assert taxon_lines == ["\t".join(TAXON_ACCESSION_COLUMNS)]
 
 

@@ -10,7 +10,7 @@ import pytest
 from gtdb_genomes.cli import main
 from gtdb_genomes.layout import (
     ACCESSION_MAP_COLUMNS,
-    RUN_SUMMARY_COLUMNS,
+    DUPLICATED_GENOMES_COLUMNS,
     TAXON_ACCESSION_COLUMNS,
 )
 from gtdb_genomes.metadata import MetadataLookupError, SummaryLookupResult
@@ -21,6 +21,7 @@ from tests.workflow_contract_helpers import (
     build_uba_only_taxonomy_frame,
     install_fake_release_resolution,
     install_capture_logger,
+    parse_summary_log,
 )
 
 
@@ -62,12 +63,14 @@ def test_zero_match_run_writes_header_only_outputs(
     )
 
     assert exit_code == 4
-    assert (output_dir / "run_summary.tsv").exists()
-    assert (output_dir / "run_summary.tsv").read_text().splitlines()[0].split(
-        "\t",
-    ) == list(RUN_SUMMARY_COLUMNS)
+    assert (output_dir / "run_summary.log").exists()
+    run_summary = parse_summary_log(output_dir / "run_summary.log")
+    assert run_summary["exit_code"] == "4"
     assert (output_dir / "accession_map.tsv").read_text().splitlines() == [
         "\t".join(ACCESSION_MAP_COLUMNS),
+    ]
+    assert (output_dir / "duplicated_genomes.tsv").read_text().splitlines() == [
+        "\t".join(DUPLICATED_GENOMES_COLUMNS),
     ]
     assert (
         output_dir / "taxa" / "g__Escherichia" / "taxon_accessions.tsv"

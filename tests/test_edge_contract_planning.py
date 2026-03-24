@@ -40,6 +40,7 @@ from tests.workflow_contract_helpers import (
     build_taxonomy_frame,
     install_fake_release_resolution,
     install_capture_logger,
+    parse_summary_log,
     parse_tsv,
 )
 
@@ -795,8 +796,7 @@ def test_total_runtime_failure_leaves_final_accession_blank(
     assert accession_map["final_accession"] == ""
     assert accession_map["conversion_status"] == "failed_no_usable_accession"
     assert accession_map["download_status"] == "failed"
-    run_summary_header, run_summary_rows = parse_tsv(output_dir / "run_summary.tsv")
-    run_summary = dict(zip(run_summary_header, run_summary_rows[0], strict=True))
+    run_summary = parse_summary_log(output_dir / "run_summary.log")
     assert run_summary["download_concurrency_used"] == "1"
     assert run_summary["rehydrate_workers_used"] == "0"
 
@@ -897,4 +897,4 @@ def test_failed_suppressed_accession_repeats_warning_and_failure_note(
 
     failure_header, failure_rows = parse_tsv(output_dir / "download_failures.tsv")
     failure = dict(zip(failure_header, failure_rows[0], strict=True))
-    assert SUPPRESSED_ASSEMBLY_NOTE in failure["error_message_redacted"]
+    assert SUPPRESSED_ASSEMBLY_NOTE in failure["reason"]

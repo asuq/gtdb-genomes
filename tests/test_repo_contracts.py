@@ -601,7 +601,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     readme_text = Path("README.md").read_text(encoding="utf-8")
     contributing_text = Path("CONTRIBUTING.md").read_text(encoding="utf-8")
     usage_details_text = Path("docs/usage-details.md").read_text(encoding="utf-8")
-    run_summary_text = Path("docs/summary-files/run_summary.tsv.txt").read_text(
+    run_summary_text = Path("docs/summary-files/run_summary.log.txt").read_text(
         encoding="utf-8",
     )
     taxon_summary_text = Path("docs/summary-files/taxon_summary.tsv.txt").read_text(
@@ -612,6 +612,9 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     )
     download_failures_text = Path(
         "docs/summary-files/download_failures.tsv.txt",
+    ).read_text(encoding="utf-8")
+    duplicated_genomes_text = Path(
+        "docs/summary-files/duplicated_genomes.tsv.txt",
     ).read_text(encoding="utf-8")
     taxon_accessions_text = Path(
         "docs/summary-files/taxon_accessions.tsv.txt",
@@ -726,7 +729,8 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
         (
             "accession_map.tsv",
             "download_failures.tsv",
-            "run_summary.tsv",
+            "duplicated_genomes.tsv",
+            "run_summary.log",
             "taxon_summary.tsv",
             "[Output Layout](docs/usage-details.md#output-layout)",
             "[Summary Files](docs/usage-details.md#summary-files)",
@@ -844,12 +848,13 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "pytest matrix runs on Linux, macOS, and Windows",
             "Clean packaged-runtime and",
             "real-data validation currently run on Linux",
-            "[run_summary.tsv](summary-files/run_summary.tsv.txt)",
+            "[run_summary.log](summary-files/run_summary.log.txt)",
             "[taxon_summary.tsv](summary-files/taxon_summary.tsv.txt)",
             "[accession_map.tsv](summary-files/accession_map.tsv.txt)",
             "[download_failures.tsv](summary-files/download_failures.tsv.txt)",
+            "[duplicated_genomes.tsv](summary-files/duplicated_genomes.tsv.txt)",
             "[taxon_accessions.tsv](summary-files/taxon_accessions.tsv.txt)",
-            "Fixed column lists for all summary and manifest TSVs live under",
+            "Fixed key and column references for all summary files live under",
         ),
     )
     assert_not_contains_any(
@@ -861,9 +866,9 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     assert_contains_all(
         run_summary_text,
         (
-            "run_summary.tsv",
-            "Output path: OUTPUT/run_summary.tsv",
-            "Fixed columns:",
+            "run_summary.log",
+            "Output path: OUTPUT/run_summary.log",
+            "Fixed keys:",
             "run_id",
             "accession_decision_sha256",
             "download_method_requested",
@@ -888,9 +893,9 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
         (
             "accession_map.tsv",
             "Output path: OUTPUT/accession_map.tsv",
-            "download_request_accession",
+            "download_request_accessions",
             "final_accession",
-            "download_batch",
+            "duplicate_across_taxa",
             "versioned request accessions fail closed",
             "Only versionless request accessions may accept a unique same-family",
         ),
@@ -900,10 +905,20 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
         (
             "download_failures.tsv",
             "Output path: OUTPUT/download_failures.tsv",
-            "attempted_accession",
-            "error_message_redacted",
-            "final_status",
-            "preferred-accession attempts before fallback",
+            "accession",
+            "reason",
+            "status",
+            "One row is written for each terminal failed accession",
+        ),
+    )
+    assert_contains_all(
+        duplicated_genomes_text,
+        (
+            "duplicated_genomes.tsv",
+            "Output path: OUTPUT/duplicated_genomes.tsv",
+            "final_accession",
+            "requested_taxa",
+            "taxa_count",
         ),
     )
     assert_contains_all(
