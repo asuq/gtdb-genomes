@@ -985,7 +985,7 @@ def test_citation_file_uses_canonical_release_metadata() -> None:
             "cff-version: 1.2.0",
             'title: "gtdb-genomes"',
             'version: "0.1.0"',
-            "date-released: 2026-03-22",
+            "date-released: 2026-03-24",
             "repository-code: 'https://github.com/asuq/gtdb-genomes'",
             'family-names: "Shima"',
             'given-names: "Akito"',
