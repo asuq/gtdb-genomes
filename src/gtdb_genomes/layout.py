@@ -400,6 +400,19 @@ def copy_accession_payload(
     return destination_directory
 
 
+def move_accession_payload(
+    source_directory: Path,
+    destination_directory: Path,
+) -> Path:
+    """Move one extracted accession payload into its final taxon directory."""
+
+    if destination_directory.exists():
+        shutil.rmtree(destination_directory)
+    destination_directory.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(source_directory), str(destination_directory))
+    return destination_directory
+
+
 def get_duplicate_accessions(accession_rows: list[dict[str, object]]) -> set[str]:
     """Return final accessions that occur in more than one requested taxon."""
 

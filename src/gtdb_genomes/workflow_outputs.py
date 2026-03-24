@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from collections import defaultdict
 from datetime import UTC, datetime
 import logging
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypedDict
+import sys
+from typing import TYPE_CHECKING, Any, TextIO, TypedDict
 
 import polars as pl
+from tqdm import tqdm
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 from gtdb_genomes.download import (
     DEFAULT_REQUESTED_DOWNLOAD_METHOD,
@@ -18,6 +22,7 @@ from gtdb_genomes.layout import (
     copy_accession_payload,
     get_accession_output_directory,
     get_duplicate_accessions,
+    move_accession_payload,
     write_root_manifests,
     write_taxon_accessions,
 )
@@ -147,6 +152,30 @@ class FailureManifestRow(TypedDict):
     error_type: str
     error_message_redacted: str
     final_status: str
+
+
+@dataclass(frozen=True, slots=True)
+class OutputTransferOperation:
+    """One planned filesystem transfer for one taxon-accession output."""
+
+    requested_taxon: str
+    taxon_slug: str
+    final_accession: str
+    source_directory: Path
+    destination_directory: Path
+    move_eligible: bool
+    duplicate_copy: bool
+
+
+@dataclass(slots=True)
+class TaxonTransferBatch:
+    """One ordered batch of output transfers for one requested taxon."""
+
+    requested_taxon: str
+    taxon_slug: str
+    taxon_index: int
+    requested_taxa_total: int
+    operations: list[OutputTransferOperation]
 
 
 def configure_output_logger(
@@ -443,14 +472,14 @@ def build_enriched_output_rows(
     mapped_frame: pl.DataFrame,
     execution_result: DownloadExecutionResult,
     unsupported_executions: dict[str, AccessionExecution],
-    run_directories: RunDirectories,
-    logger: logging.Logger,
+    _run_directories: RunDirectories,
+    _logger: logging.Logger,
 ) -> tuple[
     list[EnrichedOutputRow],
     dict[str, list[PerTaxonOutputRow]],
     dict[str, int],
 ]:
-    """Build manifest rows and copy payloads into their final taxon directories."""
+    """Build enriched manifest rows without materialising any payloads."""
 
     executions = {
         **execution_result.executions,
@@ -492,51 +521,11 @@ def build_enriched_output_rows(
         )
 
     duplicate_accessions = get_duplicate_accessions(enriched_rows)
-    seen_taxon_accessions: set[tuple[str, str]] = set()
-    seen_accessions: set[str] = set()
-    duplicate_counts: dict[str, int] = defaultdict(int)
-    per_taxon_rows: dict[str, list[PerTaxonOutputRow]] = defaultdict(list)
-
-    # Copy once per taxon-accession pair, then reuse the recorded path for
-    # duplicate rows that point to the same final payload within that taxon.
     for row in enriched_rows:
-        if row["download_status"] != "failed" and row["final_accession"]:
-            row["duplicate_across_taxa"] = row["final_accession"] in duplicate_accessions
-            key = (row["taxon_slug"], row["final_accession"])
-            if key not in seen_taxon_accessions:
-                destination_directory = get_accession_output_directory(
-                    run_directories,
-                    row["taxon_slug"],
-                    row["final_accession"],
-                )
-                payload_directory = executions[row["ncbi_accession"]].payload_directory
-                if payload_directory is None:
-                    raise RuntimeError(
-                        "Internal error: successful accessions must have payloads",
-                    )
-                copy_accession_payload(payload_directory, destination_directory)
-                row["output_relpath"] = str(
-                    destination_directory.relative_to(run_directories.output_root),
-                )
-                seen_taxon_accessions.add(key)
-                if row["final_accession"] in seen_accessions:
-                    duplicate_counts[row["requested_taxon"]] += 1
-                    logger.info(
-                        "Copied duplicate genome %s into taxon %s",
-                        row["final_accession"],
-                        row["taxon_slug"],
-                    )
-                else:
-                    seen_accessions.add(row["final_accession"])
-            else:
-                row["output_relpath"] = str(
-                    get_accession_output_directory(
-                        run_directories,
-                        row["taxon_slug"],
-                        row["final_accession"],
-                    ).relative_to(run_directories.output_root),
-                )
+        row["duplicate_across_taxa"] = row["final_accession"] in duplicate_accessions
 
+    per_taxon_rows: dict[str, list[PerTaxonOutputRow]] = defaultdict(list)
+    for row in enriched_rows:
         per_taxon_rows[row["taxon_slug"]].append(
             {
                 "requested_taxon": row["requested_taxon"],
@@ -554,7 +543,219 @@ def build_enriched_output_rows(
             },
         )
 
-    return enriched_rows, per_taxon_rows, duplicate_counts
+    return enriched_rows, per_taxon_rows, {}
+
+
+def build_transfer_batches(
+    enriched_rows: list[EnrichedOutputRow],
+    executions: dict[str, AccessionExecution],
+    run_directories: RunDirectories,
+    requested_taxa: tuple[str, ...],
+    *,
+    keep_temp: bool,
+) -> tuple[
+    list[TaxonTransferBatch],
+    dict[str, int],
+]:
+    """Build one ordered output-transfer plan for all successful accessions."""
+
+    taxon_slug_map = build_taxon_slug_map(requested_taxa)
+    taxon_order = {
+        taxon_slug_map[requested_taxon]: index
+        for index, requested_taxon in enumerate(requested_taxa)
+    }
+    source_by_accession: dict[str, Path] = {}
+    accessions_by_taxon: dict[str, set[str]] = defaultdict(set)
+
+    for row in enriched_rows:
+        if row["download_status"] == "failed" or not row["final_accession"]:
+            continue
+        accessions_by_taxon[row["taxon_slug"]].add(row["final_accession"])
+        payload_directory = executions[row["ncbi_accession"]].payload_directory
+        if payload_directory is None:
+            raise RuntimeError(
+                "Internal error: successful accessions must have payloads",
+            )
+        source_by_accession.setdefault(row["final_accession"], payload_directory)
+
+    taxon_slugs_by_accession: dict[str, list[str]] = defaultdict(list)
+    for taxon_slug, accessions in accessions_by_taxon.items():
+        for accession in accessions:
+            taxon_slugs_by_accession[accession].append(taxon_slug)
+
+    owner_by_accession = {
+        accession: sorted(
+            taxon_slugs,
+            key=lambda taxon_slug: taxon_order[taxon_slug],
+        )[-1]
+        for accession, taxon_slugs in taxon_slugs_by_accession.items()
+    }
+    duplicate_accessions = get_duplicate_accessions(enriched_rows)
+    duplicate_counts: dict[str, int] = defaultdict(int)
+    transfer_batches: list[TaxonTransferBatch] = []
+
+    for taxon_index, requested_taxon in enumerate(requested_taxa, start=1):
+        taxon_slug = taxon_slug_map[requested_taxon]
+        shared_accessions = sorted(
+            accession
+            for accession in accessions_by_taxon.get(taxon_slug, set())
+            if accession in duplicate_accessions
+        )
+        unique_accessions = sorted(
+            accession
+            for accession in accessions_by_taxon.get(taxon_slug, set())
+            if accession not in duplicate_accessions
+        )
+        operations: list[OutputTransferOperation] = []
+        for accession in (*shared_accessions, *unique_accessions):
+            owner_taxon = owner_by_accession[accession]
+            duplicate_copy = accession in duplicate_accessions and taxon_slug != owner_taxon
+            move_eligible = not keep_temp and (
+                accession not in duplicate_accessions or taxon_slug == owner_taxon
+            )
+            operations.append(
+                OutputTransferOperation(
+                    requested_taxon=requested_taxon,
+                    taxon_slug=taxon_slug,
+                    final_accession=accession,
+                    source_directory=source_by_accession[accession],
+                    destination_directory=get_accession_output_directory(
+                        run_directories,
+                        taxon_slug,
+                        accession,
+                    ),
+                    move_eligible=move_eligible,
+                    duplicate_copy=duplicate_copy,
+                ),
+            )
+            if duplicate_copy:
+                duplicate_counts[requested_taxon] += 1
+        transfer_batches.append(
+            TaxonTransferBatch(
+                requested_taxon=requested_taxon,
+                taxon_slug=taxon_slug,
+                taxon_index=taxon_index,
+                requested_taxa_total=len(requested_taxa),
+                operations=operations,
+            ),
+        )
+
+    return transfer_batches, duplicate_counts
+
+
+def create_taxon_progress_bar(
+    batch: TaxonTransferBatch,
+    *,
+    stream: TextIO | None = None,
+) -> tqdm:
+    """Create one progress bar for one taxon output-materialisation batch."""
+
+    return tqdm(
+        total=len(batch.operations),
+        desc=(
+            f"taxa {batch.taxon_index}/{batch.requested_taxa_total} "
+            f"{batch.taxon_slug}"
+        ),
+        file=stream or sys.stderr,
+        leave=True,
+        ascii=True,
+        dynamic_ncols=False,
+        bar_format=(
+            "{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} {postfix}"
+        ),
+    )
+
+
+def execute_transfer_batches(
+    enriched_rows: list[EnrichedOutputRow],
+    transfer_batches: list[TaxonTransferBatch],
+    run_directories: RunDirectories,
+    logger: logging.Logger,
+) -> tuple[dict[str, list[PerTaxonOutputRow]], dict[tuple[str, str], str]]:
+    """Execute one planned set of output transfers and build taxon rows."""
+
+    output_relpaths: dict[tuple[str, str], str] = {}
+    remaining_move_eligible_by_source: dict[Path, int] = defaultdict(int)
+    for batch in transfer_batches:
+        for operation in batch.operations:
+            if operation.move_eligible:
+                remaining_move_eligible_by_source[operation.source_directory] += 1
+
+    with logging_redirect_tqdm(loggers=[logger]):
+        for batch in transfer_batches:
+            with create_taxon_progress_bar(batch) as progress_bar:
+                for operation in batch.operations:
+                    action = "copy"
+                    if (
+                        operation.move_eligible
+                        and remaining_move_eligible_by_source[
+                            operation.source_directory
+                        ]
+                        == 1
+                    ):
+                        action = "move"
+                    if action == "move":
+                        move_accession_payload(
+                            operation.source_directory,
+                            operation.destination_directory,
+                        )
+                    else:
+                        copy_accession_payload(
+                            operation.source_directory,
+                            operation.destination_directory,
+                        )
+                    if operation.move_eligible:
+                        remaining_move_eligible_by_source[
+                            operation.source_directory
+                        ] -= 1
+                    output_relpaths[
+                        (operation.taxon_slug, operation.final_accession)
+                    ] = str(
+                        operation.destination_directory.relative_to(
+                            run_directories.output_root,
+                        ),
+                    )
+                    if operation.duplicate_copy:
+                        logger.debug(
+                            "Copied duplicate genome %s into taxon %s",
+                            operation.final_accession,
+                            operation.taxon_slug,
+                        )
+                    progress_bar.update(1)
+                    progress_bar.set_postfix_str(
+                        (
+                            f"finished={operation.final_accession} "
+                            f"action={action}"
+                        ),
+                        refresh=True,
+                    )
+
+    for row in enriched_rows:
+        if row["download_status"] == "failed" or not row["final_accession"]:
+            continue
+        row["output_relpath"] = output_relpaths[
+            (row["taxon_slug"], row["final_accession"])
+        ]
+
+    per_taxon_rows: dict[str, list[PerTaxonOutputRow]] = defaultdict(list)
+    for row in enriched_rows:
+        per_taxon_rows[row["taxon_slug"]].append(
+            {
+                "requested_taxon": row["requested_taxon"],
+                "taxon_slug": row["taxon_slug"],
+                "lineage": row["lineage"],
+                "gtdb_accession": row["gtdb_accession"],
+                "ncbi_accession": row["ncbi_accession"],
+                "selected_accession": row["selected_accession"],
+                "download_request_accession": row["download_request_accession"],
+                "final_accession": row["final_accession"],
+                "conversion_status": row["conversion_status"],
+                "output_relpath": row["output_relpath"],
+                "download_status": row["download_status"],
+                "duplicate_across_taxa": str(row["duplicate_across_taxa"]).lower(),
+            },
+        )
+    return per_taxon_rows, output_relpaths
 
 
 def resolve_exit_code(
@@ -598,26 +799,38 @@ def materialise_real_run_outputs(
 ) -> int:
     """Copy payloads, write manifests, and return the final exit code."""
 
+    executions = {
+        **execution_result.executions,
+        **unsupported_executions,
+    }
     logger.info("Writing output manifests to %s", run_directories.output_root)
-    enriched_rows, per_taxon_rows, duplicate_counts = (
-        build_enriched_output_rows(
-            resolution.resolved_release,
-            mapped_frame,
-            execution_result,
-            unsupported_executions,
-            run_directories,
-            logger,
-        )
+    enriched_rows, _, _ = build_enriched_output_rows(
+        resolution.resolved_release,
+        mapped_frame,
+        execution_result,
+        unsupported_executions,
+        run_directories,
+        logger,
+    )
+    transfer_batches, duplicate_counts = build_transfer_batches(
+        enriched_rows,
+        executions,
+        run_directories,
+        args.gtdb_taxa,
+        keep_temp=args.keep_temp,
+    )
+    per_taxon_rows, _ = execute_transfer_batches(
+        enriched_rows,
+        transfer_batches,
+        run_directories,
+        logger,
     )
     taxon_slug_map = build_taxon_slug_map(args.gtdb_taxa)
     for requested_taxon in args.gtdb_taxa:
         per_taxon_rows.setdefault(taxon_slug_map[requested_taxon], [])
     failure_rows = build_failure_rows(
         enriched_rows,
-        {
-            **execution_result.executions,
-            **unsupported_executions,
-        },
+        executions,
         planning_shared_failures,
         execution_result.shared_failures,
         secrets,
