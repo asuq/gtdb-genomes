@@ -14,21 +14,21 @@
 It uses bundled GTDB taxonomy tables and
 [NCBI datasets CLI](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/getting_started/).
 
-For the detailed behaviour, see
+The README gives the short version.
+The detailed guide covers the
 [Runtime Contract](docs/usage-details.md#runtime-contract),
 [Output Layout](docs/usage-details.md#output-layout),
 [Retry Policy](docs/usage-details.md#retry-policy), and
-[Bundled GTDB Taxonomy](docs/usage-details.md#bundled-gtdb-taxonomy) in the
-detailed guide.
+[Bundled GTDB Taxonomy](docs/usage-details.md#bundled-gtdb-taxonomy).
 
 
 ## Installation
 
-The first public Bioconda release still depends on a tagged source archive and
-its verified checksum. The checked-in recipe is therefore a draft, not a
-published installation path.
+The first public Bioconda release is not ready yet.
+It still needs a tagged source archive and a verified checksum.
+The checked-in recipe is a draft, not a published installation path.
 
-The packaged runtime is currently validated against:
+The packaged runtime is currently checked with:
 
 - `polars >=1.31.0,<2.0.0`
 - `ncbi-datasets-cli >=18.4.0,<18.22.0`
@@ -47,7 +47,7 @@ gtdb-genomes --gtdb-taxon g__Escherichia --outdir results
 
 ## Command options
 
-The short version:
+Short version:
 
 - `--gtdb-taxon`: exact GTDB taxon token(s)
 - `--outdir`: must be empty or absent
@@ -56,7 +56,7 @@ The short version:
 - `--include`: locally supported values are `genome`, `gff3`, and `protein`
 - `--threads`, `--dry-run`, `--ncbi-api-key`, and `--debug` are also available
 
-For the full option behaviour, see [Options](docs/usage-details.md#options),
+For full option behaviour, see [Options](docs/usage-details.md#options),
 [API Key Handling](docs/usage-details.md#api-key-handling),
 [Retry Policy](docs/usage-details.md#retry-policy),
 [Runtime Contract](docs/usage-details.md#runtime-contract), and
@@ -64,7 +64,7 @@ For the full option behaviour, see [Options](docs/usage-details.md#options),
 
 ## Examples
 
-Small download, quotation required for species-level taxon names with spaces:
+Small download. Quote species names that contain spaces:
 
 ```bash
 gtdb-genomes \
@@ -73,7 +73,7 @@ gtdb-genomes \
 ```
 
 Prefer paired GenBank accessions from current NCBI metadata, keep the exact
-selected version, and request extra annotation:
+selected version, and ask for extra annotation:
 
 ```bash
 export NCBI_API_KEY="your-ncbi-api-key"
@@ -84,7 +84,7 @@ gtdb-genomes \
   --outdir results
 ```
 
-Opt into the latest available revision within the selected GenBank family from
+Ask for the latest available revision in the selected GenBank family from
 current NCBI metadata:
 
 ```bash
@@ -96,7 +96,7 @@ gtdb-genomes \
   --outdir results/methanobrevibacter-latest
 ```
 
-Supported dry-run with automatic planning:
+Dry-run with automatic planning:
 
 ```bash
 gtdb-genomes \
@@ -125,13 +125,14 @@ OUTPUT/
 ```
 
 Each run writes top-level manifests and one directory per requested taxon under
-`OUTPUT/taxa/`. For the detailed layout rules and summary-file definitions, see
+`OUTPUT/taxa/`.
+For detailed layout rules and summary-file definitions, see
 [Output Layout](docs/usage-details.md#output-layout) and
 [Summary Files](docs/usage-details.md#summary-files).
 
 ## Contribution
 
-Contributor setup and source-checkout notes live in
+Contributor setup and source-checkout notes are in
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
 For runtime and packaging boundaries, see
