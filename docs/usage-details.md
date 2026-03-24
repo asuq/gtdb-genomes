@@ -4,6 +4,20 @@ This document is the detailed user-facing reference for `gtdb-genomes` CLI
 behaviour, output layout, retry rules, bundled-data handling, and runtime
 contract.
 
+## Table Of Contents
+
+- [Command Form](#command-form)
+- [Options](#options)
+- [API Key Handling](#api-key-handling)
+- [Output Layout](#output-layout)
+- [Summary Files](#summary-files)
+- [NCBI datasets CLI](#ncbi-datasets-cli)
+- [Retry Policy](#retry-policy)
+- [Runtime Contract](#runtime-contract)
+- [Bundled GTDB Taxonomy](#bundled-gtdb-taxonomy)
+- [Failure Handling](#failure-handling)
+- [Known Limitations](#known-limitations)
+
 ## Command Form
 
 ```bash
@@ -411,6 +425,8 @@ Built wheels and sdists also advertise `Requires-External` hints for
 `ncbi-datasets-cli (>=18.4.0,<18.22.0)` and `unzip (>=6.0,<7.0)`. Those
 metadata hints do not replace the CLI preflight, which remains the
 authoritative runtime check.
+
+Contributor setup lives in [CONTRIBUTING.md](../CONTRIBUTING.md). The pytest matrix runs on Linux, macOS, and Windows, while clean packaged-runtime and real-data validation currently run on Linux. Bioconda recipe-template notes live in [packaging/bioconda/README.md](../packaging/bioconda/README.md).
 
 Published distribution archives include MIT-licensed project code plus bundled
 GTDB taxonomy data under CC BY-SA 4.0. The bundled taxonomy payload is shipped

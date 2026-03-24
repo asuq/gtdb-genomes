@@ -545,11 +545,16 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     """The README should stay concise while usage-details carries the contract."""
 
     readme_text = Path("README.md").read_text(encoding="utf-8")
+    contributing_text = Path("CONTRIBUTING.md").read_text(encoding="utf-8")
     usage_details_text = Path("docs/usage-details.md").read_text(encoding="utf-8")
     installation_text = markdown_level_two_section(readme_text, "Installation")
-    development_text = markdown_level_two_section(
+    output_layout_text = markdown_level_two_section(
         readme_text,
-        "Development And Packaging",
+        "Output Layout",
+    )
+    contribution_text = markdown_level_two_section(
+        readme_text,
+        "Contribution",
     )
     assert_contains_all(
         readme_text,
@@ -573,41 +578,19 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
                 "(https://img.shields.io/badge/CITATION-cff-blue.svg)]"
                 "(https://github.com/asuq/gtdb-genomes/blob/main/CITATION.cff)"
             ),
-            "gtdb release number, defaults to `latest`",
-            "refresh_taxonomy_manifest",
             "--version-latest",
-            "keeps the exact selected version",
             "--prefer-genbank",
             "--threads",
-            "resolves inputs without creating the final output tree",
-            "Operational Notes And Limitations",
-            "exact-token and case-sensitive",
-            "Automatic planning switches to `dehydrate` at 1,000 or more unique `datasets`",
-            "The planner intentionally stays count-only for this project.",
-            "Direct downloads remain serial in the current workflow.",
-            "consult current NCBI metadata",
-            "versioned request tokens must resolve to the exact realised",
-            "selected_accession",
-            "download_request_accession",
-            "final_accession",
-            "cannot be combined with an effective NCBI API key",
             "`genome`, `gff3`, and `protein`",
             "`ncbi-datasets-cli >=18.4.0,<18.22.0`",
             "`unzip >=6.0,<7.0`",
-            "Requires-External",
-            "The CLI checks these versions during preflight",
-            "supported packaging boundary",
             "first public Bioconda release is pending a tagged source release",
             "draft template",
-            "pytest matrix runs on Linux, macOS, and Windows",
-            "Clean packaged-runtime",
-            "real-data validation currently run on Linux",
-            "uv sync --group dev",
-            "draft Bioconda recipe template",
-            "packaging/bioconda/meta.yaml.template",
-            "quarantined until a tagged release archive and final SHA256 are available",
             "polars >=1.31.0,<2.0.0",
-            "accession_decision_sha256",
+            "Output Layout",
+            "Contribution",
+            "CONTRIBUTING.md",
+            "packaging/bioconda/meta.yaml.template",
             '--gtdb-taxon "p__Pseudomonadota" "c__Alphaproteobacteria"',
         ),
     )
@@ -619,11 +602,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "`polars >=1.31.0,<2.0.0`",
             "`ncbi-datasets-cli >=18.4.0,<18.22.0`",
             "`unzip >=6.0,<7.0`",
-            "Requires-External",
-            "packaged-runtime",
-            "real-data validation currently run on Linux",
-            "source-checkout workflow in Development And Packaging below",
-            "supported packaging boundary",
+            "docs/usage-details.md",
         ),
     )
     assert_not_contains_any(
@@ -635,40 +614,70 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "uv sync --group dev",
             "uv run python -m gtdb_genomes.bootstrap_taxonomy",
             "uv run gtdb-genomes --help",
+            "CONTRIBUTING.md",
+            "`sdist`",
+            "repository checkout",
+            "maintainer",
+            "MD5SUM",
         ),
     )
     assert_contains_all(
-        development_text,
+        output_layout_text,
+        (
+            "accession_map.tsv",
+            "download_failures.tsv",
+            "run_summary.tsv",
+            "taxon_summary.tsv",
+            "docs/usage-details.md",
+        ),
+    )
+    assert_contains_all(
+        contribution_text,
+        (
+            "CONTRIBUTING.md",
+            "docs/usage-details.md",
+            "packaging/bioconda/README.md",
+        ),
+    )
+    assert_contains_all(
+        contributing_text,
         (
             "uv sync --group dev",
             "uv run python -m gtdb_genomes.bootstrap_taxonomy",
             "uv run gtdb-genomes --help",
-            "tagged-release-style `sdist` validation in CI on Linux",
-            "data/gtdb_taxonomy/releases.tsv",
-            "MD5SUM",
-            "refresh_taxonomy_manifest",
-            "maintainer and source-checkout",
-            "supported community",
-            "tagged self-contained `sdist`",
+            "uv run pytest -q",
+            "uv build",
+            "docs/usage-details.md",
+            "packaging/bioconda/README.md",
+            "tagged release `sdist`",
+            "repository snapshot",
         ),
     )
     assert_not_contains_any(
         readme_text,
         (
+            "## Development And Packaging",
+            "## Operational Notes And Limitations",
             "Runtime Contract",
             "Retry Policy",
             "Bundled GTDB Taxonomy",
             "download_method_requested",
-            "--download-method",
-            "Pipeline concept",
-            "Step-wise development plan",
-            "tracks the tagged sdist metadata",
+            "accession_decision_sha256",
+            "download_request_accession",
+            "selected_accession",
+            "MD5SUM",
+            "Requires-External",
         ),
     )
 
     assert_contains_all(
         usage_details_text,
         (
+            "Table Of Contents",
+            "[Command Form](#command-form)",
+            "[Options](#options)",
+            "[Output Layout](#output-layout)",
+            "[Bundled GTDB Taxonomy](#bundled-gtdb-taxonomy)",
             "Runtime Contract",
             "Retry Policy",
             "Output Layout",
@@ -709,6 +718,11 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "forbids `--debug` while an effective NCBI API key is active",
             "versioned request tokens fail closed",
             "Requires-External",
+            "../CONTRIBUTING.md",
+            "../packaging/bioconda/README.md",
+            "pytest matrix runs on Linux, macOS, and Windows",
+            "clean packaged-runtime and",
+            "real-data validation currently run on Linux",
         ),
     )
     assert_not_contains_any(usage_details_text, ("--download-method", "--no-prefer-genbank"))

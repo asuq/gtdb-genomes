@@ -11,7 +11,8 @@
 
 `gtdb-genomes` downloads NCBI genomes from GTDB taxon selections.
 
-It uses GTDB taxonomy tables and [NCBI datasets CLI](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/getting_started/).
+It uses bundled GTDB taxonomy tables and
+[NCBI datasets CLI](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/getting_started/).
 
 The detailed runtime contract, output layout, retry rules, and bundled-data notes live in [docs/usage-details.md](docs/usage-details.md).
 
@@ -28,18 +29,8 @@ The packaged runtime is validated against:
 - `ncbi-datasets-cli >=18.4.0,<18.22.0`
 - `unzip >=6.0,<7.0`
 
-Built wheel and sdist metadata also advertise `Requires-External` hints for
-`ncbi-datasets-cli` and `unzip`. The CLI checks these versions during preflight,
-remains the authoritative runtime check, and exits with code `5` when the
-installed runtime falls outside this supported window.
-
-For community packaging and downstream redistribution, use the tagged release
-`sdist` as the source input. A plain repository checkout is a maintainer and
-source-checkout development input, not the supported packaging boundary.
-
-The pytest matrix runs on Linux, macOS, and Windows. Clean packaged-runtime
-and real-data validation currently run on Linux. For now, use the
-source-checkout workflow in Development And Packaging below.
+For packaging-boundary and redistribution notes, see
+[docs/usage-details.md](docs/usage-details.md).
 
 
 ## Quick Start
@@ -54,19 +45,15 @@ gtdb-genomes --gtdb-taxon g__Escherichia --outdir results
 See [docs/usage-details.md](docs/usage-details.md) for the full CLI contract.
 In short:
 
-### Required:
-- `--gtdb-taxon`: repeatable, matches exact GTDB lineage strings
-- `--outdir`:  must be empty or absent
+- `--gtdb-taxon`: exact GTDB taxon token(s)
+- `--outdir`: must be empty or absent
+- `--gtdb-release`: defaults to `latest`
+- `--prefer-genbank` and `--version-latest`: live NCBI metadata modes
+- `--include`: locally supported values are `genome`, `gff3`, and `protein`
+- `--threads`, `--dry-run`, `--ncbi-api-key`, and `--debug` are also available
 
-### Optional:
-- `--gtdb-release`: gtdb release number, defaults to `latest`
-- `--prefer-genbank`: prefers paired GenBank accessions discovered from current NCBI metadata and keeps the exact selected version by default
-- `--version-latest`: paired with `--prefer-genbank`, opts into the latest available revision within the selected paired GenBank family from current NCBI metadata when explicit pairing is available, e.g. `GCA_000005845.2` -> `GCA_000005845.3` if the latter is available
-- `--threads`: number of threads to run, defaults to 8
-- `--include`: locally supported tokens are `genome`, `gff3`, and `protein`, e.g. `genome,gff3,protein`, see [NCBI datasets documentation](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/how-tos/genomes/download-genome/#choosing-which-data-files-to-include-in-the-data-package)
-- `--ncbi-api-key`: overrides ambient `NCBI_API_KEY`, passes the effective key only to child `datasets` processes, and does not write it to the tool's own logs or manifests
-- `--debug`: enables debug logging and cannot be combined with an effective NCBI API key
-- `--dry-run`: supported with automatic planning, resolves inputs without creating the final output tree, and still preflights `unzip` so real-run archive requirements fail fast
+See [docs/usage-details.md](docs/usage-details.md) for exact matching rules,
+retry behaviour, API-key handling, exit codes, and output-file definitions.
 
 ## Examples
 
@@ -112,33 +99,6 @@ gtdb-genomes \
   --outdir /tmp/gtdb_dry_run
 ```
 
-## Operational Notes And Limitations
-
-- Taxon matching is exact-token and case-sensitive.
-- `--outdir` must be empty or absent before each run.
-- If one genome matches multiple requested taxa, the downloaded package is copied into each matching taxon directory.
-- Automatic planning switches to `dehydrate` at 1,000 or more unique `datasets`
-  request tokens after accession rewriting.
-- The planner intentionally stays count-only for this project. It does not use
-  the generic `> 15 GB` `datasets` guidance because the workflow targets
-  prokaryote genome downloads, where the request-token threshold is expected
-  to be reached before package size becomes the limiting factor.
-- After extraction, versioned request tokens must resolve to the exact realised
-  accession directory. Only versionless `--version-latest` request tokens may
-  accept a unique same-family realised version from the extracted payload.
-- `--prefer-genbank` and `--version-latest` consult current NCBI metadata, so
-  they are time-dependent rather than frozen to one GTDB release snapshot. Use
-  `run_summary.tsv` timestamps, `accession_decision_sha256`, and
-  `selected_accession`, `download_request_accession`, and `final_accession` as
-  the audit trail for those live decisions. `run_id` now incorporates that
-  accession-decision digest so it changes when the realised biological output
-  changes under the same top-level request.
-- Direct downloads remain serial in the current workflow.
-- `--debug` cannot be combined with an effective NCBI API key because
-  upstream `datasets` debug output may expose the secret header.
-- `--include` accepts only `genome`, `gff3`, and `protein`; see [docs/usage-details.md](docs/usage-details.md) for the full runtime contract.
-- Clean packaged-runtime and real-data validation currently run on Linux only.
-
 ## Output Layout
 
 ```text
@@ -157,75 +117,32 @@ OUTPUT/
         `-- GCA_000005845.2/
 ```
 
-For detailed summary-file definitions, retry rules, runtime codes, and bundled
-data notes, see [docs/usage-details.md](docs/usage-details.md).
+Run-level manifests are written at the top level, and each requested taxon gets
+its own directory under `OUTPUT/taxa/`. For exact column definitions, retry
+provenance, and output rules, see
+[docs/usage-details.md](docs/usage-details.md).
 
-> [!IMPORTANT]
-> `gtdb-genomes` honours ambient `NCBI_API_KEY` by default, and
-> `--ncbi-api-key` acts as an explicit override. The effective key is passed
-> only to the upstream `datasets` command through the child process
-> environment and is not used for GTDB release resolution, local taxonomy
-> loading, or any other service. `--debug` cannot be combined with an
-> effective API key.
+## Contribution
 
-> [!NOTE]
-> Some legacy GTDB releases include genome accessions starting with `UBA`.
-> These legacy accessions are not supported by NCBI and are not supported by
-> `gtdb-genomes`. When selected, the tool warns and skips them. Check
-> BioProject `PRJNA417962`, since most `UBA` genomes are assigned through that
-> bioproject.
+Contributor setup, source-checkout bootstrap, and local test entry points live
+in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Development And Packaging
-
-Supported workflows:
-
-- maintainer and source-checkout development through `uv`
-- packaged wheel and tagged-release-style `sdist` validation in CI on Linux
-- maintainer manifest refresh through
-  `uv run python -m gtdb_genomes.refresh_taxonomy_manifest`
-- a draft Bioconda recipe template is kept at
-  `packaging/bioconda/meta.yaml.template`
-  and is quarantined until a tagged release archive and final SHA256 are available
-
-Source checkouts use the maintainer or source-checkout development workflow:
-
-```bash
-uv sync --group dev
-uv run python -m gtdb_genomes.bootstrap_taxonomy
-uv run gtdb-genomes --help
-```
-
-A Git checkout tracks only `data/gtdb_taxonomy/releases.tsv`. The bootstrap
-step downloads the configured taxonomy files from the HTTPS UQ mirror recorded
-in the manifest, verifies them against the published `MD5SUM` listing, and
-materialises the local `data/gtdb_taxonomy/<release>/*.tsv.gz` layout used by
-a source checkout and source build. Run that bootstrap step before any source
-checkout CLI invocation. This is a maintainer and source-checkout workflow,
-not the recommended end-user install path and not the supported community
-packaging boundary. The bootstrap authenticity boundary is therefore limited by
-the upstream MD5 listing; packaged runtime integrity uses the bundled local
-SHA-256 and row-count manifest instead. Community packaging and downstream
-builds should start from the tagged self-contained `sdist`, which is validated
-in CI without rerunning `bootstrap_taxonomy`.
-
-`uv` is a development tool only. Packaged runtime use should not depend on it.
+For the full runtime and packaging boundary, see
+[docs/usage-details.md](docs/usage-details.md). For Bioconda recipe-template
+notes, see [packaging/bioconda/README.md](packaging/bioconda/README.md).
 
 ## Licence
 
 The project code and packaging glue are released under the MIT licence.
-Published source and wheel archives bundle GTDB taxonomy tables under `data/gtdb_taxonomy`,
-and those bundled data files remain under CC BY-SA 4.0 rather than MIT.
-
-The Git checkout tracks only the plain-text `data/gtdb_taxonomy/releases.tsv` manifest.
-Source checkouts materialise the generated `.tsv.gz` taxonomy payload
-with `uv run python -m gtdb_genomes.bootstrap_taxonomy`.
-Attribution and redistribution details for the bundled data are recorded in [NOTICE](NOTICE)
-and the included [CC BY-SA 4.0 licence text](licenses/CC-BY-SA-4.0.txt).
-The generated taxonomy payload is not relicensed by this project.
+Published release archives also bundle GTDB taxonomy data under CC BY-SA 4.0.
+See [NOTICE](NOTICE) and
+[licenses/CC-BY-SA-4.0.txt](licenses/CC-BY-SA-4.0.txt) for attribution and
+licence details.
 
 ## Additional Documents
 
 - [Usage details](docs/usage-details.md)
+- [Contributing](CONTRIBUTING.md)
 - [Real-data validation guide](docs/real-data-validation.md)
 - [Bioconda draft template](packaging/bioconda/meta.yaml.template)
 - [Bioconda packaging notes](packaging/bioconda/README.md)
