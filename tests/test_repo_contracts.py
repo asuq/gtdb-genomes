@@ -559,7 +559,13 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
     assert_contains_all(
         readme_text,
         (
-            "docs/usage-details.md",
+            "[Runtime Contract](docs/usage-details.md#runtime-contract)",
+            "[Output Layout](docs/usage-details.md#output-layout)",
+            "[Retry Policy](docs/usage-details.md#retry-policy)",
+            (
+                "[Bundled GTDB Taxonomy]"
+                "(docs/usage-details.md#bundled-gtdb-taxonomy)"
+            ),
             "Quick Start",
             "Command options",
             "Examples",
@@ -602,7 +608,10 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "`polars >=1.31.0,<2.0.0`",
             "`ncbi-datasets-cli >=18.4.0,<18.22.0`",
             "`unzip >=6.0,<7.0`",
-            "docs/usage-details.md",
+            (
+                "[Bundled GTDB Taxonomy]"
+                "(docs/usage-details.md#bundled-gtdb-taxonomy)"
+            ),
         ),
     )
     assert_not_contains_any(
@@ -628,14 +637,19 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "download_failures.tsv",
             "run_summary.tsv",
             "taxon_summary.tsv",
-            "docs/usage-details.md",
+            "[Output Layout](docs/usage-details.md#output-layout)",
+            "[Summary Files](docs/usage-details.md#summary-files)",
         ),
     )
     assert_contains_all(
         contribution_text,
         (
             "CONTRIBUTING.md",
-            "docs/usage-details.md",
+            "[Runtime Contract](docs/usage-details.md#runtime-contract)",
+            (
+                "[Bundled GTDB Taxonomy]"
+                "(docs/usage-details.md#bundled-gtdb-taxonomy)"
+            ),
             "packaging/bioconda/README.md",
         ),
     )
@@ -647,7 +661,11 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "uv run gtdb-genomes --help",
             "uv run pytest -q",
             "uv build",
-            "docs/usage-details.md",
+            "[Runtime Contract](docs/usage-details.md#runtime-contract)",
+            (
+                "[Bundled GTDB Taxonomy]"
+                "(docs/usage-details.md#bundled-gtdb-taxonomy)"
+            ),
             "packaging/bioconda/README.md",
             "tagged release `sdist`",
             "repository snapshot",
@@ -658,9 +676,6 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
         (
             "## Development And Packaging",
             "## Operational Notes And Limitations",
-            "Runtime Contract",
-            "Retry Policy",
-            "Bundled GTDB Taxonomy",
             "download_method_requested",
             "accession_decision_sha256",
             "download_request_accession",

@@ -14,7 +14,11 @@
 It uses bundled GTDB taxonomy tables and
 [NCBI datasets CLI](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/getting_started/).
 
-The detailed runtime contract, output layout, retry rules, and bundled-data notes live in [docs/usage-details.md](docs/usage-details.md).
+The detailed [Runtime Contract](docs/usage-details.md#runtime-contract),
+[Output Layout](docs/usage-details.md#output-layout),
+[Retry Policy](docs/usage-details.md#retry-policy), and
+[Bundled GTDB Taxonomy](docs/usage-details.md#bundled-gtdb-taxonomy) notes
+live in the detailed guide.
 
 
 ## Installation
@@ -30,7 +34,7 @@ The packaged runtime is validated against:
 - `unzip >=6.0,<7.0`
 
 For packaging-boundary and redistribution notes, see
-[docs/usage-details.md](docs/usage-details.md).
+[Bundled GTDB Taxonomy](docs/usage-details.md#bundled-gtdb-taxonomy).
 
 
 ## Quick Start
@@ -42,7 +46,7 @@ gtdb-genomes --gtdb-taxon g__Escherichia --outdir results
 
 ## Command options
 
-See [docs/usage-details.md](docs/usage-details.md) for the full CLI contract.
+See [Options](docs/usage-details.md#options) for the full CLI contract.
 In short:
 
 - `--gtdb-taxon`: exact GTDB taxon token(s)
@@ -52,7 +56,11 @@ In short:
 - `--include`: locally supported values are `genome`, `gff3`, and `protein`
 - `--threads`, `--dry-run`, `--ncbi-api-key`, and `--debug` are also available
 
-See [docs/usage-details.md](docs/usage-details.md) for exact matching rules,
+See [Options](docs/usage-details.md#options),
+[API Key Handling](docs/usage-details.md#api-key-handling),
+[Retry Policy](docs/usage-details.md#retry-policy),
+[Runtime Contract](docs/usage-details.md#runtime-contract), and
+[Summary Files](docs/usage-details.md#summary-files) for exact matching rules,
 retry behaviour, API-key handling, exit codes, and output-file definitions.
 
 ## Examples
@@ -120,7 +128,8 @@ OUTPUT/
 Run-level manifests are written at the top level, and each requested taxon gets
 its own directory under `OUTPUT/taxa/`. For exact column definitions, retry
 provenance, and output rules, see
-[docs/usage-details.md](docs/usage-details.md).
+[Output Layout](docs/usage-details.md#output-layout) and
+[Summary Files](docs/usage-details.md#summary-files).
 
 ## Contribution
 
@@ -128,7 +137,9 @@ Contributor setup, source-checkout bootstrap, and local test entry points live
 in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 For the full runtime and packaging boundary, see
-[docs/usage-details.md](docs/usage-details.md). For Bioconda recipe-template
+[Runtime Contract](docs/usage-details.md#runtime-contract) and
+[Bundled GTDB Taxonomy](docs/usage-details.md#bundled-gtdb-taxonomy). For
+Bioconda recipe-template
 notes, see [packaging/bioconda/README.md](packaging/bioconda/README.md).
 
 ## Licence
