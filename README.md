@@ -113,6 +113,11 @@ gtdb-genomes \
 > `datasets` command and does not use it for GTDB release resolution, local
 > taxonomy loading, or any other use.
 
+> [!CAUTION]
+> Metadata-confirmed suppressed genomes may no longer be downloadable from
+> NCBI, especially in older GTDB releases. A run may therefore finish with
+> suppressed-genome failures even when taxon selection is otherwise valid.
+
 > [!NOTE]
 > Some legacy GTDB releases include genome accessions starting with `UBA`.
 > These legacy accessions are not supported by NCBI and are not supported by

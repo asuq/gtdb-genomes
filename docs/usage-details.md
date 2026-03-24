@@ -128,8 +128,13 @@ successfully.
     the governing operational limit
   - smaller supported requests use batch direct
     `datasets download genome accession --inputfile ... --filename ...` passes
-  - direct mode retries only the still-unresolved request accessions in later
-    batch passes
+  - direct-mode workflow retries run in waves: every batch in the current wave
+    finishes before the next wave starts
+  - unresolved multi-request direct batches are bisected only between waves,
+    while unresolved singleton request accessions carry forward unchanged
+  - metadata-confirmed suppressed-only direct groups get 2 total workflow
+    waves; any direct group containing a non-suppressed accession gets 4 total
+    workflow waves
   - if paired-`GCA_*` candidate metadata lookup fails or stays incomplete
     during `--prefer-genbank` planning, the workflow falls back to the
     original accession and records the corresponding metadata fallback status
@@ -325,12 +330,24 @@ This applies to:
 
 Local unzip, local file parsing, and manifest writing are not retried.
 
-Direct-mode layout resolution adds one more workflow-level retry loop on top
-of the command retry budget. A supported direct request starts with
-`direct_batch_1` and may continue through `direct_batch_4`, keeping partial
-successes and retrying only unresolved request accessions. Rows that still map
-from a preferred `GCA_*` request may then enter `direct_fallback_batch_1` to
-`direct_fallback_batch_4` against the original accession.
+Direct-mode layout resolution adds a separate workflow-level retry scheduler on
+top of the command retry budget. A supported direct request starts with
+`direct_batch_1`, and later numbered `direct_batch_N` or
+`direct_fallback_batch_N` labels reflect execution order, not a fixed retry cap.
+The scheduler runs in waves: every batch in the current wave completes before
+any next-wave retry or split begins. Unresolved multi-request batches are
+bisected only between waves, while unresolved singleton request accessions are
+retried unchanged in the next wave.
+
+Workflow-level direct wave budgets depend on suppression status:
+
+- direct groups containing any non-suppressed accession get 4 total workflow
+  waves
+- suppressed-only direct groups get 2 total workflow waves
+
+This wave policy applies to both ordinary direct runs and
+dehydrated-to-direct fallback. Metadata-confirmed suppressed genomes may no
+longer be downloadable from NCBI, especially in older GTDB releases.
 
 ## Runtime Contract
 
