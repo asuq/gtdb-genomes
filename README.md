@@ -5,7 +5,6 @@
 [![CI](https://github.com/asuq/gtdb-genomes/actions/workflows/ci.yml/badge.svg)](https://github.com/asuq/gtdb-genomes/actions/workflows/ci.yml)
 [![Live validation](https://github.com/asuq/gtdb-genomes/actions/workflows/live-validation.yml/badge.svg)](https://github.com/asuq/gtdb-genomes/actions/workflows/live-validation.yml)
 [![GitHub release](https://img.shields.io/github/v/release/asuq/gtdb-genomes)](https://github.com/asuq/gtdb-genomes/releases)
-[![DOI](https://zenodo.org/badge/1186361447.svg)](https://doi.org/10.5281/zenodo.19198946)
 [![CITATION.cff](https://img.shields.io/badge/CITATION-cff-blue.svg)](https://github.com/asuq/gtdb-genomes/blob/main/CITATION.cff)
 [![Code licence: MIT](https://img.shields.io/badge/code-MIT-green.svg)](LICENSE)
 [![GTDB data licence: CC BY-SA 4.0](https://img.shields.io/badge/GTDB%20data-CC--BY--SA%204.0-blue.svg)](licenses/CC-BY-SA-4.0.txt)
