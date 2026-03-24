@@ -191,6 +191,8 @@ def execute_batch_dehydrate_plans(
         stage="preferred_download",
         attempted_accession=batch_attempted_accessions,
         environment=environment,
+        logger=logger,
+        progress_label="dehydrated_batch: preferred_download",
     )
     if not batch_download.succeeded:
         return fallback_batch_to_direct(
@@ -262,6 +264,8 @@ def execute_batch_dehydrate_plans(
         stage="rehydrate",
         attempted_accession=batch_attempted_accessions,
         environment=environment,
+        logger=logger,
+        progress_label="dehydrated_batch: rehydrate",
     )
     if not rehydrate_result.succeeded:
         resolved_executions, unresolved_plans, _ = resolve_partial_dehydrate_executions(

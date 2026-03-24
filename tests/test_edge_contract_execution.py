@@ -70,6 +70,10 @@ def test_direct_mode_downloads_shared_preferred_accession_once(
         environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
+        logger=None,
+        progress_label: str | None = None,
+        progress_step: int = 10,
+        stream_runner=None,
     ) -> RetryableCommandResult:
         """Return one successful preferred download for the shared group."""
 
@@ -175,15 +179,22 @@ def test_direct_mode_passes_api_key_via_child_environment(
         environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
+        logger=None,
+        progress_label: str | None = None,
+        progress_step: int = 10,
+        stream_runner=None,
     ) -> RetryableCommandResult:
         """Return one successful direct batch command."""
 
-        del final_failure_status, sleep_func, runner
+        del final_failure_status, sleep_func, runner, stream_runner
         assert stage == "preferred_download"
         assert attempted_accession == "GCF_000001.1"
         assert "--api-key" not in command
         assert environment is not None
         assert environment[NCBI_API_KEY_ENV_VAR] == "secret"
+        assert logger is not None
+        assert progress_label == "direct_batch_1: preferred_download"
+        assert progress_step == 10
         return RetryableCommandResult(
             succeeded=True,
             stdout="",
@@ -291,7 +302,7 @@ def test_direct_mode_retries_unresolved_accessions_in_later_batches(
     payload_one.mkdir()
     payload_two = tmp_path / "payload-two"
     payload_two.mkdir()
-    download_calls: list[tuple[str, str]] = []
+    download_calls: list[tuple[str, str, str | None]] = []
     extraction_calls: list[tuple[Path, Path]] = []
 
     def fake_run_retryable_command(
@@ -302,6 +313,10 @@ def test_direct_mode_retries_unresolved_accessions_in_later_batches(
         environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
+        logger=None,
+        progress_label: str | None = None,
+        progress_step: int = 10,
+        stream_runner=None,
     ) -> RetryableCommandResult:
         """Return successful direct batch commands for both passes."""
 
@@ -423,11 +438,16 @@ def test_direct_mode_falls_back_to_original_accession_after_preferred_phase(
         environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
+        logger=None,
+        progress_label: str | None = None,
+        progress_step: int = 10,
+        stream_runner=None,
     ) -> RetryableCommandResult:
         """Return successful preferred and fallback batch commands."""
 
         del command, final_failure_status, environment, sleep_func, runner
-        download_calls.append((stage, attempted_accession or ""))
+        del logger, progress_step, stream_runner
+        download_calls.append((stage, attempted_accession or "", progress_label))
         return RetryableCommandResult(
             succeeded=True,
             stdout="",
@@ -501,11 +521,31 @@ def test_direct_mode_falls_back_to_original_accession_after_preferred_phase(
     )
 
     assert download_calls == [
-        ("preferred_download", "GCA_001881595"),
-        ("preferred_download", "GCA_001881595"),
-        ("preferred_download", "GCA_001881595"),
-        ("preferred_download", "GCA_001881595"),
-        ("fallback_download", "GCF_001881595.2"),
+        (
+            "preferred_download",
+            "GCA_001881595",
+            "direct_batch_1: preferred_download",
+        ),
+        (
+            "preferred_download",
+            "GCA_001881595",
+            "direct_batch_2: preferred_download",
+        ),
+        (
+            "preferred_download",
+            "GCA_001881595",
+            "direct_batch_3: preferred_download",
+        ),
+        (
+            "preferred_download",
+            "GCA_001881595",
+            "direct_batch_4: preferred_download",
+        ),
+        (
+            "fallback_download",
+            "GCF_001881595.2",
+            "direct_fallback_batch_1: fallback_download",
+        ),
     ]
     assert result.executions["GCF_001881595.2"].final_accession == "GCF_001881595.2"
     assert result.executions["GCF_001881595.2"].download_batch == "direct_fallback_batch_1"
@@ -561,6 +601,10 @@ def test_direct_mode_preserves_shared_retry_failures_after_success(
         environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
+        logger=None,
+        progress_label: str | None = None,
+        progress_step: int = 10,
+        stream_runner=None,
     ) -> RetryableCommandResult:
         """Return one successful batch with preserved retry history."""
 
@@ -666,6 +710,10 @@ def test_direct_mode_preserves_retry_history_when_extraction_fails(
         environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
+        logger=None,
+        progress_label: str | None = None,
+        progress_step: int = 10,
+        stream_runner=None,
     ) -> RetryableCommandResult:
         """Return one successful batch with preserved retry history."""
 
@@ -759,6 +807,10 @@ def test_direct_fallback_preserves_shared_retry_failures_after_success(
         environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
+        logger=None,
+        progress_label: str | None = None,
+        progress_step: int = 10,
+        stream_runner=None,
     ) -> RetryableCommandResult:
         """Return one unresolved preferred batch and one retried fallback batch."""
 
@@ -882,6 +934,10 @@ def test_direct_mode_records_failed_fallback_after_layout_exhaustion(
         environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
+        logger=None,
+        progress_label: str | None = None,
+        progress_step: int = 10,
+        stream_runner=None,
     ) -> RetryableCommandResult:
         """Return successful direct batch commands for both phases."""
 
@@ -1007,6 +1063,10 @@ def test_direct_mode_waits_for_wave_completion_before_retrying_failed_batches(
         environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
+        logger=None,
+        progress_label: str | None = None,
+        progress_step: int = 10,
+        stream_runner=None,
     ) -> RetryableCommandResult:
         """Fail two mixed batches before isolating one bad singleton."""
 
@@ -1205,6 +1265,10 @@ def test_direct_mode_waits_for_wave_completion_before_retrying_partial_batches(
         environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
+        logger=None,
+        progress_label: str | None = None,
+        progress_step: int = 10,
+        stream_runner=None,
     ) -> RetryableCommandResult:
         """Succeed all downloads so the wave scheduler decides the retry order."""
 
@@ -1340,6 +1404,10 @@ def test_direct_mode_retries_suppressed_groups_once(
         environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
+        logger=None,
+        progress_label: str | None = None,
+        progress_step: int = 10,
+        stream_runner=None,
     ) -> RetryableCommandResult:
         """Succeed both suppressed direct downloads before layout resolution."""
 
@@ -1425,6 +1493,10 @@ def test_direct_mode_keeps_normal_retry_budget_for_mixed_groups(
         environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
+        logger=None,
+        progress_label: str | None = None,
+        progress_step: int = 10,
+        stream_runner=None,
     ) -> RetryableCommandResult:
         """Succeed all mixed-group downloads before layout resolution."""
 
@@ -1519,6 +1591,10 @@ def test_direct_fallback_retries_suppressed_groups_once(
         environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
+        logger=None,
+        progress_label: str | None = None,
+        progress_step: int = 10,
+        stream_runner=None,
     ) -> RetryableCommandResult:
         """Succeed preferred and fallback downloads before layout resolution."""
 
@@ -1723,6 +1799,10 @@ def test_batch_dehydrate_preserves_partial_success_before_direct_fallback(
         environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
+        logger=None,
+        progress_label: str | None = None,
+        progress_step: int = 10,
+        stream_runner=None,
     ) -> RetryableCommandResult:
         """Succeed the batch download but fail rehydrate after extraction."""
 
@@ -1855,7 +1935,7 @@ def test_batch_dehydrate_passes_api_key_via_child_environment(
 
     payload_directory = tmp_path / "payload"
     payload_directory.mkdir()
-    observed_calls: list[tuple[str, dict[str, str] | None]] = []
+    observed_calls: list[tuple[str, dict[str, str] | None, str | None]] = []
 
     def fake_run_retryable_command(
         command: list[str],
@@ -1865,12 +1945,17 @@ def test_batch_dehydrate_passes_api_key_via_child_environment(
         environment: dict[str, str] | None = None,
         sleep_func=None,
         runner=None,
+        logger=None,
+        progress_label: str | None = None,
+        progress_step: int = 10,
+        stream_runner=None,
     ) -> RetryableCommandResult:
         """Return successful dehydrated download and rehydrate stages."""
 
         del final_failure_status, attempted_accession, sleep_func, runner
+        del logger, progress_step, stream_runner
         assert "--api-key" not in command
-        observed_calls.append((stage, environment))
+        observed_calls.append((stage, environment, progress_label))
         return RetryableCommandResult(
             succeeded=True,
             stdout="",
@@ -1928,9 +2013,19 @@ def test_batch_dehydrate_passes_api_key_via_child_environment(
         ("secret",),
     )
 
-    assert [stage for stage, _ in observed_calls] == ["preferred_download", "rehydrate"]
-    assert [environment[NCBI_API_KEY_ENV_VAR] for _, environment in observed_calls] == [
+    assert [stage for stage, _, _ in observed_calls] == [
+        "preferred_download",
+        "rehydrate",
+    ]
+    assert [
+        environment[NCBI_API_KEY_ENV_VAR]
+        for _, environment, _ in observed_calls
+    ] == [
         "secret",
         "secret",
+    ]
+    assert [progress_label for _, _, progress_label in observed_calls] == [
+        "dehydrated_batch: preferred_download",
+        "dehydrated_batch: rehydrate",
     ]
     assert result.method_used == "dehydrate"

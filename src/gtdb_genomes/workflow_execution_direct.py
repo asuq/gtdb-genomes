@@ -138,6 +138,8 @@ def run_direct_batch_phase(
         stage=batch_stage,
         attempted_accession=batch_attempted_accessions,
         environment=environment,
+        logger=logger,
+        progress_label=f"{batch_label}: {batch_stage}",
     )
     if not batch_result.succeeded:
         logger.warning(
