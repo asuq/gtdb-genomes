@@ -12,7 +12,8 @@
 
 `gtdb-genomes` downloads NCBI genomes from GTDB taxon selections.
 
-It uses included GTDB taxonomy tables and
+It uses included
+[Genome Taxonomy Database (GTDB)](https://gtdb.ecogenomic.org/) taxonomy tables and
 [NCBI datasets CLI](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/getting_started/).
 
 The README gives the short version.

@@ -603,6 +603,10 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
                 "[![DOI](https://zenodo.org/badge/1186361447.svg)]"
                 "(https://doi.org/10.5281/zenodo.19198946)"
             ),
+            (
+                "[Genome Taxonomy Database (GTDB)]"
+                "(https://gtdb.ecogenomic.org/)"
+            ),
             "--version-latest",
             "--prefer-genbank",
             "--threads",
