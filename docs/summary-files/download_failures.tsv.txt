@@ -16,4 +16,4 @@ error_message_redacted
 final_status
 
 Notes:
-attempted_accession records the exact token or semicolon-joined accession set passed to datasets, including earlier preferred-accession attempts before fallback.
+attempted_accession records the exact value or semicolon-joined accession set passed to datasets, including earlier preferred-accession attempts before fallback.

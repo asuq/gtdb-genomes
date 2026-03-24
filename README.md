@@ -7,11 +7,11 @@
 [![GitHub release](https://img.shields.io/github/v/release/asuq/gtdb-genomes)](https://github.com/asuq/gtdb-genomes/releases)
 [![CITATION.cff](https://img.shields.io/badge/CITATION-cff-blue.svg)](https://github.com/asuq/gtdb-genomes/blob/main/CITATION.cff)
 [![Code licence: MIT](https://img.shields.io/badge/code-MIT-green.svg)](LICENSE)
-[![Bundled data licence: CC BY-SA 4.0](https://img.shields.io/badge/bundled%20data-CC--BY--SA%204.0-blue.svg)](licenses/CC-BY-SA-4.0.txt)
+[![GTDB data licence: CC BY-SA 4.0](https://img.shields.io/badge/GTDB%20data-CC--BY--SA%204.0-blue.svg)](licenses/CC-BY-SA-4.0.txt)
 
 `gtdb-genomes` downloads NCBI genomes from GTDB taxon selections.
 
-It uses bundled GTDB taxonomy tables and
+It uses included GTDB taxonomy tables and
 [NCBI datasets CLI](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/getting_started/).
 
 The README gives the short version.
@@ -19,7 +19,7 @@ The detailed guide covers the
 [Runtime Contract](docs/usage-details.md#runtime-contract),
 [Output Layout](docs/usage-details.md#output-layout),
 [Retry Policy](docs/usage-details.md#retry-policy), and
-[Bundled GTDB Taxonomy](docs/usage-details.md#bundled-gtdb-taxonomy).
+[GTDB Taxonomy Data](docs/usage-details.md#bundled-gtdb-taxonomy).
 
 
 ## Installation
@@ -35,7 +35,7 @@ The packaged runtime is currently checked with:
 - `unzip >=6.0,<7.0`
 
 For packaging and redistribution details, see
-[Bundled GTDB Taxonomy](docs/usage-details.md#bundled-gtdb-taxonomy).
+[GTDB Taxonomy Data](docs/usage-details.md#bundled-gtdb-taxonomy).
 
 
 ## Quick Start
@@ -49,12 +49,12 @@ gtdb-genomes --gtdb-taxon g__Escherichia --outdir results
 
 Short version:
 
-- `--gtdb-taxon`: exact GTDB taxon token(s)
+- `--gtdb-taxon`: exact GTDB taxon name(s)
 - `--outdir`: must be empty or absent
 - `--gtdb-release`: defaults to `latest`
 - `--prefer-genbank` and `--version-latest`: live NCBI metadata modes
 - `--include`: locally supported values are `genome`, `gff3`, and `protein`
-- `--threads`, `--dry-run`, `--ncbi-api-key`, and `--debug` are also available
+- `--threads`, `--dry-run`, `--keep-tmp`, `--ncbi-api-key`, and `--debug` are also available
 
 For full option behaviour, see [Options](docs/usage-details.md#options),
 [API Key Handling](docs/usage-details.md#api-key-handling),
@@ -137,14 +137,14 @@ Contributor setup and source-checkout notes are in
 
 For runtime and packaging boundaries, see
 [Runtime Contract](docs/usage-details.md#runtime-contract) and
-[Bundled GTDB Taxonomy](docs/usage-details.md#bundled-gtdb-taxonomy). For
+[GTDB Taxonomy Data](docs/usage-details.md#bundled-gtdb-taxonomy). For
 Bioconda template
 notes, see [packaging/bioconda/README.md](packaging/bioconda/README.md).
 
 ## Licence
 
 The project code and packaging glue are released under the MIT licence.
-Published release archives also bundle GTDB taxonomy data under CC BY-SA 4.0.
+Published release archives also include GTDB taxonomy data under CC BY-SA 4.0.
 See [NOTICE](NOTICE) and
 [licenses/CC-BY-SA-4.0.txt](licenses/CC-BY-SA-4.0.txt) for attribution and
 licence details.

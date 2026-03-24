@@ -578,7 +578,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "[Output Layout](docs/usage-details.md#output-layout)",
             "[Retry Policy](docs/usage-details.md#retry-policy)",
             (
-                "[Bundled GTDB Taxonomy]"
+                "[GTDB Taxonomy Data]"
                 "(docs/usage-details.md#bundled-gtdb-taxonomy)"
             ),
             "Quick Start",
@@ -608,6 +608,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "first public Bioconda release is not ready yet",
             "checked-in recipe is a draft",
             "polars >=1.31.0,<2.0.0",
+            "--keep-tmp",
             "Output Layout",
             "Contribution",
             "CONTRIBUTING.md",
@@ -625,7 +626,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "`ncbi-datasets-cli >=18.4.0,<18.22.0`",
             "`unzip >=6.0,<7.0`",
             (
-                "[Bundled GTDB Taxonomy]"
+                "[GTDB Taxonomy Data]"
                 "(docs/usage-details.md#bundled-gtdb-taxonomy)"
             ),
         ),
@@ -663,7 +664,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "CONTRIBUTING.md",
             "[Runtime Contract](docs/usage-details.md#runtime-contract)",
             (
-                "[Bundled GTDB Taxonomy]"
+                "[GTDB Taxonomy Data]"
                 "(docs/usage-details.md#bundled-gtdb-taxonomy)"
             ),
             "packaging/bioconda/README.md",
@@ -679,7 +680,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "uv build",
             "[Runtime Contract](docs/usage-details.md#runtime-contract)",
             (
-                "[Bundled GTDB Taxonomy]"
+                "[GTDB Taxonomy Data]"
                 "(docs/usage-details.md#bundled-gtdb-taxonomy)"
             ),
             "packaging/bioconda/README.md",
@@ -708,13 +709,15 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "[Command Form](#command-form)",
             "[Options](#options)",
             "[Output Layout](#output-layout)",
-            "[Bundled GTDB Taxonomy](#bundled-gtdb-taxonomy)",
+            "[GTDB Taxonomy Data](#bundled-gtdb-taxonomy)",
             "Runtime Contract",
             "Retry Policy",
             "Output Layout",
             "Bundled GTDB Taxonomy",
             "usage: gtdb-genomes",
-            "Download NCBI genomes by GTDB taxon and GTDB release.",
+            "Download NCBI genomes by GTDB taxon and GTDB release",
+            "mandatory options:",
+            "optional options:",
             "--gtdb-release",
             "--gtdb-taxon",
             "--outdir",
@@ -724,7 +727,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "--ncbi-api-key",
             "--include",
             "--debug",
-            "--keep-temp",
+            "--keep-tmp",
             "--dry-run",
             "NCBI datasets CLI",
             "Direct downloads remain serial in the current workflow.",
@@ -746,7 +749,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "MD5SUM",
             "--threads",
             "processes through the child environment",
-            "Ambient `NCBI_API_KEY` is the normal workflow path",
+            "Using `NCBI_API_KEY` from the environment is the normal workflow path",
             "forbids `--debug` while an effective NCBI API key is active",
             "Requires-External",
             "../CONTRIBUTING.md",
@@ -764,7 +767,10 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "Fixed column lists for all summary and manifest TSVs live under",
         ),
     )
-    assert_not_contains_any(usage_details_text, ("--download-method", "--no-prefer-genbank"))
+    assert_not_contains_any(
+        usage_details_text,
+        ("--download-method", "--no-prefer-genbank", "--keep-temp"),
+    )
     assert "Fixed TSV columns:" not in usage_details_text
 
     assert_contains_all(
@@ -800,8 +806,8 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
             "download_request_accession",
             "final_accession",
             "download_batch",
-            "versioned request tokens fail closed",
-            "Only versionless request tokens may accept a unique same-family",
+            "versioned request accessions fail closed",
+            "Only versionless request accessions may accept a unique same-family",
         ),
     )
     assert_contains_all(

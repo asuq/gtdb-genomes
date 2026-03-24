@@ -26,7 +26,7 @@ uv build
 ```
 
 The detailed [Runtime Contract](docs/usage-details.md#runtime-contract) and
-[Bundled GTDB Taxonomy](docs/usage-details.md#bundled-gtdb-taxonomy) notes
+[GTDB Taxonomy Data](docs/usage-details.md#bundled-gtdb-taxonomy) notes
 live in the detailed guide.
 
 For Bioconda recipe-template specifics, see
