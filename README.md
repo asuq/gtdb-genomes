@@ -119,6 +119,12 @@ gtdb-genomes \
 > suppressed-genome failures even when taxon selection is otherwise valid.
 
 > [!NOTE]
+> When upstream `datasets` output includes parseable percentages, real runs log
+> 10% progress milestones for download and rehydrate stages. These progress
+> messages are best-effort hints from upstream output, not a guaranteed signal
+> on every run or platform.
+
+> [!NOTE]
 > Some legacy GTDB releases include genome accessions starting with `UBA`.
 > These legacy accessions are not supported by NCBI and are not supported by
 > `gtdb-genomes`. When selected, the tool warns and skips them. Check

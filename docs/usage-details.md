@@ -349,6 +349,12 @@ This wave policy applies to both ordinary direct runs and
 dehydrated-to-direct fallback. Metadata-confirmed suppressed genomes may no
 longer be downloadable from NCBI, especially in older GTDB releases.
 
+When upstream `datasets` output includes parseable percentages, real runs log
+10% progress milestones for direct downloads, dehydrated batch downloads, and
+`datasets rehydrate`. These messages are log-based hints from upstream output,
+not synthetic estimates, so some runs or platforms may emit only the usual
+start and completion logs.
+
 ## Runtime Contract
 
 Exit codes:
