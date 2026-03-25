@@ -8,7 +8,7 @@ license = "MIT AND CC-BY-SA-4.0"
 license-files = ["LICENSE", "NOTICE", "licenses/CC-BY-SA-4.0.txt"]
 dependencies = [
     "polars>=1.31.0,<2.0.0",
-    "tqdm>=4.67.1,<5.0.0",
+    "tqdm>=4.60.0,<5.0.0",
 ]
 
 [dependency-groups]

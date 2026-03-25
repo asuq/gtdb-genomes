@@ -32,7 +32,7 @@ The checked-in recipe is a draft, not a published installation path.
 The packaged runtime is currently checked with:
 
 - `polars >=1.31.0,<2.0.0`
-- `tqdm >=4.67.1,<5.0.0`
+- `tqdm >=4.60.0,<5.0.0`
 - `ncbi-datasets-cli >=18.4.0,<18.22.0`
 - `unzip >=6.0,<7.0`
 
@@ -63,6 +63,18 @@ For full option behaviour, see [Options](docs/usage-details.md#options),
 [Retry Policy](docs/usage-details.md#retry-policy),
 [Runtime Contract](docs/usage-details.md#runtime-contract), and
 [Summary Files](docs/usage-details.md#summary-files).
+
+> [!NOTE]
+> The software aborts when the output root already contains leftover
+> GTDB-genomes artefacts from a previous run. Existing unrelated files are
+> allowed, but reserved run artefacts such as `taxa/`, `run_summary.log`, or
+> `.gtdb_genomes_work/` block a new run until they are removed or a different
+> output directory is chosen.
+
+> [!IMPORTANT]
+> `--ncbi-api-key` expects an NCBI API key. The tool passes it only to the
+> `datasets` command and does not use it for GTDB release resolution, local
+> taxonomy loading, or any other use.
 
 ## Examples
 
@@ -108,28 +120,10 @@ gtdb-genomes \
   --outdir /tmp/gtdb_dry_run
 ```
 
-> [!IMPORTANT]
-> `--ncbi-api-key` expects an NCBI API key. The tool passes it only to the
-> `datasets` command and does not use it for GTDB release resolution, local
-> taxonomy loading, or any other use.
-
 > [!CAUTION]
 > Metadata-confirmed suppressed genomes may no longer be downloadable from
 > NCBI, especially in older GTDB releases. A run may therefore finish with
 > suppressed-genome failures even when taxon selection is otherwise valid.
-
-> [!NOTE]
-> When upstream `datasets` output includes parseable percentages, real runs log
-> 10% progress milestones for download and rehydrate stages. These progress
-> messages are best-effort hints from upstream output, not a guaranteed signal
-> on every run or platform.
-
-> [!NOTE]
-> The software aborts when the output root already contains leftover
-> GTDB-genomes artefacts from a previous run. Existing unrelated files are
-> allowed, but reserved run artefacts such as `taxa/`, `run_summary.log`, or
-> `.gtdb_genomes_work/` block a new run until they are removed or a different
-> output directory is chosen.
 
 > [!NOTE]
 > Some legacy GTDB releases include genome accessions starting with `UBA`.
