@@ -1718,6 +1718,7 @@ def test_direct_fallback_retries_suppressed_groups_once(
 def test_batch_dehydrate_failure_falls_back_to_direct(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A failed batch dehydrated download should fall back to direct mode."""
 
@@ -1799,13 +1800,14 @@ def test_batch_dehydrate_failure_falls_back_to_direct(
         fake_execute_direct_accession_plans,
     )
 
-    result = execute_batch_dehydrate_plans(
-        plans,
-        args,
-        run_directories,
-        logging.getLogger("test"),
-        (),
-    )
+    with caplog.at_level(logging.WARNING):
+        result = execute_batch_dehydrate_plans(
+            plans,
+            args,
+            run_directories,
+            logging.getLogger("test"),
+            (),
+        )
 
     assert result.method_used == "dehydrate_fallback_direct"
     assert result.download_concurrency_used == 2
@@ -1814,11 +1816,16 @@ def test_batch_dehydrate_failure_falls_back_to_direct(
     assert result.shared_failures[0].failures[0].attempted_accession == (
         "GCA_000001;GCA_000002"
     )
+    assert (
+        "Batch dehydrated download failed; "
+        "falling back to batch direct downloads for 2 accessions"
+    ) in caplog.text
 
 
 def test_batch_dehydrate_preserves_partial_success_before_direct_fallback(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Resolved dehydrated payloads should be kept when only part of the cohort fails."""
 
@@ -1959,19 +1966,25 @@ def test_batch_dehydrate_preserves_partial_success_before_direct_fallback(
         fake_execute_direct_accession_plans,
     )
 
-    result = execute_batch_dehydrate_plans(
-        plans,
-        build_cli_args(tmp_path / "out"),
-        initialise_run_directories(tmp_path / "dehydrate-partial-fallback"),
-        logging.getLogger("test-dehydrate-partial-fallback"),
-        (),
-    )
+    with caplog.at_level(logging.WARNING):
+        result = execute_batch_dehydrate_plans(
+            plans,
+            build_cli_args(tmp_path / "out"),
+            initialise_run_directories(tmp_path / "dehydrate-partial-fallback"),
+            logging.getLogger("test-dehydrate-partial-fallback"),
+            (),
+        )
 
     assert fallback_calls == [("GCF_000002.1",)]
     assert result.method_used == "dehydrate_fallback_direct"
     assert result.executions["GCF_000001.1"].download_status == "downloaded"
     assert result.executions["GCF_000001.1"].download_batch == "dehydrated_batch"
     assert result.executions["GCF_000002.1"].download_status == "downloaded_after_fallback"
+    assert (
+        "Batch dehydrated download partially succeeded; "
+        "1 accession was resolved and 1 unresolved accession is falling back "
+        "to batch direct downloads"
+    ) in caplog.text
 
 
 def test_batch_dehydrate_passes_api_key_via_child_environment(

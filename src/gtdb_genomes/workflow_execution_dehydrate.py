@@ -37,6 +37,32 @@ if TYPE_CHECKING:
     from gtdb_genomes.cli import CliArgs
 
 
+def build_dehydrate_fallback_warning(
+    fallback_plans: tuple[AccessionPlan, ...],
+    resolved_executions: dict[str, AccessionExecution] | None = None,
+) -> str:
+    """Return the dehydrate-to-direct fallback warning for one batch."""
+
+    fallback_count = len(fallback_plans)
+    fallback_noun = "accession" if fallback_count == 1 else "accessions"
+    fallback_verb = "is" if fallback_count == 1 else "are"
+    resolved_count = 0 if resolved_executions is None else len(resolved_executions)
+    resolved_noun = "accession" if resolved_count == 1 else "accessions"
+    resolved_verb = "was" if resolved_count == 1 else "were"
+    if resolved_count == 0:
+        return (
+            "Batch dehydrated download failed; "
+            f"falling back to batch direct downloads for {fallback_count} "
+            f"{fallback_noun}"
+        )
+    return (
+        "Batch dehydrated download partially succeeded; "
+        f"{resolved_count} {resolved_noun} {resolved_verb} resolved and "
+        f"{fallback_count} unresolved {fallback_noun} {fallback_verb} "
+        "falling back to batch direct downloads"
+    )
+
+
 def fallback_batch_to_direct(
     plans: tuple[AccessionPlan, ...],
     args: CliArgs,
@@ -49,7 +75,11 @@ def fallback_batch_to_direct(
     """Fall back from a failed dehydrated batch workflow to direct downloads."""
 
     logger.warning(
-        "Batch dehydrated download failed; falling back to batch direct downloads",
+        "%s",
+        build_dehydrate_fallback_warning(
+            plans,
+            resolved_executions,
+        ),
     )
     logger.info(
         "Starting direct fallback for %d accession plan(s)",
