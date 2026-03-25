@@ -31,11 +31,11 @@ def load_artifact_inspector():
 def write_duplicate_record_wheel(wheel_path: Path) -> None:
     """Write one synthetic wheel whose `RECORD` repeats the same payload path."""
 
-    init_payload = "__version__ = '0.1.0'\n"
+    init_payload = "__version__ = '0.2.0'\n"
     with zipfile.ZipFile(wheel_path, "w") as handle:
         handle.writestr("gtdb_genomes/__init__.py", init_payload)
         handle.writestr(
-            "gtdb_genomes-0.1.0.dist-info/WHEEL",
+            "gtdb_genomes-0.2.0.dist-info/WHEEL",
             (
                 "Wheel-Version: 1.0\n"
                 "Generator: test\n"
@@ -44,8 +44,8 @@ def write_duplicate_record_wheel(wheel_path: Path) -> None:
             ),
         )
         handle.writestr(
-            "gtdb_genomes-0.1.0.dist-info/METADATA",
-            "Metadata-Version: 2.4\nName: gtdb-genomes\nVersion: 0.1.0\n",
+            "gtdb_genomes-0.2.0.dist-info/METADATA",
+            "Metadata-Version: 2.4\nName: gtdb-genomes\nVersion: 0.2.0\n",
         )
         record_hash = load_artifact_inspector().build_record_hash(
             init_payload.encode("utf-8"),
@@ -54,14 +54,14 @@ def write_duplicate_record_wheel(wheel_path: Path) -> None:
             [
                 f"gtdb_genomes/__init__.py,{record_hash},{len(init_payload)}",
                 f"gtdb_genomes/__init__.py,{record_hash},{len(init_payload)}",
-                "gtdb_genomes-0.1.0.dist-info/WHEEL,,",
-                "gtdb_genomes-0.1.0.dist-info/METADATA,,",
-                "gtdb_genomes-0.1.0.dist-info/RECORD,,",
+                "gtdb_genomes-0.2.0.dist-info/WHEEL,,",
+                "gtdb_genomes-0.2.0.dist-info/METADATA,,",
+                "gtdb_genomes-0.2.0.dist-info/RECORD,,",
                 "",
             ],
         )
         handle.writestr(
-            "gtdb_genomes-0.1.0.dist-info/RECORD",
+            "gtdb_genomes-0.2.0.dist-info/RECORD",
             record_text,
         )
 
@@ -71,7 +71,7 @@ def test_validate_wheel_record_rejects_duplicate_rows(
 ) -> None:
     """The inspector should reject duplicate wheel `RECORD` rows explicitly."""
 
-    wheel_path = tmp_path / "gtdb_genomes-0.1.0-py3-none-any.whl"
+    wheel_path = tmp_path / "gtdb_genomes-0.2.0-py3-none-any.whl"
     write_duplicate_record_wheel(wheel_path)
 
     inspector = load_artifact_inspector()

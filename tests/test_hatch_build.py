@@ -68,10 +68,10 @@ def write_minimal_wheel(wheel_path: Path) -> None:
     with zipfile.ZipFile(wheel_path, "w") as handle:
         handle.writestr(
             "gtdb_genomes/__init__.py",
-            "__version__ = '0.1.0'\n",
+            "__version__ = '0.2.0'\n",
         )
         handle.writestr(
-            "gtdb_genomes-0.1.0.dist-info/WHEEL",
+            "gtdb_genomes-0.2.0.dist-info/WHEEL",
             (
                 "Wheel-Version: 1.0\n"
                 "Generator: test\n"
@@ -80,12 +80,12 @@ def write_minimal_wheel(wheel_path: Path) -> None:
             ),
         )
         handle.writestr(
-            "gtdb_genomes-0.1.0.dist-info/METADATA",
-            "Metadata-Version: 2.4\nName: gtdb-genomes\nVersion: 0.1.0\n",
+            "gtdb_genomes-0.2.0.dist-info/METADATA",
+            "Metadata-Version: 2.4\nName: gtdb-genomes\nVersion: 0.2.0\n",
         )
         handle.writestr(
-            "gtdb_genomes-0.1.0.dist-info/RECORD",
-            "gtdb_genomes-0.1.0.dist-info/RECORD,,\n",
+            "gtdb_genomes-0.2.0.dist-info/RECORD",
+            "gtdb_genomes-0.2.0.dist-info/RECORD,,\n",
         )
 
 
@@ -143,7 +143,7 @@ def test_append_requires_external_metadata_appends_known_runtime_requirements() 
     """Built metadata should advertise the documented external runtime tools once."""
 
     metadata_text = append_requires_external_metadata(
-        "Metadata-Version: 2.4\nName: gtdb-genomes\nVersion: 0.1.0\n",
+        "Metadata-Version: 2.4\nName: gtdb-genomes\nVersion: 0.2.0\n",
     )
 
     for requirement in get_external_runtime_requirements():
@@ -156,7 +156,7 @@ def test_patch_wheel_metadata_regenerates_record_entries(
 ) -> None:
     """Wheel metadata patching should keep `RECORD` hashes and sizes consistent."""
 
-    wheel_path = tmp_path / "gtdb_genomes-0.1.0-py3-none-any.whl"
+    wheel_path = tmp_path / "gtdb_genomes-0.2.0-py3-none-any.whl"
     write_minimal_wheel(wheel_path)
 
     patch_wheel_metadata(wheel_path)

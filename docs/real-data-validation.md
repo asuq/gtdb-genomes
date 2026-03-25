@@ -156,12 +156,13 @@ Remote validation assumes:
 Suggested remote setup:
 
 ```bash
-mamba create -n gtdb-genome-test -c conda-forge -c bioconda python=3.12 pip unzip=6.0 ncbi-datasets-cli=18.4.0
+mamba create -n gtdb-genome-test -c conda-forge -c bioconda python=3.12 pip polars=1.31.0 tqdm=4.67.1 unzip=6.0 ncbi-datasets-cli=18.21.0
 mamba activate gtdb-genome-test
-python -m pip install /path/to/dist/gtdb_genomes-0.1.0-py3-none-any.whl
+python -m pip install --force-reinstall --no-deps /path/to/dist/gtdb_genomes-0.2.0-py3-none-any.whl
 which gtdb-genomes
 gtdb-genomes --help
 python -c "from gtdb_genomes.release_resolver import get_release_manifest_path; path = get_release_manifest_path(); assert path.is_file(), path"
+python -c "import shutil; assert shutil.which('uv') is None"
 ```
 
 If the remote environment exposes `python3` rather than `python`, the remote
@@ -233,18 +234,30 @@ packaged-runtime paths with the same build-and-clean-runtime split and reuses
 
 Use this path when you want to prove that the packaged `gtdb-genomes`
 command works on another server, rather than validating `uv run` from a source
-checkout.
+checkout. For a pre-release check, test the exact release candidate wheel from
+`dev`, not an older tagged build or an unversioned local snapshot.
 
-### 1. Build and copy the wheel from the local machine
+### 1. Prepare the release candidate on the local machine
 
-Build the wheel on the development machine, then copy the wheel to the remote
-server. Copy the remote validation scripts as well unless the server already
-has a repo checkout containing `bin/`.
+Prepare the `dev` branch exactly as the release candidate, but stop before
+merging to `main` or tagging:
 
 ```bash
-uv build
-ls dist/*.whl
-scp dist/*.whl user@remote:/tmp/gtdb-genome-remote/
+mamba run -n gtdb-genome uv lock
+mamba run -n gtdb-genome uv run pytest -q
+git commit -m "chore(release): prepare v0.2.0"
+```
+
+### 2. Build and copy the wheel from the local machine
+
+Build the wheel from that release-prep commit, then copy the wheel to the
+remote server. Copy the remote validation scripts as well unless the server
+already has a repo checkout containing `bin/`.
+
+```bash
+mamba run -n gtdb-genome uv build
+ls dist/gtdb_genomes-0.2.0-py3-none-any.whl
+scp dist/gtdb_genomes-0.2.0-py3-none-any.whl user@remote:/tmp/gtdb-genome-remote/
 scp bin/run-real-data-tests-server.sh \
   user@remote:/tmp/gtdb-genome-remote/
 scp bin/run-real-data-tests-remote.sh \
@@ -252,17 +265,19 @@ scp bin/run-real-data-tests-remote.sh \
   user@remote:/tmp/gtdb-genome-remote/
 ```
 
-### 2. Create the clean remote runtime
+### 3. Create the clean remote runtime
 
 SSH to the remote server and create a fresh packaged-runtime environment:
 
 ```bash
 ssh user@remote
-mamba create -n gtdb-genome-test -c conda-forge -c bioconda python=3.12 pip unzip=6.0 ncbi-datasets-cli=18.4.0
+mamba create -n gtdb-genome-test -c conda-forge -c bioconda python=3.12 pip polars=1.31.0 tqdm=4.67.1 unzip=6.0 ncbi-datasets-cli=18.21.0
 mamba activate gtdb-genome-test
-python -m pip install /tmp/gtdb-genome-remote/gtdb_genomes-0.1.0-py3-none-any.whl
+python -m pip install --force-reinstall --no-deps /tmp/gtdb-genome-remote/gtdb_genomes-0.2.0-py3-none-any.whl
 which gtdb-genomes
 gtdb-genomes --help
+python -c "from gtdb_genomes.release_resolver import get_release_manifest_path; path = get_release_manifest_path(); assert path.is_file(), path"
+python -c "import shutil; assert shutil.which('uv') is None"
 ```
 
 Run the same packaged-data sanity check used by remote `C0-manifest`:
@@ -280,7 +295,7 @@ deliberately missing taxon, and it proves that the installed wheel can load the
 bundled release manifest and taxonomy data without relying on a source
 checkout.
 
-### 3. Minimum smoke test
+### 4. Minimum smoke test
 
 Start with a `C6`-style dry-run. It validates CLI wiring and packaged bundled
 data without creating an output tree:
@@ -306,7 +321,21 @@ gtdb-genomes \
   --outdir /tmp/gtdb-realtests/remote-smoke-c1
 ```
 
-### 4. Full remote matrix
+The preferred smoke entrypoint is the server wrapper, which runs `C1 C4 C6`
+under one suite root:
+
+```bash
+export REMOTE_TEST_ROOT=/tmp/gtdb-realtests/remote-$(date +%Y%m%d)
+bash /tmp/gtdb-genome-remote/run-real-data-tests-server.sh smoke
+```
+
+Expected outcomes:
+
+- `C1`: exit `0`, output present
+- `C4`: exit `6`, `unsupported_input` in `download_failures.tsv`
+- `C6`: exit `0`, dry-run, no output tree
+
+### 5. Full remote matrix
 
 Once the smoke test passes, use `bin/run-real-data-tests-server.sh` as the
 preferred on-server entrypoint. It wraps the existing remote runner with simple
@@ -355,7 +384,10 @@ export REMOTE_TEST_ROOT=/tmp/gtdb-realtests/remote-$(date +%Y%m%d)
 bash /tmp/gtdb-genome-remote/run-real-data-tests-server.sh C1 C5 C6
 ```
 
-### 5. Investigation mode for a failing remote case
+Do not merge to `main` or create `v0.2.0` until this full packaged-runtime
+suite is green.
+
+### 6. Investigation mode for a failing remote case
 
 If a remote real-data case fails on one runtime, keep the normal CLI behaviour
 unchanged and rerun the runner in investigation mode.

@@ -332,7 +332,7 @@ def test_uv_build_includes_generated_taxonomy_payloads_in_sdist_and_wheel(
     build_info = json.loads(
         read_wheel_member_text(wheel_path, "gtdb_genomes/_build_info.json"),
     )
-    assert build_info["package_version"] == "0.1.0"
+    assert build_info["package_version"] == "0.2.0"
     assert "git_revision" in build_info
     inspect_result = subprocess.run(
         [
@@ -720,7 +720,7 @@ def test_runtime_docs_match_current_readme_and_usage_details() -> None:
         (
             "You can copy and paste this citation:",
             (
-                "Shima, A. (2026). gtdb-genomes (Version 0.1.0) "
+                "Shima, A. (2026). gtdb-genomes (Version 0.2.0) "
                 "[Computer software]. Zenodo. "
                 "https://doi.org/10.5281/zenodo.19198946"
             ),
@@ -1024,7 +1024,7 @@ def test_bioconda_recipe_template_is_quarantined_until_release_metadata_exists()
 
     assert not Path("packaging/bioconda/meta.yaml").exists()
     assert bioconda_template_path.is_file()
-    assert '{% set version = "0.1.0" %}' in bioconda_text
+    assert '{% set version = "0.2.0" %}' in bioconda_text
     assert "https://github.com/asuq/gtdb-genomes/releases/download/" in (
         bioconda_text
     )
@@ -1080,8 +1080,8 @@ def test_citation_file_uses_canonical_release_metadata() -> None:
         (
             "cff-version: 1.2.0",
             'title: "gtdb-genomes"',
-            'version: "0.1.0"',
-            "date-released: 2026-03-24",
+            'version: "0.2.0"',
+            "date-released: 2026-03-25",
             "repository-code: 'https://github.com/asuq/gtdb-genomes'",
             'family-names: "Shima"',
             'given-names: "Akito"',
@@ -1137,8 +1137,15 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
             "Requires-External",
             "ncbi-datasets-cli=18.4.0",
             "ncbi-datasets-cli=18.21.0",
+            "polars=1.31.0",
+            "tqdm=4.67.1",
             "-c conda-forge -c bioconda",
             "unzip=6.0",
+            "--force-reinstall --no-deps",
+            "gtdb_genomes-0.2.0-py3-none-any.whl",
+            'git commit -m "chore(release): prepare v0.2.0"',
+            "run-real-data-tests-server.sh smoke",
+            "Do not merge to `main` or create `v0.2.0`",
             "load_release_taxonomy()",
             "accession_decision_sha256",
             "selected_accession",
