@@ -180,6 +180,11 @@ def run_workflow(args: CliArgs) -> int:
     )
     if planning_warning is not None:
         logger.warning("%s", planning_warning)
+        planning_debug_detail = workflow_planning.build_planning_suppressed_debug_detail(
+            suppressed_notes,
+        )
+        if planning_debug_detail is not None:
+            logger.debug("%s", planning_debug_detail)
     explicit_pairing_warning = workflow_planning.build_explicit_pairing_conflict_warning(
         mapped_frame,
     )
@@ -242,16 +247,25 @@ def run_workflow(args: CliArgs) -> int:
         except (OSError, shutil.Error) as error:
             exit_code = log_output_materialisation_failure(logger, error, secrets)
         else:
+            failed_original_accessions = tuple(
+                original_accession
+                for original_accession, execution in execution_result.executions.items()
+                if execution.download_status == "failed"
+            )
             failed_suppressed_warning = workflow_planning.build_failed_suppressed_warning(
                 suppressed_notes,
-                tuple(
-                    original_accession
-                    for original_accession, execution in execution_result.executions.items()
-                    if execution.download_status == "failed"
-                ),
+                failed_original_accessions,
             )
             if failed_suppressed_warning is not None:
                 logger.warning("%s", failed_suppressed_warning)
+                failed_suppressed_debug_detail = (
+                    workflow_planning.build_failed_suppressed_debug_detail(
+                        suppressed_notes,
+                        failed_original_accessions,
+                    )
+                )
+                if failed_suppressed_debug_detail is not None:
+                    logger.debug("%s", failed_suppressed_debug_detail)
     except Exception as error:
         exit_code = log_unexpected_internal_failure(logger, error, secrets)
         if not args.keep_temp:

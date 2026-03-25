@@ -23,7 +23,6 @@ from gtdb_genomes.metadata import (
     find_matching_genbank_accessions,
     get_explicit_paired_genbank_candidate,
     MetadataLookupError,
-    SUPPRESSED_ASSEMBLY_NOTE,
     apply_accession_preferences,
     build_download_request_accession,
     is_suppressed_status,
@@ -38,6 +37,7 @@ if TYPE_CHECKING:
 
 # Temporary planning workspace helpers.
 SUPPRESSED_WARNING_EXAMPLES = 5
+SUPPRESSED_WARNING_SUMMARY = "payloads may no longer be downloadable."
 
 
 def get_staging_directory_root() -> Path | None:
@@ -287,9 +287,34 @@ def build_planning_suppressed_warning(
     noun = "assembly" if count == 1 else "assemblies"
     return (
         f"NCBI marks {count} planned {noun} as suppressed; "
-        f"{SUPPRESSED_ASSEMBLY_NOTE} "
-        f"Affected accessions: {format_suppressed_accession_examples(suppressed_notes)}"
+        f"{SUPPRESSED_WARNING_SUMMARY}"
     )
+
+
+def build_planning_suppressed_debug_detail(
+    suppressed_notes: dict[str, SuppressedAccessionNote],
+) -> str | None:
+    """Build the planning-time debug detail for suppressed download targets."""
+
+    if not suppressed_notes:
+        return None
+    return (
+        "Suppressed planned accessions: "
+        f"{format_suppressed_accession_examples(suppressed_notes)}"
+    )
+
+
+def select_failed_suppressed_notes(
+    suppressed_notes: dict[str, SuppressedAccessionNote],
+    failed_original_accessions: tuple[str, ...],
+) -> dict[str, SuppressedAccessionNote]:
+    """Return suppressed-note rows scoped to failed original accessions."""
+
+    return {
+        original_accession: suppressed_notes[original_accession]
+        for original_accession in failed_original_accessions
+        if original_accession in suppressed_notes
+    }
 
 
 def build_failed_suppressed_warning(
@@ -298,11 +323,10 @@ def build_failed_suppressed_warning(
 ) -> str | None:
     """Build the final warning for failed suppressed download targets."""
 
-    failed_notes = {
-        original_accession: suppressed_notes[original_accession]
-        for original_accession in failed_original_accessions
-        if original_accession in suppressed_notes
-    }
+    failed_notes = select_failed_suppressed_notes(
+        suppressed_notes,
+        failed_original_accessions,
+    )
     if not failed_notes:
         return None
     count = len(failed_notes)
@@ -310,8 +334,25 @@ def build_failed_suppressed_warning(
     verb = "was" if count == 1 else "were"
     return (
         f"{count} failed {noun} {verb} marked suppressed by NCBI; "
-        f"{SUPPRESSED_ASSEMBLY_NOTE} "
-        f"Affected accessions: {format_suppressed_accession_examples(failed_notes)}"
+        f"{SUPPRESSED_WARNING_SUMMARY}"
+    )
+
+
+def build_failed_suppressed_debug_detail(
+    suppressed_notes: dict[str, SuppressedAccessionNote],
+    failed_original_accessions: tuple[str, ...],
+) -> str | None:
+    """Build the final debug detail for failed suppressed download targets."""
+
+    failed_notes = select_failed_suppressed_notes(
+        suppressed_notes,
+        failed_original_accessions,
+    )
+    if not failed_notes:
+        return None
+    return (
+        "Suppressed failed accessions: "
+        f"{format_suppressed_accession_examples(failed_notes)}"
     )
 
 

@@ -27,7 +27,9 @@ from gtdb_genomes.metadata import (
 )
 from gtdb_genomes.workflow_planning import (
     SuppressedAccessionNote,
+    build_failed_suppressed_debug_detail,
     build_failed_suppressed_warning,
+    build_planning_suppressed_debug_detail,
     build_planning_suppressed_warning,
     build_suppressed_accession_notes,
     create_staging_directory,
@@ -98,7 +100,18 @@ def test_build_suppressed_accession_notes_marks_original_suppressed_target() -> 
     )
 
     assert notes["GCF_003670205.1"].selected_accession == "GCF_003670205.1"
-    assert "removed by submitter" in build_planning_suppressed_warning(notes)
+    warning_text = build_planning_suppressed_warning(notes)
+    detail_text = build_planning_suppressed_debug_detail(notes)
+
+    assert warning_text is not None
+    assert detail_text is not None
+    assert "NCBI marks 1 planned assembly as suppressed" in warning_text
+    assert "payloads may no longer be downloadable." in warning_text
+    assert "GCF_003670205.1" not in warning_text
+    assert "removed by submitter" not in warning_text
+    assert "Affected accessions" not in warning_text
+    assert "GCF_003670205.1" in detail_text
+    assert "removed by submitter" in detail_text
 
 
 def test_build_suppressed_accession_notes_uses_selected_paired_status() -> None:
@@ -139,9 +152,11 @@ def test_build_suppressed_accession_notes_uses_selected_paired_status() -> None:
     )
 
     assert suppressed_paired_notes["GCF_000001.1"].selected_accession == "GCA_000001.3"
-    assert "GCF_000001.1 -> GCA_000001.3" in build_planning_suppressed_warning(
+    detail_text = build_planning_suppressed_debug_detail(
         suppressed_paired_notes,
     )
+    assert detail_text is not None
+    assert "GCF_000001.1 -> GCA_000001.3" in detail_text
 
 
 def test_build_failed_suppressed_warning_mentions_failed_accessions() -> None:
@@ -171,9 +186,17 @@ def test_build_failed_suppressed_warning_mentions_failed_accessions() -> None:
         notes,
         ("GCF_003670205.1",),
     )
+    detail_text = build_failed_suppressed_debug_detail(
+        notes,
+        ("GCF_003670205.1",),
+    )
 
+    assert detail_text is not None
     assert "1 failed assembly was marked suppressed by NCBI" in warning_text
-    assert SUPPRESSED_ASSEMBLY_NOTE in warning_text
+    assert "payloads may no longer be downloadable." in warning_text
+    assert "GCF_003670205.1" not in warning_text
+    assert "Affected accessions" not in warning_text
+    assert "GCF_003670205.1" in detail_text
 
 
 def test_suppressed_warning_builders_truncate_long_accession_lists() -> None:
@@ -212,8 +235,8 @@ def test_suppressed_warning_builders_truncate_long_accession_lists() -> None:
         ),
     }
 
-    planning_warning = build_planning_suppressed_warning(suppressed_notes)
-    failed_warning = build_failed_suppressed_warning(
+    planning_warning = build_planning_suppressed_debug_detail(suppressed_notes)
+    failed_warning = build_failed_suppressed_debug_detail(
         suppressed_notes,
         tuple(suppressed_notes),
     )
@@ -526,7 +549,73 @@ def test_dry_run_warns_for_suppressed_planned_accession(
     )
 
     assert exit_code == 0
-    assert "NCBI marks 1 planned assembly as suppressed" in log_stream.getvalue()
+    log_text = log_stream.getvalue()
+    assert "NCBI marks 1 planned assembly as suppressed" in log_text
+    assert "payloads may no longer be downloadable." in log_text
+    assert "GCF_000001.1" not in log_text
+    assert "removed by submitter" not in log_text
+    assert "Affected accessions" not in log_text
+
+
+def test_dry_run_debug_logs_suppressed_accession_detail(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Debug dry-runs should log suppressed-accession detail separately."""
+
+    log_stream = install_capture_logger(monkeypatch)
+    monkeypatch.delenv("NCBI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.check_required_tools",
+        lambda required_tools: None,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.load_release_taxonomy",
+        lambda resolution: build_taxonomy_frame(
+            "d__Bacteria;p__Proteobacteria;g__Escherichia",
+        ),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_planning.run_summary_lookup_with_retries",
+        lambda *args, **kwargs: SummaryLookupResult(
+            summary_map={},
+            status_map={
+                "GCF_000001.1": AssemblyStatusInfo(
+                    assembly_status="suppressed",
+                    suppression_reason="removed by submitter",
+                    paired_accession=None,
+                    paired_assembly_status=None,
+                ),
+            },
+            failures=(),
+        ),
+    )
+
+    output_dir = tmp_path / "dry-run-suppressed-warning-debug"
+    exit_code = main(
+        [
+            "--gtdb-release",
+            "95",
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--prefer-genbank",
+            "--outdir",
+            str(output_dir),
+            "--dry-run",
+            "--debug",
+        ],
+    )
+
+    assert exit_code == 0
+    log_text = log_stream.getvalue()
+    assert (
+        "WARNING NCBI marks 1 planned assembly as suppressed; "
+        "payloads may no longer be downloadable."
+    ) in log_text
+    assert (
+        "DEBUG Suppressed planned accessions: "
+        "GCF_000001.1 (reason: removed by submitter)"
+    ) in log_text
 
 
 def test_real_run_logs_info_milestones(
@@ -894,7 +983,122 @@ def test_failed_suppressed_accession_repeats_warning_and_failure_note(
     log_text = log_stream.getvalue()
     assert "NCBI marks 1 planned assembly as suppressed" in log_text
     assert "1 failed assembly was marked suppressed by NCBI" in log_text
+    assert "payloads may no longer be downloadable." in log_text
+    assert "GCF_000001.1" not in log_text
+    assert "removed by submitter" not in log_text
+    assert "Affected accessions" not in log_text
 
     failure_header, failure_rows = parse_tsv(output_dir / "download_failures.tsv")
     failure = dict(zip(failure_header, failure_rows[0], strict=True))
     assert SUPPRESSED_ASSEMBLY_NOTE in failure["reason"]
+
+
+def test_failed_suppressed_accession_logs_detail_only_with_debug(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Debug real runs should keep detailed suppressed-accession logs at DEBUG."""
+
+    log_stream = install_capture_logger(monkeypatch)
+    monkeypatch.delenv("NCBI_API_KEY", raising=False)
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.check_required_tools",
+        lambda required_tools: None,
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_selection.load_release_taxonomy",
+        lambda resolution: build_taxonomy_frame(
+            "d__Bacteria;p__Proteobacteria;g__Escherichia",
+        ),
+    )
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_planning.run_summary_lookup_with_retries",
+        lambda *args, **kwargs: SummaryLookupResult(
+            summary_map={},
+            status_map={
+                "GCF_000001.1": AssemblyStatusInfo(
+                    assembly_status="suppressed",
+                    suppression_reason="removed by submitter",
+                    paired_accession=None,
+                    paired_assembly_status=None,
+                ),
+            },
+            failures=(),
+        ),
+    )
+
+    def fake_execute_accession_plans(
+        *args,
+        **kwargs,
+    ) -> object:
+        """Return one failed execution for the suppressed accession."""
+
+        from gtdb_genomes.download import CommandFailureRecord
+        from gtdb_genomes.workflow_execution_models import (
+            AccessionExecution,
+            DownloadExecutionResult,
+        )
+
+        return DownloadExecutionResult(
+            executions={
+                "GCF_000001.1": AccessionExecution(
+                    original_accession="GCF_000001.1",
+                    final_accession=None,
+                    conversion_status="failed_no_usable_accession",
+                    download_status="failed",
+                    download_batch="direct_batch_1",
+                    payload_directory=None,
+                    failures=(
+                        CommandFailureRecord(
+                            stage="preferred_download",
+                            attempt_index=4,
+                            max_attempts=4,
+                            error_type="subprocess",
+                            error_message="download failed",
+                            final_status="retry_exhausted",
+                        ),
+                    ),
+                ),
+            },
+            method_used="direct",
+            download_concurrency_used=1,
+            rehydrate_workers_used=0,
+        )
+
+    monkeypatch.setattr(
+        "gtdb_genomes.workflow_execution.execute_accession_plans",
+        fake_execute_accession_plans,
+    )
+
+    output_dir = tmp_path / "suppressed-runtime-failure-debug"
+    exit_code = main(
+        [
+            "--gtdb-release",
+            "95",
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--prefer-genbank",
+            "--outdir",
+            str(output_dir),
+            "--debug",
+        ],
+    )
+
+    assert exit_code == 7
+    log_text = log_stream.getvalue()
+    assert (
+        "WARNING NCBI marks 1 planned assembly as suppressed; "
+        "payloads may no longer be downloadable."
+    ) in log_text
+    assert (
+        "DEBUG Suppressed planned accessions: "
+        "GCF_000001.1 (reason: removed by submitter)"
+    ) in log_text
+    assert (
+        "WARNING 1 failed assembly was marked suppressed by NCBI; "
+        "payloads may no longer be downloadable."
+    ) in log_text
+    assert (
+        "DEBUG Suppressed failed accessions: "
+        "GCF_000001.1 (reason: removed by submitter)"
+    ) in log_text
