@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+import re
 
 import polars as pl
 import pytest
@@ -33,6 +34,7 @@ from gtdb_genomes.workflow_planning import SuppressedAccessionNote
 from gtdb_genomes.workflow_outputs import (
     build_enriched_output_rows,
     build_failure_rows,
+    render_run_summary_log,
 )
 from tests.workflow_contract_helpers import (
     build_multi_accession_taxonomy_frame,
@@ -1334,6 +1336,7 @@ def test_real_run_records_provenance_and_download_request_accessions(
 
     assert fixed_summary["run_id"] == fixed_summary_repeat["run_id"]
     assert fixed_summary["run_id"] != latest_summary["run_id"]
+    assert re.fullmatch(r"[0-9a-f]{12}\.\.\.", fixed_summary["run_id"])
     assert (
         fixed_summary["accession_decision_sha256"]
         == fixed_summary_repeat["accession_decision_sha256"]
@@ -1341,6 +1344,10 @@ def test_real_run_records_provenance_and_download_request_accessions(
     assert (
         fixed_summary["accession_decision_sha256"]
         != latest_summary["accession_decision_sha256"]
+    )
+    assert re.fullmatch(
+        r"[0-9a-f]{12}\.\.\.",
+        fixed_summary["accession_decision_sha256"],
     )
     assert fixed_summary["package_version"] == "1.2.3"
     assert fixed_summary["git_revision"] == "deadbeef"
@@ -2480,3 +2487,45 @@ def test_failure_manifest_condenses_non_suppressed_multiline_reason_to_one_line(
     assert [row["reason"] for row in failure_rows] == [
         "temporary outage please retry later",
     ]
+
+
+def test_render_run_summary_log_abbreviates_digest_fields() -> None:
+    """Run-summary rendering should shorten the two digest-like identity fields."""
+
+    rendered = render_run_summary_log(
+        {
+            "run_id": "a" * 64,
+            "accession_decision_sha256": "b" * 64,
+            "started_at": "2026-03-25T00:00:00+00:00",
+            "finished_at": "2026-03-25T00:00:01+00:00",
+            "requested_release": "226",
+            "resolved_release": "226.0",
+            "download_method_requested": "auto",
+            "download_method_used": "direct",
+            "threads_requested": 4,
+            "download_concurrency_used": 1,
+            "rehydrate_workers_used": 0,
+            "include": "genome",
+            "prefer_genbank": "false",
+            "version_latest": "false",
+            "package_version": "0.2.0",
+            "git_revision": "deadbeef",
+            "datasets_version": "datasets 2.0",
+            "unzip_version": "UnZip 6.00",
+            "release_manifest_sha256": "0" * 64,
+            "bacterial_taxonomy_sha256": "1" * 64,
+            "archaeal_taxonomy_sha256": "",
+            "debug_enabled": "false",
+            "requested_taxa_count": 1,
+            "matched_rows": 1,
+            "unique_gtdb_accessions": 1,
+            "successful_accessions": 1,
+            "failed_accessions": 0,
+            "output_dir": "/tmp/out",
+            "exit_code": 0,
+        },
+    )
+
+    assert "run_id: aaaaaaaaaaaa..." in rendered
+    assert "accession_decision_sha256: bbbbbbbbbbbb..." in rendered
+    assert "release_manifest_sha256: 0000000000000000000000000000000000000000000000000000000000000000" in rendered

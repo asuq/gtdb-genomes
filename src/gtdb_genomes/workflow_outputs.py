@@ -217,6 +217,7 @@ DATASETS_NO_MATCH_MESSAGE = (
     "Please try again using different search criteria."
 )
 WHITESPACE_RUN_PATTERN = re.compile(r"\s+")
+DIGEST_DISPLAY_PREFIX_LENGTH = 12
 
 
 def normalise_failure_manifest_reason(reason: str) -> str:
@@ -418,9 +419,22 @@ def render_run_summary_log(run_summary: RunSummaryRow) -> str:
     for section_title, section_keys in sections:
         lines.append(section_title)
         for key in section_keys:
-            lines.append(f"{key}: {run_summary[key]}")
+            lines.append(
+                f"{key}: {format_run_summary_value(key, run_summary[key])}",
+            )
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def format_run_summary_value(key: str, value: object) -> object:
+    """Return one human-readable run-summary value."""
+
+    if key not in {"run_id", "accession_decision_sha256"}:
+        return value
+    value_text = str(value)
+    if len(value_text) <= DIGEST_DISPLAY_PREFIX_LENGTH:
+        return value_text
+    return f"{value_text[:DIGEST_DISPLAY_PREFIX_LENGTH]}..."
 
 
 def join_sorted_values(values: list[str]) -> str:

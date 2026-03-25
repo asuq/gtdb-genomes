@@ -217,10 +217,10 @@ the installed payload is exercised, not just the manifest header. In workflow
 terms, that check resolves `latest` and then calls `load_release_taxonomy()`.
 
 When `--prefer-genbank` or `--version-latest` is enabled during validation,
-use the generated `run_summary.log` timestamps,
-`accession_decision_sha256`, `selected_accession`,
+use the generated `run_summary.log` timestamps, `selected_accession`,
 `download_request_accession`, and `final_accession` as the audit trail for
-live NCBI-driven identity decisions.
+live NCBI-driven identity decisions. `run_summary.log` abbreviates
+`accession_decision_sha256` for quick human comparison.
 
 The CI workflow excludes:
 

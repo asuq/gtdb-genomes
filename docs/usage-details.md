@@ -477,10 +477,11 @@ accessions are warned about, skipped, and recorded as failed in manifests for
 non-dry runs.
 
 When `--prefer-genbank` or `--version-latest` is enabled, reproducibility is
-limited by current NCBI metadata. Use `run_summary.log` timestamps,
-`accession_decision_sha256`, `selected_accession`,
-`download_request_accession`, and `final_accession`
-from the accession manifests as the audit trail for those live decisions.
+limited by current NCBI metadata. Use `run_summary.log` timestamps together
+with `selected_accession`, `download_request_accession`, and
+`final_accession` from the accession manifests as the audit trail for those
+live decisions. `run_summary.log` shows abbreviated digest identifiers for
+quick comparison, not full digest strings.
 
 ## Known Limitations
 

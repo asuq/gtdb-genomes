@@ -35,4 +35,6 @@ exit_code
 
 Notes:
 The file is a human-readable log grouped into short sections.
+`run_id` and `accession_decision_sha256` are abbreviated to the first 12
+hexadecimal characters followed by `...` in the rendered log.
 download_method_requested is an internal provenance field and is always auto.
