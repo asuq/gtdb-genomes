@@ -240,6 +240,45 @@ def test_load_taxonomy_bundle_manifest_rejects_blank_required_fields(
         load_taxonomy_bundle_manifest(manifest_path)
 
 
+@pytest.mark.parametrize(
+    ("invalid_taxonomy_path", "expected_message"),
+    [
+        ("../escape.tsv.gz", "parent-directory references"),
+        ("/absolute/escape.tsv.gz", "relative path"),
+        ("C:/drive-rooted.tsv.gz", "drive-rooted"),
+    ],
+)
+def test_load_taxonomy_bundle_manifest_rejects_invalid_taxonomy_paths(
+    tmp_path: Path,
+    invalid_taxonomy_path: str,
+    expected_message: str,
+) -> None:
+    """Bundling manifest loading should reject taxonomy paths that escape the tree."""
+
+    manifest_path = tmp_path / "data" / "gtdb_taxonomy" / "releases.tsv"
+    write_manifest_text(
+        manifest_path,
+        "\n".join(
+            [
+                BOOTSTRAP_MANIFEST_HEADER,
+                build_bootstrap_manifest_row(
+                    "95.0",
+                    "95,95.0",
+                    invalid_taxonomy_path,
+                    "",
+                    "true",
+                    "https://example.org/release95/95.0/",
+                    "MD5SUM",
+                ),
+            ],
+        )
+        + "\n",
+    )
+
+    with pytest.raises(TaxonomyBundleError, match=expected_message):
+        load_taxonomy_bundle_manifest(manifest_path)
+
+
 def test_refresh_manifest_prefers_precompressed_source_when_available(
     tmp_path: Path,
 ) -> None:
@@ -727,6 +766,92 @@ def test_bootstrap_taxonomy_bundle_preserves_existing_release_on_failure(
 
     assert sentinel_path.read_text(encoding="ascii") == "original\n"
     assert release_root.is_dir()
+
+
+def test_bootstrap_taxonomy_bundle_restores_release_and_manifest_on_refresh_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Manifest refresh failures should roll back the swapped release directory."""
+
+    manifest_path = tmp_path / "data" / "gtdb_taxonomy" / "releases.tsv"
+    data_root = manifest_path.parent
+    release_root = data_root / "95.0"
+    release_root.mkdir(parents=True)
+    sentinel_path = release_root / "sentinel.txt"
+    sentinel_path.write_text("original\n", encoding="ascii")
+    original_manifest_text = "\n".join(
+        [
+            BOOTSTRAP_MANIFEST_HEADER,
+            build_bootstrap_manifest_row(
+                "95.0",
+                "95,95.0",
+                "bac120_taxonomy_r95.tsv.gz",
+                "",
+                "true",
+                "https://example.org/release95/95.0/",
+                "MD5SUM",
+            ),
+        ],
+    ) + "\n"
+    write_manifest_text(manifest_path, original_manifest_text)
+
+    monkeypatch.setattr(
+        "gtdb_genomes.taxonomy_bundle.load_checksum_mapping",
+        lambda source_root_url, checksum_filename: {
+            "bac120_taxonomy_r95.tsv.gz": ("checksum",),
+        },
+    )
+
+    def fake_materialise_taxonomy_file(
+        source_root_url: str,
+        target_name: str | None,
+        target_path: Path | None,
+        checksum_mapping: dict[str, tuple[str, ...]],
+    ) -> None:
+        """Create one staged payload without touching the network."""
+
+        del source_root_url, checksum_mapping
+        if target_name is None or target_path is None:
+            return
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_bytes(
+            gzip.compress(
+                b"RS_GCF_000001.1\td__Bacteria;g__Escherichia\n",
+                mtime=0,
+            ),
+        )
+
+    monkeypatch.setattr(
+        "gtdb_genomes.taxonomy_bundle.materialise_taxonomy_file",
+        fake_materialise_taxonomy_file,
+    )
+
+    def fail_refresh_runtime_manifest(
+        manifest_path: Path,
+        entries: tuple[TaxonomyBundleEntry, ...],
+        data_root: Path,
+    ) -> None:
+        """Fail deterministically after the staged release has been swapped in."""
+
+        del manifest_path, entries, data_root
+        raise TaxonomyBundleError("refresh failed")
+
+    monkeypatch.setattr(
+        "gtdb_genomes.taxonomy_bundle.refresh_runtime_manifest",
+        fail_refresh_runtime_manifest,
+    )
+
+    with pytest.raises(TaxonomyBundleError, match="refresh failed"):
+        bootstrap_taxonomy_bundle(
+            manifest_path,
+            data_root=data_root,
+            allow_file_urls=True,
+        )
+
+    assert manifest_path.read_text(encoding="ascii") == original_manifest_text
+    assert sentinel_path.read_text(encoding="ascii") == "original\n"
+    assert not (release_root / "bac120_taxonomy_r95.tsv.gz").exists()
 
 
 def test_bootstrap_manifest_entries_refreshes_manifest_after_each_successful_release(

@@ -11,6 +11,7 @@ from gtdb_genomes.bundled_data_validation import (
     hash_sha256_file,
     normalise_optional_row_count,
     normalise_optional_sha256,
+    normalise_optional_taxonomy_relative_path,
     validate_taxonomy_file,
 )
 from gtdb_genomes.manifest_validation import (
@@ -113,14 +114,12 @@ def parse_aliases(raw_aliases: str) -> tuple[str, ...]:
 
 
 def parse_optional_path(raw_path: str | None) -> str | None:
-    """Convert an optional TSV path field into a normalised value."""
+    """Convert and validate one optional taxonomy path field."""
 
-    if raw_path is None:
-        return None
-    value = raw_path.strip()
-    if not value:
-        return None
-    return value
+    try:
+        return normalise_optional_taxonomy_relative_path(raw_path)
+    except ValueError as error:
+        raise BundledDataError(str(error)) from error
 
 
 def parse_is_latest(raw_value: str) -> bool:
@@ -413,7 +412,15 @@ def build_taxonomy_path(
 
     if relative_path is None:
         return None
-    return data_root / resolved_release / relative_path
+    try:
+        validated_relative_path = normalise_optional_taxonomy_relative_path(
+            relative_path,
+        )
+    except ValueError as error:
+        raise BundledDataError(str(error)) from error
+    if validated_relative_path is None:
+        return None
+    return data_root / resolved_release / validated_relative_path
 
 
 def build_release_resolution(

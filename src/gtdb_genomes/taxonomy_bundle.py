@@ -18,6 +18,7 @@ from gtdb_genomes.bundled_data_validation import (
     describe_taxonomy_file,
     normalise_optional_row_count,
     normalise_optional_sha256,
+    normalise_optional_taxonomy_relative_path,
 )
 from gtdb_genomes.manifest_validation import (
     ManifestHeaderValidationError,
@@ -99,6 +100,15 @@ def normalise_optional_field(raw_value: str | None) -> str | None:
     if not value:
         return None
     return value
+
+
+def normalise_optional_taxonomy_path(raw_value: str | None) -> str | None:
+    """Return one validated optional taxonomy-relative manifest field."""
+
+    try:
+        return normalise_optional_taxonomy_relative_path(raw_value)
+    except ValueError as error:
+        raise TaxonomyBundleError(str(error)) from error
 
 
 def get_required_manifest_field(
@@ -255,8 +265,12 @@ def parse_manifest_row(
             manifest_path,
             line_number,
         ),
-        bacterial_taxonomy=normalise_optional_field(row.get("bacterial_taxonomy")),
-        archaeal_taxonomy=normalise_optional_field(row.get("archaeal_taxonomy")),
+        bacterial_taxonomy=normalise_optional_taxonomy_path(
+            row.get("bacterial_taxonomy"),
+        ),
+        archaeal_taxonomy=normalise_optional_taxonomy_path(
+            row.get("archaeal_taxonomy"),
+        ),
         bacterial_taxonomy_sha256=parse_manifest_integrity_field(
             row.get("bacterial_taxonomy_sha256"),
             field_name="bacterial_taxonomy_sha256",
@@ -772,8 +786,8 @@ def refresh_runtime_manifest(
 def swap_release_directories(
     staged_release_directory: Path,
     release_directory: Path,
-) -> None:
-    """Atomically replace one release directory while preserving the old tree."""
+) -> Path | None:
+    """Atomically replace one release directory while preserving a rollback copy."""
 
     backup_directory = release_directory.parent / (
         f".{release_directory.name}.backup"
@@ -790,9 +804,26 @@ def swap_release_directories(
                 shutil.rmtree(release_directory)
             backup_directory.rename(release_directory)
         raise
-    else:
-        if backup_directory.exists():
-            shutil.rmtree(backup_directory)
+    return backup_directory if backup_directory.exists() else None
+
+
+def restore_release_directory(
+    release_directory: Path,
+    backup_directory: Path | None,
+) -> None:
+    """Restore one release directory from its backup copy if present."""
+
+    if release_directory.exists():
+        shutil.rmtree(release_directory)
+    if backup_directory is not None and backup_directory.exists():
+        backup_directory.rename(release_directory)
+
+
+def discard_release_backup(backup_directory: Path | None) -> None:
+    """Remove one staged release backup copy when replacement succeeds."""
+
+    if backup_directory is not None and backup_directory.exists():
+        shutil.rmtree(backup_directory)
 
 
 def bootstrap_manifest_entries(
@@ -845,9 +876,18 @@ def bootstrap_manifest_entries(
                 archaeal_target,
                 checksum_mapping,
             )
-            swap_release_directories(staged_release_directory, release_directory)
-        if manifest_path is not None:
-            refresh_runtime_manifest(manifest_path, entries, data_root)
+            backup_directory = swap_release_directories(
+                staged_release_directory,
+                release_directory,
+            )
+        try:
+            if manifest_path is not None:
+                refresh_runtime_manifest(manifest_path, entries, data_root)
+        except Exception:
+            restore_release_directory(release_directory, backup_directory)
+            raise
+        else:
+            discard_release_backup(backup_directory)
         if logger is not None:
             logger.info("Bootstrapped release %s", entry.resolved_release)
         for generated_path in (

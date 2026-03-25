@@ -14,7 +14,9 @@ from gtdb_genomes.bundled_data_validation import (
 from gtdb_genomes.cli import main
 from gtdb_genomes.release_resolver import (
     BundledDataError,
+    ReleaseManifestEntry,
     ReleaseResolution,
+    build_release_resolution,
     get_release_manifest_path,
     load_release_manifest,
     resolve_and_validate_release,
@@ -193,6 +195,63 @@ def test_load_release_manifest_rejects_duplicate_aliases(tmp_path: Path) -> None
 
     with pytest.raises(BundledDataError, match="duplicate alias"):
         load_release_manifest(get_release_manifest_path(data_root))
+
+
+@pytest.mark.parametrize(
+    ("invalid_taxonomy_path", "expected_message"),
+    [
+        ("../escape.tsv.gz", "parent-directory references"),
+        ("/absolute/escape.tsv.gz", "relative path"),
+        ("C:/drive-rooted.tsv.gz", "drive-rooted"),
+    ],
+)
+def test_load_release_manifest_rejects_invalid_taxonomy_paths(
+    tmp_path: Path,
+    invalid_taxonomy_path: str,
+    expected_message: str,
+) -> None:
+    """Manifest loading should reject taxonomy paths that escape the release tree."""
+
+    data_root = tmp_path / "gtdb_taxonomy"
+    write_manifest(
+        get_release_manifest_path(data_root),
+        "\n".join(
+            [
+                f"95.0\t95,95.0\t{invalid_taxonomy_path}\t\ttrue",
+            ],
+        ),
+    )
+
+    with pytest.raises(BundledDataError, match=expected_message):
+        load_release_manifest(get_release_manifest_path(data_root))
+
+
+def test_build_release_resolution_rejects_invalid_taxonomy_paths(
+    tmp_path: Path,
+) -> None:
+    """Runtime release resolution should reject path traversal in manifest rows."""
+
+    data_root = tmp_path / "gtdb_taxonomy"
+    manifest_path = get_release_manifest_path(data_root)
+    entry = ReleaseManifestEntry(
+        resolved_release="95.0",
+        aliases=("95", "95.0"),
+        bacterial_taxonomy="C:/drive-rooted.tsv.gz",
+        archaeal_taxonomy=None,
+        bacterial_taxonomy_sha256="0" * 64,
+        archaeal_taxonomy_sha256=None,
+        bacterial_taxonomy_rows=1,
+        archaeal_taxonomy_rows=None,
+        is_latest=True,
+    )
+
+    with pytest.raises(BundledDataError, match="drive-rooted"):
+        build_release_resolution(
+            entry,
+            requested_release="95",
+            data_root=data_root,
+            manifest_path=manifest_path,
+        )
 
 
 def test_resolve_and_validate_release_uses_local_taxonomy_files(

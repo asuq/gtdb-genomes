@@ -5,7 +5,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 from io import StringIO
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
 def hash_sha256_bytes(data: bytes) -> str:
@@ -47,6 +47,26 @@ def normalise_optional_row_count(raw_value: str | None) -> int | None:
     if row_count <= 0:
         raise ValueError("must be a positive integer row count")
     return row_count
+
+
+def normalise_optional_taxonomy_relative_path(raw_value: str | None) -> str | None:
+    """Normalise one optional relative taxonomy path from a manifest cell."""
+
+    if raw_value is None:
+        return None
+    value = raw_value.strip()
+    if not value:
+        return None
+    normalised_value = value.replace("\\", "/")
+    windows_path = PureWindowsPath(normalised_value)
+    if windows_path.drive:
+        raise ValueError("must not be drive-rooted")
+    posix_path = PurePosixPath(normalised_value)
+    if posix_path.is_absolute():
+        raise ValueError("must be a relative path")
+    if any(part in {".", ".."} for part in posix_path.parts):
+        raise ValueError("must not contain parent-directory references")
+    return str(posix_path)
 
 
 def decode_taxonomy_bytes(
