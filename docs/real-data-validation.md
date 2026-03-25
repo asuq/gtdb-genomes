@@ -198,7 +198,7 @@ The main GitHub Actions CI workflow runs:
 
 - `A1` to `A9`
 - `B1` to `B6`
-- `C1`, `C2`, `C3`, `C4`, `C5`, and `C6`
+- `C1`, `C2`, `C3`, `C4`, `C5`, `C6`, and `C8`
 
 The pytest matrix covers Python `3.12`, `3.13`, and `3.14`.
 
@@ -228,7 +228,7 @@ The CI workflow excludes:
 
 The dedicated release workflow validates both the wheel and `sdist`
 packaged-runtime paths with the same build-and-clean-runtime split and reuses
-`C5` as part of the packaged-runtime validation gate.
+`C5` and `C8` as part of the packaged-runtime validation gate.
 
 ## Remote Server Quickstart
 
@@ -355,6 +355,9 @@ Optional environment:
   forbids that combination and upstream debug output can expose the key
 
 `C5` runs without `NCBI_API_KEY` and uses it opportunistically when present.
+`C8` installs a case-local `datasets` wrapper that intentionally interrupts one
+normal direct download after the archive starts being written, so
+`download_failures.tsv` captures a non-suppressed real download failure.
 
 Required environment for `full-large` coverage:
 
@@ -487,6 +490,7 @@ Acceptance highlights:
 - `C5`: `202 / g__Bacteroides`
 - `C6`: `release220/220.0 / s__Thermoflexus hugenholtzii`
 - `C7`: optional `214 / g__Bacteroides`
+- `C8`: `226 / s__Thermoflexus hugenholtzii / intentional interrupted direct download`
 
 Acceptance highlights:
 
@@ -497,6 +501,8 @@ Acceptance highlights:
   `dehydrate` or `dehydrate_fallback_direct`
 - `C6`: exit `0`, no output tree
 - `C7`: run only with large free disk and a long window
+- `C8`: exit `7`, `download_method_used=direct`, and at least one
+  unsuppressed `retry_exhausted` subprocess row in `download_failures.tsv`
 - successful direct cases leave `download_failures.tsv` empty; prioritise the
   shell exit code and `run_summary.log` `failed_accessions`
 

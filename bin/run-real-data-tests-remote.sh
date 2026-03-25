@@ -156,8 +156,90 @@ remote_check_dehydrate_suppressed_partial_result() {
 }
 
 
+remote_check_interrupted_direct_failure() {
+    local output_root=$1
+    local suppression_note="NCBI metadata marked this assembly as suppressed; the genome payload may no longer be downloadable."
+
+    real_data_assert_run_summary_matches \
+        "${output_root}" \
+        "download_method_used" \
+        '^direct$' \
+        "remote interrupted direct method" || return 1
+    real_data_assert_run_summary_matches \
+        "${output_root}" \
+        "successful_accessions" \
+        '^0$' \
+        "remote interrupted direct zero successes" || return 1
+    real_data_assert_run_summary_matches \
+        "${output_root}" \
+        "failed_accessions" \
+        '^[1-9][0-9]*$' \
+        "remote interrupted direct failure count" || return 1
+    real_data_assert_any_row_column_matches \
+        "${output_root}/accession_map.tsv" \
+        "download_status" \
+        '^failed$' \
+        "remote interrupted direct failed accession map row" || return 1
+
+    if [ ! -f "${output_root}/download_failures.tsv" ]; then
+        real_data_fail_message \
+            "remote interrupted direct: missing download_failures.tsv"
+        return 1
+    fi
+
+    if ! awk -F '\t' -v suppression_note="${suppression_note}" '
+        NR == 1 {
+            for (field_index = 1; field_index <= NF; field_index += 1) {
+                header_value = $field_index
+                sub(/\r$/, "", header_value)
+                if (header_value == "suppressed") {
+                    suppressed_index = field_index
+                }
+                if (header_value == "error_type") {
+                    error_type_index = field_index
+                }
+                if (header_value == "status") {
+                    status_index = field_index
+                }
+                if (header_value == "reason") {
+                    reason_index = field_index
+                }
+            }
+            next
+        }
+        suppressed_index > 0 && error_type_index > 0 && status_index > 0 && reason_index > 0 {
+            suppressed_value = $suppressed_index
+            error_type_value = $error_type_index
+            status_value = $status_index
+            reason_value = $reason_index
+            sub(/\r$/, "", suppressed_value)
+            sub(/\r$/, "", error_type_value)
+            sub(/\r$/, "", status_value)
+            sub(/\r$/, "", reason_value)
+            if (suppressed_value == "false" && error_type_value == "subprocess" && status_value == "retry_exhausted" && length(reason_value) > 0 && index(reason_value, suppression_note) == 0) {
+                found = 1
+                exit 0
+            }
+        }
+        END {
+            if (suppressed_index == 0 || error_type_index == 0 || status_index == 0 || reason_index == 0) {
+                exit 2
+            }
+            exit(found ? 0 : 1)
+        }
+    ' "${output_root}/download_failures.tsv"; then
+        real_data_fail_message \
+            "remote interrupted direct: no unsuppressed retry-exhausted subprocess failure row found"
+        return 1
+    fi
+
+    return 0
+}
+
+
 run_remote_case() {
     local case_id=$1
+    local wrapper_root=""
 
     case "${case_id}" in
         C1)
@@ -233,6 +315,24 @@ run_remote_case() {
                 --threads 12 \
                 --include genome
             ;;
+        C8)
+            wrapper_root=$(
+                real_data_install_interrupting_datasets_wrapper \
+                    "${REMOTE_TEST_ROOT}/_evidence/${case_id}/datasets-wrapper"
+            ) || return 1
+            real_data_run_case \
+                "${REMOTE_TEST_ROOT}" "${case_id}" 7 present "" \
+                remote_check_interrupted_direct_failure \
+                env \
+                "PATH=${wrapper_root}:${PATH}" \
+                "REAL_DATA_REAL_DATASETS_BIN=$(command -v datasets)" \
+                REAL_DATA_INTERRUPT_DATASETS_DOWNLOAD=1 \
+                gtdb-genomes \
+                --gtdb-release 226 \
+                --gtdb-taxon "s__Thermoflexus hugenholtzii" \
+                --threads 2 \
+                --include genome,gff3,protein
+            ;;
         *)
             real_data_die "Unknown remote case ID: ${case_id}"
             ;;
@@ -275,7 +375,7 @@ main() {
         --dry-run
 
     if [ "${#selected_cases[@]}" -eq 0 ]; then
-        selected_cases=(C1 C2 C3 C4 C5 C6)
+        selected_cases=(C1 C2 C3 C4 C5 C6 C8)
         if [ "${RUN_OPTIONAL_LARGE:-0}" = "1" ]; then
             selected_cases+=(C7)
         fi

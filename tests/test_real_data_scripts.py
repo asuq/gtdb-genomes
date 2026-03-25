@@ -213,6 +213,97 @@ def test_real_data_detect_uv_python_bin_uses_uv_resolved_interpreter() -> None:
     assert result.stdout.strip() == expected.stdout.strip()
 
 
+def test_real_data_interrupting_datasets_wrapper_passes_through_non_download_commands(
+    tmp_path: Path,
+) -> None:
+    """The interrupting datasets wrapper should leave non-download commands unchanged."""
+
+    fake_bin_dir = tmp_path / "bin"
+    fake_bin_dir.mkdir()
+    fake_datasets = fake_bin_dir / "datasets"
+    fake_datasets.write_text(
+        "#!/usr/bin/env bash\n"
+        "if [ \"$1\" = \"version\" ]; then\n"
+        "  printf 'datasets 99.0\\n'\n"
+        "  exit 0\n"
+        "fi\n"
+        "printf 'unexpected args: %s\\n' \"$*\" >&2\n"
+        "exit 2\n",
+        encoding="utf-8",
+    )
+    fake_datasets.chmod(0o755)
+    wrapper_root = tmp_path / "wrapper"
+    script = (
+        f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        f"export PATH={shlex.quote(str(fake_bin_dir))}:\"$PATH\"\n"
+        f"wrapper_root=$(real_data_install_interrupting_datasets_wrapper {shlex.quote(str(wrapper_root))})\n"
+        'REAL_DATA_INTERRUPT_DATASETS_DOWNLOAD=1 '
+        f"REAL_DATA_REAL_DATASETS_BIN={shlex.quote(str(fake_datasets))} "
+        '"${wrapper_root}/datasets" version\n'
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "datasets 99.0"
+
+
+def test_real_data_interrupting_datasets_wrapper_terminates_download_after_archive_creation(
+    tmp_path: Path,
+) -> None:
+    """The interrupting datasets wrapper should force a non-zero download exit."""
+
+    fake_bin_dir = tmp_path / "bin"
+    fake_bin_dir.mkdir()
+    fake_datasets = fake_bin_dir / "datasets"
+    fake_datasets.write_text(
+        "#!/usr/bin/env bash\n"
+        "archive_path=''\n"
+        "while [ \"$#\" -gt 0 ]; do\n"
+        "  case \"$1\" in\n"
+        "    --filename)\n"
+        "      archive_path=$2\n"
+        "      shift 2\n"
+        "      ;;\n"
+        "    --filename=*)\n"
+        "      archive_path=${1#--filename=}\n"
+        "      shift\n"
+        "      ;;\n"
+        "    *)\n"
+        "      shift\n"
+        "      ;;\n"
+        "  esac\n"
+        "done\n"
+        "trap 'exit 143' TERM\n"
+        "mkdir -p \"$(dirname -- \"${archive_path}\")\"\n"
+        "printf 'zip' > \"${archive_path}\"\n"
+        "sleep 10\n"
+        "exit 0\n",
+        encoding="utf-8",
+    )
+    fake_datasets.chmod(0o755)
+    wrapper_root = tmp_path / "wrapper"
+    archive_path = tmp_path / "archive.zip"
+    script = (
+        f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        f"export PATH={shlex.quote(str(fake_bin_dir))}:\"$PATH\"\n"
+        f"wrapper_root=$(real_data_install_interrupting_datasets_wrapper {shlex.quote(str(wrapper_root))})\n"
+        'REAL_DATA_INTERRUPT_DATASETS_DOWNLOAD=1 '
+        f"REAL_DATA_REAL_DATASETS_BIN={shlex.quote(str(fake_datasets))} "
+        '"${wrapper_root}/datasets" download genome accession '
+        f"--filename {shlex.quote(str(archive_path))}\n"
+        "status=$?\n"
+        "printf 'status=%s\\n' \"${status}\"\n"
+        "[ \"${status}\" -ne 0 ]\n"
+        f"[ -s {shlex.quote(str(archive_path))} ]\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0
+    assert "status=" in result.stdout
+
+
 def test_real_data_run_command_check_redacts_logs_and_records_versions(
     tmp_path: Path,
 ) -> None:
@@ -545,6 +636,9 @@ def test_local_runner_keeps_only_c7_as_api_key_required_case() -> None:
     assert "base_command" not in c5_block
     assert "printf '%s\\0'" not in c5_block
     assert "real_data_require_ncbi_api_key" not in c5_block
+    c8_block = remote_script.split("C8)", 1)[1].split("*)", 1)[0]
+    assert "real_data_require_ncbi_api_key" not in c8_block
+    assert "selected_cases=(C1 C2 C3 C4 C5 C6 C8)" in remote_script
     assert "C7)\n            real_data_require_ncbi_api_key" in remote_script
 
 
@@ -819,6 +913,51 @@ def test_remote_check_dehydrate_suppressed_partial_result_rejects_generic_partia
 
     assert result.returncode != 0
     assert "lacks suppression note" in result.stderr
+
+
+def test_remote_check_interrupted_direct_failure_accepts_unsuppressed_retry_exhausted_row(
+    tmp_path: Path,
+) -> None:
+    """C8 should accept an intentionally interrupted unsuppressed direct failure."""
+
+    output_root = tmp_path / "c8-output"
+    output_root.mkdir()
+    (output_root / "run_summary.log").write_text(
+        build_run_summary_log(
+            exit_code=7,
+            download_method_used="direct",
+            successful_accessions=0,
+            failed_accessions=1,
+        ),
+        encoding="utf-8",
+    )
+    (output_root / "accession_map.tsv").write_text(
+        "final_accession\trequested_taxa\tgtdb_accessions\tselected_accessions\t"
+        "download_request_accessions\tconversion_status\tdownload_status\t"
+        "output_relpaths\tduplicate_across_taxa\n"
+        "\ts__Thermoflexus hugenholtzii\tRS_GCF_000016725.1\tGCF_000016725.1\tGCF_000016725.1\t"
+        "failed_no_usable_accession\tfailed\t\tfalse\n",
+        encoding="utf-8",
+    )
+    (output_root / "download_failures.tsv").write_text(
+        "accession\trequested_taxa\tgtdb_accessions\tsuppressed\tstage\terror_type\treason\tstatus\n"
+        "GCF_000016725.1\ts__Thermoflexus hugenholtzii\tRS_GCF_000016725.1\tfalse\tpreferred_download\tsubprocess\tterminated during test interruption\tretry_exhausted\n",
+        encoding="utf-8",
+    )
+    function_text = extract_bash_function(
+        Path("bin/run-real-data-tests-remote.sh"),
+        "remote_check_interrupted_direct_failure",
+    )
+    script = (
+        f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        f"{function_text}\n"
+        "remote_check_interrupted_direct_failure "
+        f"{shlex.quote(str(output_root))}\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0
 
 
 def test_server_wrapper_smoke_preset_uses_remote_smoke_cases(

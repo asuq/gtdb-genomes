@@ -97,7 +97,7 @@ jobs:
           REMOTE_TEST_ROOT: /tmp/gtdb-realtests/release
         run: >-
           micromamba run -n gtdb-genome-release
-          bash bin/run-real-data-tests-remote.sh C1 C2 C3 C4 C5 C6
+          bash bin/run-real-data-tests-remote.sh C1 C2 C3 C4 C5 C6 C8
 
   sdist-runtime-validation:
     name: Validate packaged sdist runtime
@@ -150,7 +150,7 @@ jobs:
           REMOTE_TEST_ROOT: /tmp/gtdb-realtests/release-sdist
         run: >-
           micromamba run -n gtdb-genome-release-sdist
-          bash bin/run-real-data-tests-remote.sh C1 C2 C3 C4 C5 C6
+          bash bin/run-real-data-tests-remote.sh C1 C2 C3 C4 C5 C6 C8
 
   publish:
     name: Publish release

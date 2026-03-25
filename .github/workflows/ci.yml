@@ -202,7 +202,7 @@ jobs:
           REMOTE_TEST_ROOT: /tmp/gtdb-realtests/ci-c
         run: >-
           micromamba run -n gtdb-genome-runtime
-          bash bin/run-real-data-tests-remote.sh C1 C2 C3 C4 C5 C6
+          bash bin/run-real-data-tests-remote.sh C1 C2 C3 C4 C5 C6 C8
 
       - name: Upload C validation evidence
         if: always()

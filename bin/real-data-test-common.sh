@@ -243,6 +243,88 @@ real_data_prepare_case_command() {
 }
 
 
+real_data_install_interrupting_datasets_wrapper() {
+    local wrapper_root=$1
+    local wrapper_path="${wrapper_root}/datasets"
+
+    mkdir -p "${wrapper_root}"
+    cat > "${wrapper_path}" <<'EOF'
+#!/usr/bin/env bash
+
+set -u
+set -o pipefail
+
+real_data_wrapper_find_archive_path() {
+    local argument=""
+
+    while [ "$#" -gt 0 ]; do
+        argument=$1
+        case "${argument}" in
+            --filename)
+                if [ "$#" -lt 2 ]; then
+                    return 1
+                fi
+                printf '%s\n' "$2"
+                return 0
+                ;;
+            --filename=*)
+                printf '%s\n' "${argument#--filename=}"
+                return 0
+                ;;
+        esac
+        shift
+    done
+    return 1
+}
+
+
+real_datasets_bin="${REAL_DATA_REAL_DATASETS_BIN:-}"
+if [ -z "${real_datasets_bin}" ] || [ ! -x "${real_datasets_bin}" ]; then
+    printf 'ERROR: REAL_DATA_REAL_DATASETS_BIN must name an executable datasets binary\n' >&2
+    exit 1
+fi
+
+archive_path=""
+if [ "${REAL_DATA_INTERRUPT_DATASETS_DOWNLOAD:-0}" = "1" ] && \
+    [ "$#" -ge 3 ] && \
+    [ "$1" = "download" ] && \
+    [ "$2" = "genome" ] && \
+    [ "$3" = "accession" ]; then
+    archive_path=$(real_data_wrapper_find_archive_path "$@") || archive_path=""
+fi
+
+if [ -z "${archive_path}" ]; then
+    exec "${real_datasets_bin}" "$@"
+fi
+
+"${real_datasets_bin}" "$@" &
+child_pid=$!
+while kill -0 "${child_pid}" 2>/dev/null; do
+    if [ -s "${archive_path}" ]; then
+        kill -TERM "${child_pid}" 2>/dev/null || true
+        break
+    fi
+    sleep "${REAL_DATA_INTERRUPT_POLL_SECONDS:-0.1}"
+done
+
+wait_attempts=0
+while kill -0 "${child_pid}" 2>/dev/null && [ "${wait_attempts}" -lt 20 ]; do
+    sleep 0.1
+    wait_attempts=$((wait_attempts + 1))
+done
+
+if kill -0 "${child_pid}" 2>/dev/null; then
+    kill -KILL "${child_pid}" 2>/dev/null || true
+fi
+
+wait "${child_pid}"
+exit $?
+EOF
+    chmod +x "${wrapper_path}"
+    printf '%s\n' "${wrapper_root}"
+}
+
+
 real_data_run_command_capture() {
     local stdout_file=$1
     local stderr_file=$2
