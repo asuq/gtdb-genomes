@@ -474,11 +474,12 @@ def test_parse_args_rejects_leftover_run_artefacts(
     captured = capsys.readouterr()
     assert error.value.code == 2
     assert (
-        "detected leftover GTDB-genomes output from a previous run"
+        "detected leftover gtdb-genomes output from a previous run"
         in captured.err
     )
+    assert f"  {output_dir}" in captured.err
     assert "aborting because these artefacts already exist" in captured.err
-    assert artefact in captured.err
+    assert f"  - {artefact}" in captured.err
 
 
 def test_parse_args_accepts_ncbi_api_key_flag(tmp_path: Path) -> None:

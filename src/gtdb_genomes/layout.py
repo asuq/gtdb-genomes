@@ -154,10 +154,11 @@ def build_leftover_run_abort_message(
 ) -> str:
     """Build one user-facing abort message for leftover run artefacts."""
 
-    artefacts_text = ", ".join(artefacts)
+    artefacts_text = "\n".join(f"  - {artefact}" for artefact in artefacts)
     return (
-        "detected leftover GTDB-genomes output from a previous run in "
-        f"{output_root}; aborting because these artefacts already exist: "
+        "detected leftover gtdb-genomes output from a previous run in:\n"
+        f"  {output_root}\n"
+        "aborting because these artefacts already exist:\n"
         f"{artefacts_text}"
     )
 

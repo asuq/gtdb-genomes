@@ -17,6 +17,7 @@ from gtdb_genomes.layout import (
     RESERVED_OUTPUT_ARTEFACTS,
     RUN_SUMMARY_KEYS,
     TAXON_ACCESSION_COLUMNS,
+    build_leftover_run_abort_message,
     build_unzip_command,
     copy_accession_payload,
     extract_archive,
@@ -102,9 +103,35 @@ def test_initialise_run_directories_rejects_leftover_run_artefacts(
 
     with pytest.raises(
         LayoutError,
-        match="detected leftover GTDB-genomes output from a previous run",
+        match="detected leftover gtdb-genomes output from a previous run",
     ):
         initialise_run_directories(output_root)
+
+
+def test_build_leftover_run_abort_message_formats_multiline_bullet_list(
+    tmp_path: Path,
+) -> None:
+    """Leftover-output abort messages should be readable and line-broken."""
+
+    output_root = tmp_path / "output"
+
+    message = build_leftover_run_abort_message(
+        output_root,
+        (
+            "accession_map.tsv",
+            "taxa",
+            "taxon_summary.tsv",
+        ),
+    )
+
+    assert message == (
+        "detected leftover gtdb-genomes output from a previous run in:\n"
+        f"  {output_root}\n"
+        "aborting because these artefacts already exist:\n"
+        "  - accession_map.tsv\n"
+        "  - taxa\n"
+        "  - taxon_summary.tsv"
+    )
 
 
 def test_find_leftover_run_artefacts_returns_sorted_names(tmp_path: Path) -> None:
