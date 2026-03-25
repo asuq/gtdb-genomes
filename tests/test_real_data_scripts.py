@@ -311,15 +311,15 @@ def test_real_data_prepare_case_command_skips_debug_for_api_key_case(
     assert "--ncbi-api-key" not in command_text
 
 
-def test_real_data_append_optional_ncbi_api_key_keeps_command_without_key() -> None:
-    """Optional API-key helper should leave commands unchanged when unset."""
+def test_real_data_command_stream_keeps_command_without_key() -> None:
+    """NUL-delimited command streaming should leave arguments unchanged."""
 
     script = (
         f"source {shlex.quote(str(COMMON_HELPERS))}\n"
         "unset NCBI_API_KEY\n"
         "while IFS= read -r -d '' argument; do\n"
         "  printf '%s\\n' \"$argument\"\n"
-        "done < <(real_data_append_optional_ncbi_api_key gtdb-genomes --threads 2)\n"
+        "done < <(printf '%s\\0' gtdb-genomes --threads 2)\n"
     )
 
     result = run_bash(script)
@@ -328,15 +328,15 @@ def test_real_data_append_optional_ncbi_api_key_keeps_command_without_key() -> N
     assert result.stdout.splitlines() == ["gtdb-genomes", "--threads", "2"]
 
 
-def test_real_data_append_optional_ncbi_api_key_keeps_command_when_key_is_set() -> None:
-    """Optional API-key helper should leave ambient-secret usage unchanged."""
+def test_real_data_command_stream_keeps_command_when_key_is_set() -> None:
+    """NUL-delimited command streaming should ignore ambient API-key state."""
 
     script = (
         f"source {shlex.quote(str(COMMON_HELPERS))}\n"
         "export NCBI_API_KEY=secret\n"
         "while IFS= read -r -d '' argument; do\n"
         "  printf '%s\\n' \"$argument\"\n"
-        "done < <(real_data_append_optional_ncbi_api_key gtdb-genomes --threads 2)\n"
+        "done < <(printf '%s\\0' gtdb-genomes --threads 2)\n"
     )
 
     result = run_bash(script)
@@ -500,14 +500,14 @@ def test_local_runner_keeps_only_c7_as_api_key_required_case() -> None:
         encoding="utf-8",
     )
 
-    assert "real_data_append_optional_ncbi_api_key" in local_script
-    assert "real_data_append_optional_ncbi_api_key" in remote_script
+    assert "real_data_append_optional_ncbi_api_key" not in local_script
+    assert "real_data_append_optional_ncbi_api_key" not in remote_script
     assert "B2)\n            real_data_require_ncbi_api_key" not in local_script
     assert "B6)\n            real_data_require_ncbi_api_key" not in local_script
     assert "C2)\n            real_data_require_ncbi_api_key" not in remote_script
     assert "C3)\n            real_data_require_ncbi_api_key" not in remote_script
     c5_block = remote_script.split("C5)", 1)[1].split("C6)", 1)[0]
-    assert "real_data_append_optional_ncbi_api_key" in c5_block
+    assert "printf '%s\\0' \"${base_command[@]}\"" in c5_block
     assert "real_data_require_ncbi_api_key" not in c5_block
     assert "C7)\n            real_data_require_ncbi_api_key" in remote_script
 

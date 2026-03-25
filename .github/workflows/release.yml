@@ -68,12 +68,12 @@ jobs:
       - name: Create runtime environment
         run: >-
           micromamba create -y -n gtdb-genome-release python=3.12 pip
-          ncbi-datasets-cli=18.21.0 unzip=6.0
+          polars=1.31.0 tqdm=4.67.1 ncbi-datasets-cli=18.21.0 unzip=6.0
 
       - name: Install built wheel into clean runtime
         run: >-
           micromamba run -n gtdb-genome-release
-          python -m pip install --force-reinstall dist/*.whl
+          python -m pip install --force-reinstall --no-deps dist/*.whl
 
       - name: Confirm runtime has no uv on PATH
         run: >-
@@ -119,7 +119,7 @@ jobs:
       - name: Create runtime environment
         run: >-
           micromamba create -y -n gtdb-genome-release-sdist
-          python=3.12 pip hatchling polars
+          python=3.12 pip hatchling polars=1.31.0 tqdm=4.67.1
           ncbi-datasets-cli=18.21.0 unzip=6.0
 
       - name: Install built sdist into clean runtime

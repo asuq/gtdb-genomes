@@ -185,7 +185,7 @@ run_remote_case() {
             command=()
             while IFS= read -r -d '' argument; do
                 command+=("${argument}")
-            done < <(real_data_append_optional_ncbi_api_key "${base_command[@]}")
+            done < <(printf '%s\0' "${base_command[@]}")
             real_data_run_case \
                 "${REMOTE_TEST_ROOT}" "${case_id}" 0 present "" \
                 remote_check_direct_success \
@@ -203,7 +203,7 @@ run_remote_case() {
             command=()
             while IFS= read -r -d '' argument; do
                 command+=("${argument}")
-            done < <(real_data_append_optional_ncbi_api_key "${base_command[@]}")
+            done < <(printf '%s\0' "${base_command[@]}")
             real_data_run_case \
                 "${REMOTE_TEST_ROOT}" "${case_id}" 0 present "" \
                 remote_check_direct_success \
@@ -231,7 +231,7 @@ run_remote_case() {
             command=()
             while IFS= read -r -d '' argument; do
                 command+=("${argument}")
-            done < <(real_data_append_optional_ncbi_api_key "${base_command[@]}")
+            done < <(printf '%s\0' "${base_command[@]}")
             real_data_run_case \
                 "${REMOTE_TEST_ROOT}" "${case_id}" '0|6' present "" \
                 remote_check_dehydrate_suppressed_partial_result \

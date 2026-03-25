@@ -244,7 +244,7 @@ run_local_case() {
             command=()
             while IFS= read -r -d '' argument; do
                 command+=("${argument}")
-            done < <(real_data_append_optional_ncbi_api_key "${base_command[@]}")
+            done < <(printf '%s\0' "${base_command[@]}")
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 6 present 'PRJNA417962' \
                 local_check_legacy_mixed \
@@ -293,7 +293,7 @@ run_local_case() {
             command=()
             while IFS= read -r -d '' argument; do
                 command+=("${argument}")
-            done < <(real_data_append_optional_ncbi_api_key "${base_command[@]}")
+            done < <(printf '%s\0' "${base_command[@]}")
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 present "" \
                 local_check_direct_success \

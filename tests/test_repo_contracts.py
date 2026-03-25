@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from gtdb_genomes.cli import build_parser
 from gtdb_genomes.preflight import SUPPORTED_TOOL_VERSIONS
 
 
@@ -231,9 +232,7 @@ def test_pyproject_exposes_console_script() -> None:
     assert pyproject["tool"]["hatch"]["build"]["hooks"]["custom"]["path"] == (
         "hatch_build.py"
     )
-    assert pyproject["tool"]["hatch"]["metadata"]["hooks"]["custom"]["path"] == (
-        "hatch_metadata.py"
-    )
+    assert "metadata" not in pyproject["tool"]["hatch"]
 
 
 def test_pyproject_build_targets_include_runtime_package_sources() -> None:
@@ -515,17 +514,7 @@ def test_module_entrypoint_help_runs() -> None:
     )
 
     assert result.returncode == 0
-    assert "-r GTDB_RELEASE, --gtdb-release GTDB_RELEASE" in result.stdout
-    assert "-t GTDB_TAXON" in result.stdout
-    assert "-o OUTDIR, --outdir OUTDIR" in result.stdout
-    assert "-j THREADS, --threads THREADS" in result.stdout
-    assert "-d, --dry-run" in result.stdout
-    assert "--gtdb-release" in result.stdout
-    assert "--gtdb-taxon" in result.stdout
-    assert "--outdir" in result.stdout
-    assert "--version-latest" in result.stdout
-    assert "--version-fixed" not in result.stdout
-    assert "gtdb-genomes" in result.stdout
+    assert result.stdout == build_parser().format_help()
 
 
 def test_module_entrypoint_without_arguments_shows_help() -> None:
@@ -541,14 +530,7 @@ def test_module_entrypoint_without_arguments_shows_help() -> None:
 
     assert result.returncode == 0
     assert result.stderr == ""
-    assert "-r GTDB_RELEASE, --gtdb-release GTDB_RELEASE" in result.stdout
-    assert "-t GTDB_TAXON" in result.stdout
-    assert "-o OUTDIR, --outdir OUTDIR" in result.stdout
-    assert "--gtdb-release" in result.stdout
-    assert "--gtdb-taxon" in result.stdout
-    assert "--outdir" in result.stdout
-    assert "--version-latest" in result.stdout
-    assert "gtdb-genomes" in result.stdout
+    assert result.stdout == build_parser().format_help()
 
 
 def test_source_checkout_cli_module_help_runs() -> None:
@@ -563,13 +545,7 @@ def test_source_checkout_cli_module_help_runs() -> None:
     )
 
     assert result.returncode == 0
-    assert "-r GTDB_RELEASE, --gtdb-release GTDB_RELEASE" in result.stdout
-    assert "-j THREADS, --threads THREADS" in result.stdout
-    assert "-d, --dry-run" in result.stdout
-    assert "--gtdb-release" in result.stdout
-    assert "--version-latest" in result.stdout
-    assert "--version-fixed" not in result.stdout
-    assert "gtdb-genomes" in result.stdout
+    assert result.stdout == build_parser().format_help()
 
 
 def test_source_checkout_cli_module_without_arguments_shows_help() -> None:
@@ -585,14 +561,7 @@ def test_source_checkout_cli_module_without_arguments_shows_help() -> None:
 
     assert result.returncode == 0
     assert result.stderr == ""
-    assert "-r GTDB_RELEASE, --gtdb-release GTDB_RELEASE" in result.stdout
-    assert "-t GTDB_TAXON" in result.stdout
-    assert "-o OUTDIR, --outdir OUTDIR" in result.stdout
-    assert "--gtdb-release" in result.stdout
-    assert "--gtdb-taxon" in result.stdout
-    assert "--outdir" in result.stdout
-    assert "--version-latest" in result.stdout
-    assert "gtdb-genomes" in result.stdout
+    assert result.stdout == build_parser().format_help()
 
 
 def test_runtime_docs_match_current_readme_and_usage_details() -> None:
@@ -1123,8 +1092,10 @@ def test_real_data_validation_guide_describes_local_requirements() -> None:
             "uv run python -m gtdb_genomes.bootstrap_taxonomy",
             "uv run gtdb-genomes",
             "LOCAL_LAUNCHER_MODE=module",
-            "A1` to `A9`: `uv`, `datasets`, and `unzip`",
-            "B1` to `B6`: `uv`, `datasets`, and `unzip`",
+            "default launcher mode requires `uv` on `PATH`",
+            "module launcher uses the checked-out `.venv/bin/python` directly",
+            "A1` to `A9`: `uv`, `datasets`, and `unzip` for the default launcher mode",
+            "B1` to `B6`: `uv`, `datasets`, and `unzip` for the default launcher mode",
             "--gtdb-release 226",
             "226 / s__Thermoflexus hugenholtzii",
             "226 / g__Methanobrevibacter",
@@ -1189,6 +1160,8 @@ def test_ci_workflow_runs_expected_validation_suites() -> None:
             "bash bin/install-micromamba-ci.sh",
             "micromamba create -y -n gtdb-genome",
             "python=3.12 uv pip",
+            "polars=1.31.0",
+            "tqdm=4.67.1",
             "windows-latest",
             "- \"3.13\"",
             "- \"3.14\"",
@@ -1205,8 +1178,9 @@ def test_ci_workflow_runs_expected_validation_suites() -> None:
             "python bin/inspect_built_artifacts.py dist",
             "actions/download-artifact@v7",
             "micromamba run -n gtdb-genome-runtime",
-            "python -m pip install --force-reinstall dist/*.whl",
+            "python -m pip install --force-reinstall --no-deps dist/*.whl",
             "micromamba create -y -n gtdb-genome-runtime-sdist",
+            "python=3.12 pip hatchling polars=1.31.0 tqdm=4.67.1",
             "python -m pip install --force-reinstall --no-deps",
             "--no-build-isolation dist/*.tar.gz",
             "micromamba run -n gtdb-genome-runtime-sdist",
@@ -1270,10 +1244,12 @@ def test_release_workflow_enforces_build_then_clean_runtime() -> None:
             "bash bin/install-micromamba-ci.sh",
             "micromamba create -y -n gtdb-genome-release",
             "python=3.12 pip",
+            "polars=1.31.0",
+            "tqdm=4.67.1",
             "micromamba run -n gtdb-genome-release",
-            "python -m pip install --force-reinstall dist/*.whl",
+            "python -m pip install --force-reinstall --no-deps dist/*.whl",
             "micromamba create -y -n gtdb-genome-release-sdist",
-            "python=3.12 pip hatchling polars",
+            "python=3.12 pip hatchling polars=1.31.0 tqdm=4.67.1",
             "micromamba run -n gtdb-genome-release-sdist",
             "python -m pip install --force-reinstall --no-deps",
             "--no-build-isolation dist/*.tar.gz",

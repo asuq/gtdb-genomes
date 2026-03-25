@@ -46,13 +46,6 @@ real_data_require_ncbi_api_key() {
 }
 
 
-real_data_append_optional_ncbi_api_key() {
-    local command=("$@")
-
-    printf '%s\0' "${command[@]}"
-}
-
-
 real_data_initialise_suite() {
     local test_root=$1
     local evidence_root="${test_root}/_evidence"

@@ -86,10 +86,12 @@ Optional local launcher fallback:
 - `LOCAL_LAUNCHER_MODE=module` to run
   `${REPO_ROOT}/.venv/bin/python -m gtdb_genomes ...`
 
+The default launcher mode requires `uv` on `PATH`. The module launcher uses the checked-out `.venv/bin/python` directly and does not depend on `uv`.
+
 Required commands by case family:
 
-- `A1` to `A9`: `uv`, `datasets`, and `unzip`
-- `B1` to `B6`: `uv`, `datasets`, and `unzip`
+- `A1` to `A9`: `uv`, `datasets`, and `unzip` for the default launcher mode
+- `B1` to `B6`: `uv`, `datasets`, and `unzip` for the default launcher mode
 
 Required bootstrap step:
 
