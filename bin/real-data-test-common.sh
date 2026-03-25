@@ -9,6 +9,8 @@ REAL_DATA_OVERALL_STATUS=0
 REAL_DATA_CASE_RESULTS_FILE=""
 REAL_DATA_PYTHON_VERSION_BIN="${REAL_DATA_PYTHON_VERSION_BIN:-}"
 REAL_DATA_PREPARED_COMMAND=()
+REAL_DATA_LAST_COMMAND_EXIT=0
+REAL_DATA_LAST_COMMAND_ELAPSED_SECONDS=0
 
 
 real_data_today() {
@@ -78,6 +80,15 @@ real_data_detect_python_bin() {
         return 0
     fi
     return 1
+}
+
+
+real_data_detect_uv_python_bin() {
+    if ! command -v uv >/dev/null 2>&1; then
+        return 1
+    fi
+
+    uv run python -c 'import sys; print(sys.executable)'
 }
 
 
@@ -229,6 +240,41 @@ real_data_prepare_case_command() {
             "${REAL_DATA_PREPARED_COMMAND[@]}"
         )
     fi
+}
+
+
+real_data_run_command_capture() {
+    local stdout_file=$1
+    local stderr_file=$2
+    local combined_file=$3
+    local actual_exit=0
+    local start_epoch=0
+    local end_epoch=0
+    local temp_dir=""
+    local raw_stdout_file=""
+    local raw_stderr_file=""
+    local temp_dir_escaped=""
+
+    shift 3
+
+    temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/gtdb_real_command.XXXXXX")
+    raw_stdout_file="${temp_dir}/stdout.log"
+    raw_stderr_file="${temp_dir}/stderr.log"
+    printf -v temp_dir_escaped '%q' "${temp_dir}"
+    trap "real_data_cleanup_temp_dir ${temp_dir_escaped}" EXIT INT TERM HUP
+
+    start_epoch=$(date +%s)
+    "$@" > "${raw_stdout_file}" 2> "${raw_stderr_file}"
+    actual_exit=$?
+    end_epoch=$(date +%s)
+    real_data_redact_file "${raw_stdout_file}" "${stdout_file}"
+    real_data_redact_file "${raw_stderr_file}" "${stderr_file}"
+    cat "${stdout_file}" "${stderr_file}" > "${combined_file}"
+    trap - EXIT INT TERM HUP
+    real_data_cleanup_temp_dir "${temp_dir}"
+
+    REAL_DATA_LAST_COMMAND_EXIT=${actual_exit}
+    REAL_DATA_LAST_COMMAND_ELAPSED_SECONDS=$((end_epoch - start_epoch))
 }
 
 
@@ -612,33 +658,17 @@ real_data_run_command_check() {
     local combined_file="${evidence_root}/combined.log"
     local summary_file="${evidence_root}/summary.txt"
     local command_file="${evidence_root}/command.sh"
-    local actual_exit=0
     local status="PASS"
-    local start_epoch=0
-    local end_epoch=0
-    local temp_dir=""
-    local raw_stdout_file=""
-    local raw_stderr_file=""
-    local temp_dir_escaped=""
 
     shift 3
     mkdir -p "${evidence_root}"
     real_data_write_command_file "${command_file}" "$@"
-    temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/gtdb_real_command.XXXXXX")
-    raw_stdout_file="${temp_dir}/stdout.log"
-    raw_stderr_file="${temp_dir}/stderr.log"
-    printf -v temp_dir_escaped '%q' "${temp_dir}"
-    trap "real_data_cleanup_temp_dir ${temp_dir_escaped}" EXIT INT TERM HUP
-
-    start_epoch=$(date +%s)
-    "$@" > "${raw_stdout_file}" 2> "${raw_stderr_file}"
-    actual_exit=$?
-    end_epoch=$(date +%s)
-    real_data_redact_file "${raw_stdout_file}" "${stdout_file}"
-    real_data_redact_file "${raw_stderr_file}" "${stderr_file}"
-    cat "${stdout_file}" "${stderr_file}" > "${combined_file}"
-    trap - EXIT INT TERM HUP
-    real_data_cleanup_temp_dir "${temp_dir}"
+    real_data_run_command_capture \
+        "${stdout_file}" \
+        "${stderr_file}" \
+        "${combined_file}" \
+        "$@"
+    actual_exit=${REAL_DATA_LAST_COMMAND_EXIT}
 
     if [ "${actual_exit}" -ne "${expected_exit}" ]; then
         status="FAIL"
@@ -650,7 +680,7 @@ real_data_run_command_check() {
         printf 'status=%s\n' "${status}"
         printf 'expected_exit=%s\n' "${expected_exit}"
         printf 'actual_exit=%s\n' "${actual_exit}"
-        printf 'elapsed_seconds=%s\n' "$((end_epoch - start_epoch))"
+        printf 'elapsed_seconds=%s\n' "${REAL_DATA_LAST_COMMAND_ELAPSED_SECONDS}"
     } > "${summary_file}"
 }
 
@@ -669,15 +699,8 @@ real_data_run_case() {
     local combined_file="${evidence_root}/combined.log"
     local summary_file="${evidence_root}/summary.txt"
     local command_file="${evidence_root}/command.sh"
-    local actual_exit=0
     local status="PASS"
-    local start_epoch=0
-    local end_epoch=0
-    local temp_dir=""
-    local raw_stdout_file=""
-    local raw_stderr_file=""
-    local temp_dir_escaped=""
-    local command=()
+    local actual_exit=0
 
     shift 6
 
@@ -690,26 +713,17 @@ real_data_run_case() {
 
     mkdir -p "${evidence_root}"
     real_data_prepare_case_command "$@"
-    command=("${REAL_DATA_PREPARED_COMMAND[@]}")
     real_data_write_command_file \
         "${command_file}" \
-        "${command[@]}" \
+        "${REAL_DATA_PREPARED_COMMAND[@]}" \
         --outdir "${output_root}"
-    temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/gtdb_real_command.XXXXXX")
-    raw_stdout_file="${temp_dir}/stdout.log"
-    raw_stderr_file="${temp_dir}/stderr.log"
-    printf -v temp_dir_escaped '%q' "${temp_dir}"
-    trap "real_data_cleanup_temp_dir ${temp_dir_escaped}" EXIT INT TERM HUP
-
-    start_epoch=$(date +%s)
-    "${command[@]}" --outdir "${output_root}" > "${raw_stdout_file}" 2> "${raw_stderr_file}"
-    actual_exit=$?
-    end_epoch=$(date +%s)
-    real_data_redact_file "${raw_stdout_file}" "${stdout_file}"
-    real_data_redact_file "${raw_stderr_file}" "${stderr_file}"
-    cat "${stdout_file}" "${stderr_file}" > "${combined_file}"
-    trap - EXIT INT TERM HUP
-    real_data_cleanup_temp_dir "${temp_dir}"
+    real_data_run_command_capture \
+        "${stdout_file}" \
+        "${stderr_file}" \
+        "${combined_file}" \
+        "${REAL_DATA_PREPARED_COMMAND[@]}" \
+        --outdir "${output_root}"
+    actual_exit=${REAL_DATA_LAST_COMMAND_EXIT}
 
     if ! real_data_assert_case_exit_matches \
         "${actual_exit}" \
@@ -746,7 +760,7 @@ real_data_run_case() {
         printf 'status=%s\n' "${status}"
         printf 'expected_exit=%s\n' "${expected_exit_pattern}"
         printf 'actual_exit=%s\n' "${actual_exit}"
-        printf 'elapsed_seconds=%s\n' "$((end_epoch - start_epoch))"
+        printf 'elapsed_seconds=%s\n' "${REAL_DATA_LAST_COMMAND_ELAPSED_SECONDS}"
         printf 'output_root=%s\n' "${output_root}"
     } > "${summary_file}"
 

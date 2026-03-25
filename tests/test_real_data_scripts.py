@@ -6,6 +6,7 @@ import os
 import shlex
 import subprocess
 import sys
+import shutil
 from pathlib import Path
 
 import pytest
@@ -178,6 +179,38 @@ def test_real_data_detect_python_bin_falls_back_to_python3(
 
     assert result.returncode == 0
     assert result.stdout.strip() == str(fake_python3)
+
+
+def test_real_data_detect_uv_python_bin_uses_uv_resolved_interpreter() -> None:
+    """The local uv helper should report the interpreter chosen by uv."""
+
+    uv_bin = shutil.which("uv")
+    if uv_bin is None:
+        pytest.skip("uv is required for this regression test")
+
+    expected = subprocess.run(
+        [
+            uv_bin,
+            "run",
+            "python",
+            "-c",
+            "import sys; print(sys.executable)",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert expected.returncode == 0, expected.stderr
+
+    script = (
+        f"source {shlex.quote(str(COMMON_HELPERS))}\n"
+        "real_data_detect_uv_python_bin\n"
+    )
+
+    result = run_bash(script)
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == expected.stdout.strip()
 
 
 def test_real_data_run_command_check_redacts_logs_and_records_versions(
@@ -502,12 +535,15 @@ def test_local_runner_keeps_only_c7_as_api_key_required_case() -> None:
 
     assert "real_data_append_optional_ncbi_api_key" not in local_script
     assert "real_data_append_optional_ncbi_api_key" not in remote_script
+    assert "real_data_detect_uv_python_bin" in local_script
+    assert "real_data_detect_python_bin" not in local_script
     assert "B2)\n            real_data_require_ncbi_api_key" not in local_script
     assert "B6)\n            real_data_require_ncbi_api_key" not in local_script
     assert "C2)\n            real_data_require_ncbi_api_key" not in remote_script
     assert "C3)\n            real_data_require_ncbi_api_key" not in remote_script
     c5_block = remote_script.split("C5)", 1)[1].split("C6)", 1)[0]
-    assert "printf '%s\\0' \"${base_command[@]}\"" in c5_block
+    assert "base_command" not in c5_block
+    assert "printf '%s\\0'" not in c5_block
     assert "real_data_require_ncbi_api_key" not in c5_block
     assert "C7)\n            real_data_require_ncbi_api_key" in remote_script
 

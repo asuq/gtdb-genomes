@@ -158,9 +158,6 @@ remote_check_dehydrate_suppressed_partial_result() {
 
 run_remote_case() {
     local case_id=$1
-    local base_command=()
-    local command=()
-    local argument=""
 
     case "${case_id}" in
         C1)
@@ -174,40 +171,26 @@ run_remote_case() {
                 --include genome
             ;;
         C2)
-            base_command=(
-                gtdb-genomes
-                --gtdb-release 89
-                --gtdb-taxon "s__Thermoflexus hugenholtzii"
-                --prefer-genbank
-                --threads 1
-                --include genome
-            )
-            command=()
-            while IFS= read -r -d '' argument; do
-                command+=("${argument}")
-            done < <(printf '%s\0' "${base_command[@]}")
             real_data_run_case \
                 "${REMOTE_TEST_ROOT}" "${case_id}" 0 present "" \
                 remote_check_direct_success \
-                "${command[@]}"
+                gtdb-genomes \
+                --gtdb-release 89 \
+                --gtdb-taxon "s__Thermoflexus hugenholtzii" \
+                --prefer-genbank \
+                --threads 1 \
+                --include genome
             ;;
         C3)
-            base_command=(
-                gtdb-genomes
-                --gtdb-release 207
-                --gtdb-taxon g__Methanobrevibacter
-                --prefer-genbank
-                --threads 4
-                --include genome,gff3
-            )
-            command=()
-            while IFS= read -r -d '' argument; do
-                command+=("${argument}")
-            done < <(printf '%s\0' "${base_command[@]}")
             real_data_run_case \
                 "${REMOTE_TEST_ROOT}" "${case_id}" 0 present "" \
                 remote_check_direct_success \
-                "${command[@]}"
+                gtdb-genomes \
+                --gtdb-release 207 \
+                --gtdb-taxon g__Methanobrevibacter \
+                --prefer-genbank \
+                --threads 4 \
+                --include genome,gff3
             ;;
         C4)
             real_data_run_case \
@@ -220,22 +203,15 @@ run_remote_case() {
                 --include genome
             ;;
         C5)
-            base_command=(
-                gtdb-genomes
-                --gtdb-release 202
-                --gtdb-taxon g__Bacteroides
-                --prefer-genbank
-                --threads 12
-                --include genome
-            )
-            command=()
-            while IFS= read -r -d '' argument; do
-                command+=("${argument}")
-            done < <(printf '%s\0' "${base_command[@]}")
             real_data_run_case \
                 "${REMOTE_TEST_ROOT}" "${case_id}" '0|6' present "" \
                 remote_check_dehydrate_suppressed_partial_result \
-                "${command[@]}"
+                gtdb-genomes \
+                --gtdb-release 202 \
+                --gtdb-taxon g__Bacteroides \
+                --prefer-genbank \
+                --threads 12 \
+                --include genome
             ;;
         C6)
             real_data_run_case \

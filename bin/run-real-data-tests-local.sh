@@ -98,7 +98,7 @@ local_initialise_launcher() {
             real_data_require_command uv
             export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/gtdb_uv_cache}"
             LOCAL_LAUNCHER=(uv run gtdb-genomes)
-            if REAL_DATA_PYTHON_VERSION_BIN=$(real_data_detect_python_bin); then
+            if REAL_DATA_PYTHON_VERSION_BIN=$(real_data_detect_uv_python_bin); then
                 :
             else
                 REAL_DATA_PYTHON_VERSION_BIN=""
@@ -144,9 +144,6 @@ local_require_case_commands() {
 
 run_local_case() {
     local case_id=$1
-    local base_command=()
-    local command=()
-    local argument=""
 
     case "${case_id}" in
         A1)
@@ -233,22 +230,15 @@ run_local_case() {
                 --include genome
             ;;
         B2)
-            base_command=(
-                "${LOCAL_LAUNCHER[@]}"
-                --gtdb-release 86
-                --gtdb-taxon g__Methanobrevibacter
-                --prefer-genbank
-                --threads 2
-                --include genome,gff3
-            )
-            command=()
-            while IFS= read -r -d '' argument; do
-                command+=("${argument}")
-            done < <(printf '%s\0' "${base_command[@]}")
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 6 present 'PRJNA417962' \
                 local_check_legacy_mixed \
-                "${command[@]}"
+                "${LOCAL_LAUNCHER[@]}" \
+                --gtdb-release 86 \
+                --gtdb-taxon g__Methanobrevibacter \
+                --prefer-genbank \
+                --threads 2 \
+                --include genome,gff3
             ;;
         B3)
             real_data_run_case \
@@ -282,22 +272,15 @@ run_local_case() {
                 --include genome
             ;;
         B6)
-            base_command=(
-                "${LOCAL_LAUNCHER[@]}"
-                --gtdb-release 207
-                --gtdb-taxon g__Methanobrevibacter
-                --prefer-genbank
-                --threads 4
-                --include genome,gff3
-            )
-            command=()
-            while IFS= read -r -d '' argument; do
-                command+=("${argument}")
-            done < <(printf '%s\0' "${base_command[@]}")
             real_data_run_case \
                 "${LOCAL_TEST_ROOT}" "${case_id}" 0 present "" \
                 local_check_direct_success \
-                "${command[@]}"
+                "${LOCAL_LAUNCHER[@]}" \
+                --gtdb-release 207 \
+                --gtdb-taxon g__Methanobrevibacter \
+                --prefer-genbank \
+                --threads 4 \
+                --include genome,gff3
             ;;
         *)
             real_data_die "Unknown local case ID: ${case_id}"
