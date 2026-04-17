@@ -133,7 +133,7 @@ def test_initialise_build_info_requires_force_include_dict(
     """The build hook should reject non-dict force-include state explicitly."""
 
     hook = CustomBuildHook.__new__(CustomBuildHook)
-    hook.directory = str(tmp_path)
+    hook._BuildHookInterface__directory = str(tmp_path)
 
     with pytest.raises(RuntimeError, match="force_include"):
         hook.initialise_build_info(build_data={"force_include": []})
