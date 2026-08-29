@@ -1,0 +1,203 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "gtdb-genomes software architecture",
+    "locale": "en",
+    "output": "gtdb-genomes-architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [1395, 760],
+    "repository": {
+      "url": "https://github.com/asuq/gtdb-genomes",
+      "revision": "b8c999fa20e8aff0e8da4078a9ba57c8378a7eda"
+    },
+    "views": [
+      {
+        "id": "core-run",
+        "label": "Core run path",
+        "focus": ["request", "cli", "orchestrator", "selection", "planning", "execution", "outputs"],
+        "note": "Follow one invocation from validated arguments to auditable genome outputs."
+      },
+      {
+        "id": "taxonomy-lineage",
+        "label": "Taxonomy lineage",
+        "focus": ["bundled-taxonomy", "selection", "planning"],
+        "note": "See how a bundled GTDB release becomes exact taxon and accession selections."
+      },
+      {
+        "id": "ncbi-boundary",
+        "label": "NCBI boundary",
+        "focus": ["planning", "ncbi-metadata", "execution", "ncbi-downloads"],
+        "note": "Inspect the only external command boundary used for metadata and genome payloads."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "request",
+      "type": "external",
+      "label": "Researcher",
+      "sublabel": "taxa + release",
+      "pos": [40, 350],
+      "size": [150, 72]
+    },
+    {
+      "id": "cli",
+      "type": "frontend",
+      "label": "CLI validation",
+      "sublabel": "argparse entrypoint",
+      "tag": "fail closed",
+      "pos": [255, 350],
+      "size": [160, 72],
+      "sources": [
+        {"path": "src/gtdb_genomes/cli.py", "line": 295, "label": "main"},
+        {"path": "src/gtdb_genomes/cli.py", "line": 116, "label": "argument validation"}
+      ]
+    },
+    {
+      "id": "orchestrator",
+      "type": "backend",
+      "label": "Workflow orchestrator",
+      "sublabel": "plan and run",
+      "tag": "exit codes + cleanup",
+      "pos": [490, 350],
+      "size": [170, 72],
+      "sources": [
+        {"path": "src/gtdb_genomes/workflow.py", "line": 131, "label": "run_workflow"}
+      ]
+    },
+    {
+      "id": "selection",
+      "type": "backend",
+      "label": "Release + taxon selection",
+      "sublabel": "exact lineage joins",
+      "pos": [735, 350],
+      "size": [175, 72],
+      "sources": [
+        {"path": "src/gtdb_genomes/workflow_selection.py", "line": 162, "label": "prepare selection"},
+        {"path": "src/gtdb_genomes/selection.py", "line": 48, "label": "exact taxon match"}
+      ]
+    },
+    {
+      "id": "planning",
+      "type": "backend",
+      "label": "Accession planner",
+      "sublabel": "map + choose method",
+      "tag": "direct / dehydrate",
+      "pos": [995, 350],
+      "size": [170, 72],
+      "sources": [
+        {"path": "src/gtdb_genomes/workflow_planning.py", "line": 499, "label": "planning inputs"},
+        {"path": "src/gtdb_genomes/download.py", "line": 186, "label": "method selection"}
+      ]
+    },
+    {
+      "id": "execution",
+      "type": "backend",
+      "label": "Download execution",
+      "sublabel": "download + fallback",
+      "tag": "serial direct path",
+      "pos": [1205, 350],
+      "size": [160, 72],
+      "sources": [
+        {"path": "src/gtdb_genomes/workflow_execution.py", "line": 56, "label": "dispatch"},
+        {"path": "src/gtdb_genomes/workflow_execution_dehydrate.py", "line": 183, "label": "batch path"},
+        {"path": "src/gtdb_genomes/workflow_execution_direct.py", "line": 377, "label": "direct path"}
+      ]
+    },
+    {
+      "id": "outputs",
+      "type": "database",
+      "label": "Output tree + manifests",
+      "sublabel": "payloads + provenance",
+      "tag": "deterministic",
+      "pos": [1180, 600],
+      "size": [210, 76],
+      "sources": [
+        {"path": "src/gtdb_genomes/workflow_outputs.py", "line": 913, "label": "materialise outputs"},
+        {"path": "src/gtdb_genomes/layout.py", "line": 481, "label": "root manifests"}
+      ]
+    },
+    {
+      "id": "bundled-taxonomy",
+      "type": "database",
+      "label": "Bundled GTDB data",
+      "sublabel": "release taxonomy",
+      "tag": "SHA-256 + row counts",
+      "pos": [735, 600],
+      "size": [175, 76],
+      "sources": [
+        {"path": "src/gtdb_genomes/release_resolver.py", "line": 53, "label": "release resolution"},
+        {"path": "src/gtdb_genomes/taxonomy.py", "line": 66, "label": "table loading"}
+      ]
+    },
+    {
+      "id": "ncbi-metadata",
+      "type": "external",
+      "label": "NCBI Datasets metadata",
+      "sublabel": "assembly summaries",
+      "pos": [985, 80],
+      "size": [190, 76],
+      "sources": [
+        {"path": "src/gtdb_genomes/metadata.py", "line": 93, "label": "summary lookup"}
+      ]
+    },
+    {
+      "id": "ncbi-downloads",
+      "type": "external",
+      "label": "NCBI genome payloads",
+      "sublabel": "ZIP / dehydrated bag",
+      "pos": [1190, 80],
+      "size": [190, 76],
+      "sources": [
+        {"path": "src/gtdb_genomes/download.py", "line": 97, "label": "download command"},
+        {"path": "src/gtdb_genomes/download.py", "line": 165, "label": "rehydrate command"}
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Local Python 3.12+ process",
+      "wraps": ["cli", "orchestrator", "selection", "planning", "execution", "bundled-taxonomy", "outputs"],
+      "pad": 4
+    }
+  ],
+  "connections": [
+    {"id": "submit-request", "from": "request", "to": "cli", "label": "args", "variant": "emphasis"},
+    {"id": "start-workflow", "from": "cli", "to": "orchestrator", "label": "CliArgs"},
+    {"id": "orchestrate-selection", "from": "orchestrator", "to": "selection", "label": "select"},
+    {"id": "taxonomy-input", "from": "bundled-taxonomy", "to": "selection", "label": "release tables", "fromSide": "top", "toSide": "bottom"},
+    {"id": "selected-accessions", "from": "selection", "to": "planning", "label": "rows"},
+    {"id": "metadata-lookup", "from": "planning", "to": "ncbi-metadata", "label": "datasets summary", "fromSide": "top", "toSide": "bottom"},
+    {"id": "planned-work", "from": "planning", "to": "execution", "label": "run", "variant": "emphasis", "fromSide": "right", "toSide": "left"},
+    {"id": "payload-request", "from": "execution", "to": "ncbi-downloads", "label": "datasets payloads", "fromSide": "top", "toSide": "bottom"},
+    {"id": "materialise-results", "from": "execution", "to": "outputs", "label": "payloads + status", "variant": "emphasis", "fromSide": "bottom", "toSide": "top", "labelAt": [1285, 446]}
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Local source of taxonomic truth",
+      "items": [
+        "Release aliases resolve against bundled releases.tsv",
+        "Taxonomy files are checked against recorded digests and row counts"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "External boundary",
+      "items": [
+        "Only ncbi-datasets-cli supplies live metadata and genome payloads",
+        "The optional API key is passed only to datasets subprocesses"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Auditable result",
+      "items": [
+        "Per-taxon payloads are paired with accession and failure manifests",
+        "Run summaries record versions, hashes, decisions, counts, and exit status"
+      ]
+    }
+  ]
+}
