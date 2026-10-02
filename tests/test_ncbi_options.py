@@ -38,6 +38,40 @@ def read_table(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle, delimiter="\t"))
 
 
+def test_native_options_preserve_values_and_split_destinations(tmp_path: Path) -> None:
+    args = parse_args(build_parser(), [
+        "-t", "g__Example", "-o", str(tmp_path), "--assembly-level", "complete,chromosome",
+        "--annotated", "--exclude-atypical=false", "--search", "Broad Institute",
+        "--search=--filename=untouched.zip", "--chromosomes", "1,2", "--chromosomes", "pEC",
+        "--fast-zip-validation", "--no-progressbar", "--include", "all",
+        "--api-key", "test-secret",
+    ])
+    assert args.ncbi_filters == (
+        "--assembly-level=complete,chromosome", "--annotated=true",
+        "--exclude-atypical=false", "--search=Broad Institute",
+        "--search=--filename=untouched.zip",
+    )
+    assert args.ncbi_download_options == (
+        "--chromosomes=1,2", "--chromosomes=pEC", "--fast-zip-validation=true",
+        "--no-progressbar=true",
+    )
+    assert args.include == "all"
+    assert args.ncbi_api_key == "test-secret"
+
+
+@pytest.mark.parametrize("arguments", [
+    ["--assembly-source", "genbank"], ["--assembly-version", "all"],
+    ["--filename", "override.zip"], ["--inputfile", "override.txt"],
+    ["--preview"], ["--dehydrated"], ["--include", "none"],
+    ["--include", "protein"], ["--search", ""], ["--assembly-lev", "complete"],
+    ["--annotated=maybe"], ["--api-key", "test-secret", "--debug"],
+])
+def test_invalid_or_incompatible_options_fail(arguments: list[str], tmp_path: Path) -> None:
+    with pytest.raises(SystemExit) as error:
+        parse_args(build_parser(), ["-t", "g__Example", "-o", str(tmp_path), *arguments])
+    assert error.value.code == 2
+
+
 @pytest.mark.parametrize("include", [
     "all", "genome,rna,cds,gtf,gbff,seq-report", "genome,gff3,protein",
 ])
@@ -133,3 +167,83 @@ def test_excluded_fallback_does_not_hide_primary_download_failure(monkeypatch, t
     assert requests == ["GCA_1.1"] * 4
     assert result.executions["GCF_1.1"].download_status == "failed"
     assert result.executions["GCF_1.1"].failures
+
+
+@pytest.mark.parametrize("mode,all_excluded,dry_run", [
+    ("direct", False, False), ("dehydrate", False, False),
+    ("threshold", False, False),
+    ("direct", True, False), ("direct", True, True),
+])
+def test_cli_exclusion_tables_and_download_workload(
+    monkeypatch, tmp_path: Path, mode: str, all_excluded: bool, dry_run: bool,
+) -> None:
+    install_fake_release_resolution(monkeypatch)
+    monkeypatch.delenv("NCBI_API_KEY", raising=False)
+    lineage = "d__Bacteria;g__Example;s__Example one"
+    frame = pl.DataFrame({
+        "gtdb_accession": ["RS_GCF_1.1", "RS_GCF_2.1"],
+        "ncbi_accession": ["GCF_1.1", "GCF_2.1"],
+        "lineage": [lineage, lineage], "taxonomy_file": ["fixture.tsv", "fixture.tsv"],
+    })
+    monkeypatch.setattr("gtdb_genomes.workflow_selection.load_release_taxonomy", lambda _: frame)
+    monkeypatch.setattr("gtdb_genomes.workflow_selection.run_supported_preflight", lambda _: None)
+    monkeypatch.setattr("gtdb_genomes.provenance.get_command_version", lambda _: "datasets 18.4.0")
+    if mode in ("dehydrate", "threshold"):
+        monkeypatch.setattr(
+            "gtdb_genomes.download.DEHYDRATE_ACCESSION_THRESHOLD",
+            1 if mode == "dehydrate" else 2,
+        )
+
+    def lookup(accessions, inputfile, **kwargs):
+        records = [{"accession": "GCF_1.1"}, {"accession": "GCF_2.1"}]
+        if kwargs.get("filter_args"):
+            records = [] if all_excluded else records[:1]
+        return lookup_result(records, accessions)
+
+    monkeypatch.setattr("gtdb_genomes.workflow_eligibility.run_summary_lookup_with_retries", lookup)
+    commands = []
+
+    def command_runner(command, **kwargs):
+        commands.append(command)
+        assert not all_excluded and not dry_run
+        if command[1] == "download":
+            assert "--chromosomes=all" in command
+            accessions = Path(command[command.index("--inputfile") + 1]).read_text().splitlines()
+            assert accessions == ["GCF_1.1"]
+            archive = Path(command[command.index("--filename") + 1])
+            with zipfile.ZipFile(archive, "w") as handle:
+                handle.writestr("ncbi_dataset/data/GCF_1.1/genomic.fna", ">fixture\nACGT\n")
+        return RetryableCommandResult(True, "", "", ())
+
+    for module in ("workflow_execution_direct", "workflow_execution_dehydrate"):
+        monkeypatch.setattr(f"gtdb_genomes.{module}.run_retryable_command", command_runner)
+    output = tmp_path / "output"
+    arguments = [
+        "-t", "g__Example", "-o", str(output), "--assembly-level", "complete",
+        "--chromosomes", "all", "--include", "all",
+    ]
+    if dry_run:
+        arguments.append("--dry-run")
+    assert main(arguments) == 0
+    if dry_run:
+        assert not output.exists()
+        assert not commands
+        return
+    rows = read_table(output / "accession_map.tsv")
+    excluded = [row for row in rows if row["download_status"] == "excluded"]
+    assert len(excluded) == (2 if all_excluded else 1)
+    assert all(not row["final_accession"] and not row["output_relpaths"] for row in excluded)
+    assert all("--assembly-level=complete" in row["exclusion_reason"] for row in excluded)
+    assert read_table(output / "download_failures.tsv") == []
+    per_taxon = read_table(output / "taxa/g__Example/taxon_accessions.tsv")
+    assert sum(row["download_status"] == "excluded" for row in per_taxon) == len(excluded)
+    summary = parse_summary_log(output / "run_summary.log")
+    assert summary["excluded_accessions"] == str(len(excluded))
+    assert summary["failed_accessions"] == "0"
+    assert json.loads(summary["ncbi_options"]) == ["--assembly-level=complete", "--chromosomes=all"]
+    assert read_table(output / "taxon_summary.tsv")[0]["excluded_accessions"] == str(len(excluded))
+    if all_excluded:
+        assert not commands
+    else:
+        assert (output / "taxa/g__Example/GCF_1.1/genomic.fna").is_file()
+        assert ("--dehydrated" in commands[0]) == (mode == "dehydrate")

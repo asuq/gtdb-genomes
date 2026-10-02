@@ -728,25 +728,24 @@ def test_parse_args_rejects_removed_download_method_flag(tmp_path: Path) -> None
     assert error.value.code == 2
 
 
-def test_parse_args_rejects_legacy_api_key_flag(tmp_path: Path) -> None:
-    """The removed legacy API key flag should be rejected."""
+def test_parse_args_accepts_native_api_key_alias(tmp_path: Path) -> None:
+    """The native Datasets API key spelling should use the existing secret path."""
 
     parser = build_parser()
-    with pytest.raises(SystemExit) as error:
-        parse_args(
-            parser,
-            [
-                "--gtdb-release",
-                "latest",
-                "--gtdb-taxon",
-                "g__Escherichia",
-                "--outdir",
-                str(tmp_path),
-                "--api-key",
-                "secret",
-            ],
-        )
-    assert error.value.code == 2
+    args = parse_args(
+        parser,
+        [
+            "--gtdb-release",
+            "latest",
+            "--gtdb-taxon",
+            "g__Escherichia",
+            "--outdir",
+            str(tmp_path),
+            "--api-key",
+            "secret",
+        ],
+    )
+    assert args.ncbi_api_key == "secret"
 
 
 def test_parse_args_rejects_removed_legacy_flags(tmp_path: Path) -> None:

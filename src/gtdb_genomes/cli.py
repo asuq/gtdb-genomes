@@ -15,6 +15,7 @@ from gtdb_genomes.layout import (
     find_leftover_run_artefacts,
 )
 from gtdb_genomes.preflight import PreflightError
+from gtdb_genomes.ncbi_options import add_ncbi_options, collect_ncbi_options
 from gtdb_genomes.subprocess_utils import NCBI_API_KEY_ENV_VAR
 from gtdb_genomes.taxon_normalisation import (
     is_complete_requested_taxon,
@@ -179,6 +180,8 @@ def parse_args(
         debug=namespace.debug,
         keep_temp=namespace.keep_temp,
         dry_run=namespace.dry_run,
+        ncbi_filters=collect_ncbi_options(parser, namespace, "filter"),
+        ncbi_download_options=collect_ncbi_options(parser, namespace, "download"),
     )
 
 
@@ -186,6 +189,7 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the base argument parser for the CLI."""
     parser = argparse.ArgumentParser(
         add_help=False,
+        allow_abbrev=False,
         prog="gtdb-genomes",
         description="Download NCBI genomes by GTDB taxon and GTDB release",
         usage=(
@@ -193,7 +197,7 @@ def build_parser() -> argparse.ArgumentParser:
             "[-o OUTDIR] [-h] [-r GTDB_RELEASE] [--prefer-genbank] "
             "[--version-latest] [-j THREADS] "
             "[--ncbi-api-key NCBI_API_KEY] [--include INCLUDE] "
-            "[--debug] [--keep-tmp] [-d]"
+            "[--debug] [--keep-tmp] [-d] [NCBI_OPTIONS]"
         ),
     )
     mandatory_options = parser.add_argument_group("mandatory options")
@@ -258,6 +262,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     optional_options.add_argument(
         "--ncbi-api-key",
+        "--api-key",
         help=(
             "NCBI API key used only for datasets commands; overrides "
             f"{NCBI_API_KEY_ENV_VAR} from the environment; the tool does not "
@@ -291,6 +296,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Resolve inputs without downloading genome payloads"
         ),
     )
+    add_ncbi_options(parser)
     return parser
 
 
