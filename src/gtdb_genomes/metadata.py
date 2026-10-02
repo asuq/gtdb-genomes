@@ -28,6 +28,7 @@ from gtdb_genomes.metadata_summary_parsing import (
     ParsedSummaryOutput,
     SummaryLookupResult,
     parse_summary_json_lines,
+    parse_primary_summary_output,
     parse_summary_output,
     parse_summary_status_map,
 )
@@ -63,6 +64,7 @@ UNKNOWN_ASSEMBLY_STATUS_INFO = AssemblyStatusInfo(
 def build_summary_command(
     accession_file: Path,
     datasets_bin: str = "datasets",
+    filter_args: tuple[str, ...] = (),
 ) -> list[str]:
     """Build the datasets summary command for assembly accessions."""
 
@@ -74,6 +76,7 @@ def build_summary_command(
         "--inputfile",
         str(accession_file),
         "--as-json-lines",
+        *filter_args,
     ]
 
 
@@ -97,6 +100,9 @@ def run_summary_lookup_with_retries(
     datasets_bin: str = "datasets",
     sleep_func: Callable[[float], None] = time.sleep,
     runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+    *,
+    filter_args: tuple[str, ...] = (),
+    primary_only: bool = False,
 ) -> SummaryLookupResult:
     """Look up accession metadata with the fixed retry budget."""
 
@@ -108,6 +114,7 @@ def run_summary_lookup_with_retries(
     command = build_summary_command(
         accession_file,
         datasets_bin=datasets_bin,
+        filter_args=filter_args,
     )
     environment = build_datasets_subprocess_environment(ncbi_api_key)
     max_attempts = len(RETRY_DELAYS_SECONDS) + 1
@@ -137,7 +144,10 @@ def run_summary_lookup_with_retries(
         else:
             if result.returncode == 0:
                 try:
-                    parsed_summary = parse_summary_output(
+                    parse_output = (
+                        parse_primary_summary_output if primary_only else parse_summary_output
+                    )
+                    parsed_summary = parse_output(
                         result.stdout,
                         ordered_accessions,
                     )

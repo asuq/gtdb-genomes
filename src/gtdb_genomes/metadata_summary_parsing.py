@@ -8,7 +8,10 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from json import JSONDecodeError
 
-from gtdb_genomes.assembly_accessions import parse_assembly_accession
+from gtdb_genomes.assembly_accessions import (
+    get_assembly_accession_stem,
+    parse_assembly_accession,
+)
 from gtdb_genomes.download import CommandFailureRecord
 
 
@@ -309,6 +312,43 @@ def parse_summary_json_lines(
     """Map requested accessions to discovered accessions from summary output."""
 
     return parse_summary_output(raw_text, requested_accessions).summary_map
+
+
+def parse_primary_summary_output(
+    raw_text: str,
+    requested_accessions: Iterable[str],
+) -> ParsedSummaryOutput:
+    """Match eligibility records by primary accession, never by a paired alias."""
+
+    requested = set(requested_accessions)
+    summaries: dict[str, set[str]] = {}
+    statuses: dict[str, AssemblyStatusInfo] = {}
+    for line in raw_text.splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except JSONDecodeError as error:
+            raise MetadataLookupError(DATASETS_SUMMARY_JSON_ERROR) from error
+        accession = extract_primary_assembly_accession(payload)
+        if accession is None:
+            raise MetadataLookupError(
+                f"{DATASETS_SUMMARY_JSON_ERROR}: missing primary assembly accession",
+            )
+        matches = requested.intersection((accession, get_assembly_accession_stem(accession)))
+        if not matches or accession in statuses:
+            raise MetadataLookupError(
+                f"{DATASETS_SUMMARY_JSON_ERROR}: unexpected or duplicate primary "
+                f"assembly accession {accession}",
+            )
+        for request in matches:
+            if request in summaries:
+                raise MetadataLookupError(
+                    f"{DATASETS_SUMMARY_JSON_ERROR}: multiple revisions for {request}",
+                )
+            summaries[request] = {accession}
+        statuses[accession] = build_assembly_status_info(payload)
+    return ParsedSummaryOutput(summary_map=summaries, status_map=statuses)
 
 
 def parse_summary_status_map(
