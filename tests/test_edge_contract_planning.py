@@ -695,7 +695,7 @@ def test_real_run_logs_info_milestones(
         log_text
     )
     assert "INFO Writing output manifests to" in log_text
-    assert "INFO Run finished: successful_accessions=1 failed_accessions=0 exit_code=0" in (
+    assert "INFO Run finished: successful_accessions=1 failed_accessions=0 excluded_accessions=0 exit_code=0" in (
         log_text
     )
 

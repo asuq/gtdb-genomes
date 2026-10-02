@@ -14,7 +14,10 @@ conversion_status
 output_relpath
 download_status
 duplicate_across_taxa
+exclusion_reason
 
 Notes:
-Rows are ordered with failed records first, then successful records by
+Rows are ordered with failed records first, then excluded records, then successful records by
 `final_accession`.
+Excluded rows retain their input mappings, with empty final_accession and output_relpath.
+exclusion_reason records the applied combined NCBI criteria.

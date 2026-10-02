@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import json
 import logging
 from pathlib import Path
 import re
@@ -64,6 +65,7 @@ class RunSummaryRow(TypedDict):
     download_concurrency_used: int
     rehydrate_workers_used: int
     include: str
+    ncbi_options: str
     prefer_genbank: str
     version_latest: str
     package_version: str
@@ -78,6 +80,7 @@ class RunSummaryRow(TypedDict):
     unique_gtdb_accessions: int
     successful_accessions: int
     failed_accessions: int
+    excluded_accessions: int
     output_dir: str
     exit_code: int
 
@@ -89,6 +92,7 @@ class TaxonSummaryRow(TypedDict):
     unique_gtdb_accessions: int
     successful_accessions: int
     failed_accessions: int
+    excluded_accessions: int
     duplicate_copies_written: int
     output_dir: str
 
@@ -110,6 +114,7 @@ class EnrichedOutputRow(TypedDict):
     output_relpath: str
     download_status: str
     duplicate_across_taxa: bool
+    exclusion_reason: str
 
 
 class AccessionMapRow(TypedDict):
@@ -124,6 +129,7 @@ class AccessionMapRow(TypedDict):
     download_status: str
     output_relpaths: str
     duplicate_across_taxa: str
+    exclusion_reason: str
 
 
 class PerTaxonOutputRow(TypedDict):
@@ -140,6 +146,7 @@ class PerTaxonOutputRow(TypedDict):
     output_relpath: str
     download_status: str
     duplicate_across_taxa: str
+    exclusion_reason: str
 
 
 class FailureManifestRow(TypedDict):
@@ -287,6 +294,10 @@ def build_taxon_summary_rows(
                     },
                 ),
                 "duplicate_copies_written": duplicate_counts.get(requested_taxon, 0),
+                "excluded_accessions": len({
+                    row["gtdb_accession"] for row in rows
+                    if row["download_status"] == "excluded"
+                }),
                 "output_dir": str(run_directories.taxa_root / taxon_slug),
             },
         )
@@ -324,6 +335,7 @@ def build_run_summary_row(
             version_latest=args.version_latest,
             provenance=provenance,
             accession_decision_sha256=accession_decision_sha256,
+            ncbi_options=args.ncbi_filters + args.ncbi_download_options,
         ),
         "accession_decision_sha256": accession_decision_sha256,
         "started_at": started_at,
@@ -336,6 +348,7 @@ def build_run_summary_row(
         "download_concurrency_used": download_concurrency_used,
         "rehydrate_workers_used": rehydrate_workers_used,
         "include": args.include,
+        "ncbi_options": json.dumps(args.ncbi_filters + args.ncbi_download_options),
         "prefer_genbank": str(args.prefer_genbank).lower(),
         "version_latest": str(args.version_latest).lower(),
         "package_version": provenance.package_version,
@@ -368,6 +381,10 @@ def build_run_summary_row(
                 if row["download_status"] == "failed"
             },
         ),
+        "excluded_accessions": len({
+            row["gtdb_accession"] for row in accession_rows
+            if row["download_status"] == "excluded"
+        }),
         "output_dir": "" if output_root is None else str(output_root),
         "exit_code": exit_code,
     }
@@ -389,6 +406,7 @@ def render_run_summary_log(run_summary: RunSummaryRow) -> str:
                 "download_concurrency_used",
                 "rehydrate_workers_used",
                 "include",
+                "ncbi_options",
                 "prefer_genbank",
                 "version_latest",
                 "package_version",
@@ -408,6 +426,7 @@ def render_run_summary_log(run_summary: RunSummaryRow) -> str:
                 "unique_gtdb_accessions",
                 "successful_accessions",
                 "failed_accessions",
+                "excluded_accessions",
             ),
         ),
         ("Paths And Exit", ("output_dir", "exit_code")),
@@ -528,6 +547,7 @@ def build_accession_map_rows(
                     "download_request_accession",
                 ),
                 "conversion_status": join_unique_row_values(rows, "conversion_status"),
+                "exclusion_reason": join_unique_row_values(rows, "exclusion_reason"),
                 "download_status": join_unique_row_values(rows, "download_status"),
                 "output_relpaths": join_unique_row_values(rows, "output_relpath"),
                 "duplicate_across_taxa": str(
@@ -653,6 +673,7 @@ def build_enriched_output_rows(
                 "conversion_status": execution.conversion_status,
                 "output_relpath": "",
                 "download_status": execution.download_status,
+                "exclusion_reason": execution.exclusion_reason,
                 "duplicate_across_taxa": False,
             },
         )
@@ -876,6 +897,7 @@ def execute_transfer_batches(
                 "conversion_status": row["conversion_status"],
                 "output_relpath": row["output_relpath"],
                 "download_status": row["download_status"],
+                "exclusion_reason": row.get("exclusion_reason", ""),
                 "duplicate_across_taxa": str(row["duplicate_across_taxa"]).lower(),
             },
         )
@@ -991,9 +1013,10 @@ def materialise_real_run_outputs(
         taxon_slug = taxon_slug_map[requested_taxon]
         write_taxon_accessions(run_directories, taxon_slug, per_taxon_rows[taxon_slug])
     logger.info(
-        "Run finished: successful_accessions=%d failed_accessions=%d exit_code=%d",
+        "Run finished: successful_accessions=%d failed_accessions=%d excluded_accessions=%d exit_code=%d",
         successful_count,
         failed_count,
+        len({row["gtdb_accession"] for row in enriched_rows if row["download_status"] == "excluded"}),
         exit_code,
     )
     return exit_code

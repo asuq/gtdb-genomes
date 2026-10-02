@@ -30,6 +30,7 @@ class AccessionExecution:
     payload_directory: Path | None
     failures: tuple[CommandFailureRecord, ...]
     request_accession_used: str = ""
+    exclusion_reason: str = ""
 
 
 @dataclass(slots=True)

@@ -48,6 +48,7 @@ RUN_SUMMARY_KEYS = (
     "download_concurrency_used",
     "rehydrate_workers_used",
     "include",
+    "ncbi_options",
     "prefer_genbank",
     "version_latest",
     "package_version",
@@ -62,6 +63,7 @@ RUN_SUMMARY_KEYS = (
     "unique_gtdb_accessions",
     "successful_accessions",
     "failed_accessions",
+    "excluded_accessions",
     "output_dir",
     "exit_code",
 )
@@ -70,6 +72,7 @@ TAXON_SUMMARY_COLUMNS = (
     "unique_gtdb_accessions",
     "successful_accessions",
     "failed_accessions",
+    "excluded_accessions",
     "duplicate_copies_written",
     "output_dir",
 )
@@ -83,6 +86,7 @@ ACCESSION_MAP_COLUMNS = (
     "download_status",
     "output_relpaths",
     "duplicate_across_taxa",
+    "exclusion_reason",
 )
 DOWNLOAD_FAILURE_COLUMNS = (
     "accession",
@@ -112,6 +116,7 @@ TAXON_ACCESSION_COLUMNS = (
     "output_relpath",
     "download_status",
     "duplicate_across_taxa",
+    "exclusion_reason",
 )
 WINDOWS_DRIVE_ROOT_PATTERN = re.compile(r"^[A-Za-z]:($|[\\/])")
 ARCHIVE_EXTRACTION_CHUNK_SIZE_BYTES = 1024 * 1024

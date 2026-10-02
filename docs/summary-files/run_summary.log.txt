@@ -15,6 +15,7 @@ threads_requested
 download_concurrency_used
 rehydrate_workers_used
 include
+ncbi_options
 prefer_genbank
 version_latest
 package_version
@@ -29,6 +30,7 @@ matched_rows
 unique_gtdb_accessions
 successful_accessions
 failed_accessions
+excluded_accessions
 output_dir
 exit_code
 
@@ -37,3 +39,5 @@ The file is a human-readable log grouped into short sections.
 `run_id` and `accession_decision_sha256` are abbreviated to the first 12
 hexadecimal characters followed by `...` in the rendered log.
 download_method_requested is an internal provenance field and is always auto.
+ncbi_options is a JSON array of normalised filter and download arguments, without credentials.
+excluded_accessions counts unique GTDB accessions excluded by NCBI criteria.

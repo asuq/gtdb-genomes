@@ -12,10 +12,11 @@ conversion_status
 download_status
 output_relpaths
 duplicate_across_taxa
+exclusion_reason
 
 Notes:
 The file is condensed to one row per unique accession outcome.
-Rows are ordered with failed records first, then successful records by
+Rows are ordered with failed records first, then excluded records, then successful records by
 `final_accession`.
 download_request_accessions records the terminal exact accession token or tokens
 used for the grouped row.
@@ -24,3 +25,5 @@ payload when one exists.
 The workflow treats the realised accession as authoritative, so versioned request accessions fail closed if the exact realised accession is absent after extraction.
 Only versionless request accessions may accept a unique same-family realised
 version.
+Excluded rows retain their input mappings, with empty final_accession and output_relpaths.
+exclusion_reason records the applied combined criteria, without attributing a specific failed rule.

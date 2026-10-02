@@ -77,6 +77,7 @@ def build_deterministic_run_id(
     version_latest: bool,
     provenance: RuntimeProvenance,
     accession_decision_sha256: str,
+    ncbi_options: tuple[str, ...] = (),
 ) -> str:
     """Return a deterministic run identifier for the realised output."""
 
@@ -85,6 +86,7 @@ def build_deterministic_run_id(
         "resolved_release": resolved_release,
         "requested_taxa": list(requested_taxa),
         "include": include,
+        "ncbi_options": list(ncbi_options),
         "prefer_genbank": prefer_genbank,
         "version_latest": version_latest,
         "package_version": provenance.package_version,

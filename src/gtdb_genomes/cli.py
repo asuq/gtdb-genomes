@@ -39,6 +39,8 @@ class CliArgs:
     debug: bool
     keep_temp: bool
     dry_run: bool
+    ncbi_filters: tuple[str, ...] = ()
+    ncbi_download_options: tuple[str, ...] = ()
 
 
 def normalise_optional_api_key(api_key: str | None) -> str | None:

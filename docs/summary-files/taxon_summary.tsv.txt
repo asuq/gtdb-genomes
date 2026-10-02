@@ -7,5 +7,6 @@ requested_taxon
 unique_gtdb_accessions
 successful_accessions
 failed_accessions
+excluded_accessions
 duplicate_copies_written
 output_dir

@@ -107,3 +107,16 @@ def test_run_id_changes_when_accession_decision_digest_changes() -> None:
     )
 
     assert fixed_run_id != changed_run_id
+
+
+def test_run_id_records_ncbi_criteria_even_when_accessions_are_unchanged() -> None:
+    """Different selection criteria must remain distinguishable in provenance."""
+
+    kwargs = dict(
+        requested_release="95", resolved_release="95", requested_taxa=("g__Example",),
+        include="genome", prefer_genbank=False, version_latest=False,
+        provenance=build_test_provenance(), accession_decision_sha256="a" * 64,
+    )
+    assert build_deterministic_run_id(**kwargs) != build_deterministic_run_id(
+        **kwargs, ncbi_options=("--assembly-level=complete",),
+    )
