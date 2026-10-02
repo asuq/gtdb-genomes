@@ -63,7 +63,8 @@ Short version:
 - `-o, --outdir`: defaults to the current working directory; aborts if leftover GTDB-genomes run artefacts are detected there
 - `-r, --gtdb-release`: defaults to `latest`
 - `--prefer-genbank` and `--version-latest`: live NCBI metadata modes
-- `--include`: locally supported values are `genome`, `gff3`, and `protein`
+- `--assembly-level complete`: download only complete assemblies; other NCBI genome filters are also available
+- `--include`: accepts `genome`, `gff3`, `protein`, `rna`, `cds`, `gtf`, `gbff`, `seq-report`, and `all`; must contain `genome` or `all`
 - `-j, --threads` and `-d, --dry-run` are also available, alongside `--keep-tmp`, `--ncbi-api-key`, and `--debug`
 
 For full option behaviour, see [Options](docs/usage-details.md#options),
@@ -71,6 +72,27 @@ For full option behaviour, see [Options](docs/usage-details.md#options),
 [Retry Policy](docs/usage-details.md#retry-policy),
 [Runtime Contract](docs/usage-details.md#runtime-contract), and
 [Summary Files](docs/usage-details.md#summary-files).
+
+**Assembly source:** `gtdb-genomes` manages accession selection through
+`--prefer-genbank` and `--version-latest`, so NCBI's `--assembly-source` option
+is not exposed. `--prefer-genbank` prefers paired GenBank accessions but can
+fall back to the original accession; it does not guarantee GenBank-only output.
+`--version-latest` requests the latest revision and requires `--prefer-genbank`.
+
+Compatible NCBI filters use their native flag names, including `--annotated`,
+`--exclude-atypical`, `--exclude-multi-isolate`, `--from-type`, `--mag`,
+`--reference`, `--released-after`, `--released-before`, and repeatable `--search`.
+NCBI evaluates these criteria before sequence downloads. Excluded genomes remain
+in the accession tables with `download_status=excluded` and an `exclusion_reason`
+listing the applied criteria. Exclusions are counted separately from failures;
+an entirely excluded selection completes successfully without downloading genomes.
+Assembly level is NCBI's assembly classification, not a completeness or
+contamination score.
+
+The tool also accepts `--chromosomes`, `--fast-zip-validation`,
+`--no-progressbar`, and `--api-key` as an alias for `--ncbi-api-key`.
+See [NCBI genome options](docs/usage-details.md#ncbi-genome-options) for
+compatibility boundaries and metadata requirements.
 
 > [!NOTE]
 > The software aborts when the output root already contains leftover
@@ -85,6 +107,12 @@ For full option behaviour, see [Options](docs/usage-details.md#options),
 > taxonomy loading, or any other use.
 
 ## Examples
+
+Download complete assemblies only:
+
+```bash
+gtdb-genomes -t g__Escherichia --assembly-level complete -o complete-genomes
+```
 
 Small download. Quote species names that contain spaces:
 

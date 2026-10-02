@@ -33,3 +33,9 @@ For Bioconda recipe-template specifics, see
 [packaging/bioconda/README.md](packaging/bioconda/README.md).
 
 Community packaging should use the tagged release `sdist`, not a repository snapshot.
+
+Compatible NCBI genome options are defined once in
+`src/gtdb_genomes/ncbi_options.py`. A new filter or download option normally needs
+one registry entry, relevant tests, and documentation. NCBI evaluates filters;
+avoid reimplementing its scientific criteria locally. Eligibility tests include
+a small bacterial and archaeal fixture checked with Datasets 18.4.0 and 18.35.0.

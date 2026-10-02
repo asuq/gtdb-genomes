@@ -21,25 +21,24 @@ runtime contract.
 ## Command Form
 
 ```text
-usage: gtdb-genomes -t GTDB_TAXON [GTDB_TAXON ...] [-o OUTDIR] [-h] [-r GTDB_RELEASE] [--prefer-genbank] [--version-latest] [-j THREADS] [--ncbi-api-key NCBI_API_KEY] [--include INCLUDE] [--debug] [--keep-tmp] [-d]
+usage: gtdb-genomes -t GTDB_TAXON [GTDB_TAXON ...] [-o OUTDIR] [-h] [-r GTDB_RELEASE] [--prefer-genbank] [--version-latest] [-j THREADS] [--ncbi-api-key NCBI_API_KEY] [--include INCLUDE] [--debug] [--keep-tmp] [-d] [NCBI_OPTIONS]
 
 Download NCBI genomes by GTDB taxon and GTDB release
 
 mandatory options:
-  -t GTDB_TAXON [GTDB_TAXON ...], --gtdb-taxon GTDB_TAXON [GTDB_TAXON ...]
+  -t, --gtdb-taxon GTDB_TAXON [GTDB_TAXON ...]
                         Exact GTDB taxon. You can give one or more values
                         after the flag and repeat it as needed. Quote species
                         names with spaces, for example "s__Altiarchaeum
                         hamiconexum"
-  -o OUTDIR, --outdir OUTDIR
-                        Output directory for the run; default: current working
-                        directory
 
 optional options:
   -h, --help            show this help message and exit
-  -r GTDB_RELEASE, --gtdb-release GTDB_RELEASE
+  -r, --gtdb-release GTDB_RELEASE
                         GTDB release alias or included release identifier;
                         default: latest
+  -o, --outdir OUTDIR   Output directory for the run; default: current working
+                        directory
   --prefer-genbank      Prefer paired GenBank accessions discovered from
                         current NCBI metadata and, by default, keep the exact
                         selected versioned accession
@@ -47,19 +46,46 @@ optional options:
                         paired GenBank family when explicit pairing is
                         available, otherwise in the selected accession family
                         from current NCBI metadata; requires --prefer-genbank
-  -j THREADS, --threads THREADS
+  -j, --threads THREADS
                         Choose the worker count used by compatible workflow
                         steps; direct downloads remain serial; default: 8
-  --ncbi-api-key NCBI_API_KEY
+  --ncbi-api-key, --api-key NCBI_API_KEY
                         NCBI API key used only for datasets commands;
                         overrides NCBI_API_KEY from the environment; the tool
                         does not write it to its own logs or manifests
   --include INCLUDE     Comma-separated datasets include values; must contain
-                        genome
+                        genome or all
   --debug               Enable debug logging; cannot be used while an NCBI API
                         key is active
   --keep-tmp            Keep intermediate working files
   -d, --dry-run         Resolve inputs without downloading genome payloads
+
+NCBI genome options:
+  --assembly-level ASSEMBLY_LEVEL
+                        Assembly levels, comma-separated: complete,
+                        chromosome, scaffold, contig
+  --annotated [{true,false}]
+                        Limit to annotated genomes
+  --exclude-atypical [{true,false}]
+                        Exclude atypical assemblies
+  --exclude-multi-isolate [{true,false}]
+                        Exclude assemblies from multi-isolate projects
+  --from-type [{true,false}]
+                        Limit to assemblies from type material
+  --mag MAG             Metagenome assembled genomes: all, only, or exclude
+  --reference [{true,false}]
+                        Limit to reference genomes
+  --released-after RELEASED_AFTER
+                        Limit to genomes released on or after this date
+  --released-before RELEASED_BEFORE
+                        Limit to genomes released on or before this date
+  --search SEARCH       Search NCBI genome metadata; may be repeated
+  --chromosomes CHROMOSOMES
+                        Chromosomes to download, comma-separated, or all
+  --fast-zip-validation [{true,false}]
+                        Skip upstream ZIP checksum validation
+  --no-progressbar [{true,false}]
+                        Hide the upstream download progress bar
 ```
 
 Running `gtdb-genomes` with no arguments shows this full help text and exits
@@ -170,9 +196,9 @@ successfully.
 - `--include`: Defaults to `genome`.
 
   The value is passed to `datasets download genome accession --include` after
-  a light validation step. In `gtdb-genomes`, `genome` is mandatory and the
-  accepted values are `genome`, `gff3`, and `protein`. The upstream Datasets
-  CLI accepts more include values; see
+  light validation. Accepted values are `genome`, `gff3`, `protein`, `rna`,
+  `cds`, `gtf`, `gbff`, `seq-report`, and `all`. Include `genome` or `all`;
+  genome-free packages are unsupported. See
   [Download a genome data package](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/how-tos/genomes/download-genome/)
   for the broader `--include` behaviour.
 
@@ -181,6 +207,7 @@ successfully.
   - `genome`
   - `genome,gff3`
   - `genome,gff3,protein`
+  - `all`
 
 - `--debug`: Enables debug-level logging, prints redacted command traces, and
   writes a redacted `OUTPUT/debug.log` for real runs. Console logs prefix each
@@ -194,14 +221,63 @@ successfully.
 - `-d`, `--dry-run`: Resolves inputs without creating the final output tree or
   downloading genome payloads. It may resolve the local GTDB release, read
   the included GTDB taxonomy TSVs and the local release manifest, and perform
-  NCBI metadata lookup when `--prefer-genbank` is enabled and the selected rows
-  include supported non-`UBA*` accessions. Zero-match runs and
+  NCBI metadata lookup when `--prefer-genbank` or NCBI filters are enabled and
+  the selected rows include supported non-`UBA*` accessions. With filters, it
+  reports eligible, excluded, and missing-metadata counts; missing metadata
+  returns exit code 5. Zero-match runs and
   unsupported-`UBA*`-only runs avoid NCBI calls.
+
+### NCBI genome options
+
+The following native flags delegate assembly eligibility to
+[NCBI Datasets](https://www.ncbi.nlm.nih.gov/datasets/docs/v2/reference-docs/command-line/datasets/summary/genome/):
+
+- `--assembly-level`: comma-separated `complete`, `chromosome`, `scaffold`, or `contig`.
+- `--annotated`, `--exclude-atypical`, `--exclude-multi-isolate`, `--from-type`, and `--reference`.
+- `--mag`: `all`, `only`, or `exclude`.
+- `--released-after` and `--released-before`: inclusive dates; prefer `YYYY-MM-DD`.
+- `--search`: metadata search text; repeat the flag for multiple searches.
+
+Boolean flags also accept `=true` or `=false`. NCBI validates filter values and
+defines how combined criteria match. Assembly level is an assembly classification;
+it does not measure completeness or contamination. Available upstream options
+depend on the installed Datasets version; unsupported flags fail explicitly.
+
+Filters apply after accession preference resolution. Unfiltered and filtered
+metadata queries distinguish an excluded accession from missing metadata. Queries
+match primary assembly accessions, never incidental paired identifiers. Latest
+requests are pinned to an unambiguous version before filtering and downloading.
+Original-accession fallbacks must also meet the criteria. Excluded genomes are
+never downloaded or retried. Missing primary metadata is recorded as a failure;
+failed or malformed eligibility queries stop planning. An excluded fallback
+does not hide a failure to download an eligible preferred accession.
+
+Excluded accessions remain in root and per-taxon accession tables with status
+`excluded`, an `exclusion_reason` listing the combined criteria, and empty final
+accession and output-path fields. The reason does not identify individual failed
+criteria. Run and taxon summaries include `excluded_accessions`; exclusions do
+not appear in `download_failures.tsv`. If all selected genomes are excluded,
+the run writes its tables, downloads no sequences, and returns 0. Automatic
+download mode selection uses only eligible accessions.
+
+Compatible download controls are `--chromosomes` (repeatable, comma-separated
+names or `all`), `--fast-zip-validation`, and `--no-progressbar`. They apply to
+direct, dehydrated, retry, and fallback downloads, but not metadata queries or
+rehydration. Chromosome selection can produce partial genome sequences. The
+tool still validates and extracts ZIP files with Python. Normalised NCBI options
+are recorded in `run_summary.log` and contribute to the run identifier.
+
+NCBI's `--assembly-source` is intentionally omitted: `--prefer-genbank` prefers
+paired GenBank accessions and can fall back to the original, while
+`--version-latest` controls revision selection. Strict source filtering is not
+provided. Other upstream controls that replace this workflow are unsupported:
+`--inputfile`, `--filename`, `--dehydrated`, `--preview`, `--assembly-version`,
+and genome-free includes such as `none`. Summary output controls are internal.
 
 ## API Key Handling
 
 Using `NCBI_API_KEY` from the environment is the normal workflow path.
-`--ncbi-api-key` is an explicit override. The effective key is passed only to
+`--ncbi-api-key` (alias `--api-key`) is an explicit override. The effective key is passed only to
 child `datasets` processes through the child environment.
 
 The tool:
@@ -389,6 +465,7 @@ Status values:
   - `downloaded`
   - `downloaded_after_fallback`
   - `failed`
+  - `excluded`
 - `download_failures.tsv.stage`
   - `preflight`
   - `metadata_lookup`
@@ -401,6 +478,7 @@ Status values:
   - `retry_scheduled`
   - `retry_exhausted`
   - `unsupported_input`
+  - `metadata_unavailable`
 
 Fixed key and column references for all summary files live under
 [Summary Files](#summary-files) and the linked per-file references.
