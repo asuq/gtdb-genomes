@@ -217,7 +217,7 @@ licence details.
 You can copy and paste this citation:
 
 ```text
-Shima, A. (2026). gtdb-genomes (Version 0.3.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.19198946
+Shima, A. (2026). gtdb-genomes (Version 0.4.0) [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.19198946
 ```
 
 Machine-readable citation metadata is also available in [CITATION.cff](CITATION.cff).

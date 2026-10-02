@@ -158,7 +158,7 @@ Suggested remote setup:
 ```bash
 mamba create -n gtdb-genome-test -c conda-forge -c bioconda python=3.12 pip polars=1.31.0 tqdm=4.67.1 ncbi-datasets-cli=18.33.1
 mamba activate gtdb-genome-test
-python -m pip install --force-reinstall --no-deps /path/to/dist/gtdb_genomes-0.3.0-py3-none-any.whl
+python -m pip install --force-reinstall --no-deps /path/to/dist/gtdb_genomes-0.4.0-py3-none-any.whl
 which gtdb-genomes
 gtdb-genomes --help
 python -c "from gtdb_genomes.release_resolver import get_release_manifest_path; path = get_release_manifest_path(); assert path.is_file(), path"
@@ -235,17 +235,17 @@ packaged-runtime paths with the same build-and-clean-runtime split and reuses
 Use this path when you want to prove that the packaged `gtdb-genomes`
 command works on another server, rather than validating `uv run` from a source
 checkout. For a pre-release check, test the exact release candidate wheel from
-`dev`, not an older tagged build or an unversioned local snapshot.
+`release-0.4.0`, not an older tagged build or an unversioned local snapshot.
 
 ### 1. Prepare the release candidate on the local machine
 
-Prepare the `dev` branch exactly as the release candidate, but stop before
+Prepare the `release-0.4.0` branch exactly as the release candidate, but stop before
 merging to `main` or tagging:
 
 ```bash
 mamba run -n gtdb-genome uv lock
 mamba run -n gtdb-genome uv run pytest -q
-git commit -m "chore(release): prepare v0.3.0"
+git commit -m "chore(release): prepare v0.4.0"
 ```
 
 ### 2. Build and copy the wheel from the local machine
@@ -256,8 +256,8 @@ already has a repo checkout containing `bin/`.
 
 ```bash
 mamba run -n gtdb-genome uv build
-ls dist/gtdb_genomes-0.3.0-py3-none-any.whl
-scp dist/gtdb_genomes-0.3.0-py3-none-any.whl user@remote:/tmp/gtdb-genome-remote/
+ls dist/gtdb_genomes-0.4.0-py3-none-any.whl
+scp dist/gtdb_genomes-0.4.0-py3-none-any.whl user@remote:/tmp/gtdb-genome-remote/
 scp bin/run-real-data-tests-server.sh \
   user@remote:/tmp/gtdb-genome-remote/
 scp bin/run-real-data-tests-remote.sh \
@@ -273,7 +273,7 @@ SSH to the remote server and create a fresh packaged-runtime environment:
 ssh user@remote
 mamba create -n gtdb-genome-test -c conda-forge -c bioconda python=3.12 pip polars=1.31.0 tqdm=4.67.1 ncbi-datasets-cli=18.33.1
 mamba activate gtdb-genome-test
-python -m pip install --force-reinstall --no-deps /tmp/gtdb-genome-remote/gtdb_genomes-0.3.0-py3-none-any.whl
+python -m pip install --force-reinstall --no-deps /tmp/gtdb-genome-remote/gtdb_genomes-0.4.0-py3-none-any.whl
 which gtdb-genomes
 gtdb-genomes --help
 python -c "from gtdb_genomes.release_resolver import get_release_manifest_path; path = get_release_manifest_path(); assert path.is_file(), path"
@@ -387,7 +387,7 @@ export REMOTE_TEST_ROOT=/tmp/gtdb-realtests/remote-$(date +%Y%m%d)
 bash /tmp/gtdb-genome-remote/run-real-data-tests-server.sh C1 C5 C6
 ```
 
-Do not merge to `main` or create `v0.3.0` until this full packaged-runtime
+Do not merge to `main` or create `v0.4.0` until this full packaged-runtime
 suite is green.
 
 ### 6. Investigation mode for a failing remote case

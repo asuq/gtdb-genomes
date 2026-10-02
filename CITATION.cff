@@ -8,8 +8,8 @@ authors:
     email: asuq.4096@gmail.com
     affiliation: Max Planck Institute for Marine Microbiology
     orcid: 'https://orcid.org/0000-0002-7092-7720'
-version: "0.3.0"
-date-released: 2026-08-19
+version: "0.4.0"
+date-released: 2026-10-02
 repository-code: 'https://github.com/asuq/gtdb-genomes'
 abstract: CLI to download genomes by GTDB taxon and GTDB release
 license: MIT
