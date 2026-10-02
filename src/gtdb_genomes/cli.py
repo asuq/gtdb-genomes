@@ -265,7 +265,7 @@ def build_parser() -> argparse.ArgumentParser:
     optional_options.add_argument(
         "--include",
         default="genome",
-        help="Comma-separated datasets include values; must contain genome",
+        help="Comma-separated datasets include values; must contain genome or all",
     )
     optional_options.add_argument(
         "--debug",

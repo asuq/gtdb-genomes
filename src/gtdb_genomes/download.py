@@ -26,7 +26,9 @@ DEHYDRATE_ACCESSION_THRESHOLD = 1000
 REHYDRATE_WORKER_CAP = 30
 RETRY_DELAYS_SECONDS = (5, 15, 45)
 DEFAULT_REQUESTED_DOWNLOAD_METHOD = "auto"
-SUPPORTED_INCLUDE_TOKENS = frozenset({"genome", "gff3", "protein"})
+SUPPORTED_INCLUDE_TOKENS = frozenset({
+    "genome", "gff3", "protein", "rna", "cds", "gtf", "gbff", "seq-report", "all",
+})
 STREAM_READ_CHUNK_SIZE = 4096
 
 
@@ -86,11 +88,12 @@ def validate_include_value(include: str) -> str:
         if value not in SUPPORTED_INCLUDE_TOKENS:
             raise ValueError(
                 "argument --include: unsupported include value "
-                f"{value!r}; supported values are genome, gff3, protein",
+                f"{value!r}; supported values are "
+                + ", ".join(sorted(SUPPORTED_INCLUDE_TOKENS)),
             )
         include_values.append(value)
-    if "genome" not in include_values:
-        raise ValueError("argument --include: value must contain 'genome'")
+    if not {"genome", "all"}.intersection(include_values):
+        raise ValueError("argument --include: value must contain 'genome' or 'all'")
     return ",".join(include_values)
 
 
@@ -100,6 +103,7 @@ def build_direct_batch_download_command(
     include: str,
     datasets_bin: str = "datasets",
     debug: bool = False,
+    download_options: tuple[str, ...] = (),
 ) -> list[str]:
     """Build a non-dehydrated batch datasets genome download command."""
 
@@ -117,6 +121,7 @@ def build_direct_batch_download_command(
     ]
     if debug:
         command.append("--debug")
+    command.extend(download_options)
     return command
 
 
@@ -126,24 +131,17 @@ def build_batch_dehydrate_command(
     include: str,
     datasets_bin: str = "datasets",
     debug: bool = False,
+    download_options: tuple[str, ...] = (),
 ) -> list[str]:
     """Build a batch dehydrated datasets download command."""
 
-    command = [
-        datasets_bin,
-        "download",
-        "genome",
-        "accession",
-        "--inputfile",
-        str(accession_file),
-        "--filename",
-        str(archive_path),
-        "--include",
-        validate_include_value(include),
-        "--dehydrated",
-    ]
+    command = build_direct_batch_download_command(
+        accession_file, archive_path, include, datasets_bin=datasets_bin,
+    )
+    command.append("--dehydrated")
     if debug:
         command.append("--debug")
+    command.extend(download_options)
     return command
 
 
