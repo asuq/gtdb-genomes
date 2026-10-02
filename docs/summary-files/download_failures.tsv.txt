@@ -22,3 +22,6 @@ reason is written as a compact single-line summary with embedded line breaks
 collapsed to spaces.
 Suppressed stock `datasets` "no matching genome assemblies" stderr is
 canonicalised to the suppression note instead of being written verbatim.
+Missing primary metadata during eligibility checks is recorded with
+error_type=filter_metadata_missing and status=metadata_unavailable.
+Genomes excluded by NCBI criteria are recorded in the accession tables, not here.

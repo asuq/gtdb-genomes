@@ -6,7 +6,8 @@ import shutil
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from gtdb_genomes.download import DEFAULT_REQUESTED_DOWNLOAD_METHOD
+from gtdb_genomes.download import DEFAULT_REQUESTED_DOWNLOAD_METHOD, select_download_method
+from gtdb_genomes.workflow_eligibility import resolve_eligible_plans
 from gtdb_genomes.layout import (
     cleanup_interrupted_output_directories,
     cleanup_working_directories,
@@ -201,6 +202,21 @@ def run_workflow(args: CliArgs) -> int:
                 logger,
             )
         )
+        accession_plans, eligibility_executions = resolve_eligible_plans(
+            accession_plans, args, logger,
+        )
+        if args.ncbi_filters:
+            decision_method = (
+                select_download_method(len({
+                    plan.download_request_accession for plan in accession_plans
+                })).method_used
+                if accession_plans else DEFAULT_REQUESTED_DOWNLOAD_METHOD
+            )
+            logger.info(
+                "After NCBI criteria, selected %s for %d eligible request accession(s)",
+                decision_method,
+                len({plan.download_request_accession for plan in accession_plans}),
+            )
     except KeyboardInterrupt:
         exit_code = log_user_interrupt(logger)
         close_logger(logger)
@@ -238,7 +254,10 @@ def run_workflow(args: CliArgs) -> int:
             workflow_selection.count_unique_accessions(unsupported_selected_frame),
         )
         close_logger(logger)
-        return 0
+        return 5 if any(
+            execution.download_status == "failed"
+            for execution in eligibility_executions.values()
+        ) else 0
 
     # Real runs execute downloads and materialise outputs
     run_directories: RunDirectories
@@ -273,6 +292,7 @@ def run_workflow(args: CliArgs) -> int:
                 rehydrate_workers_used=0,
                 shared_failures=(),
             )
+        execution_result.executions.update(eligibility_executions)
         unsupported_executions = workflow_selection.build_unsupported_executions(
             unsupported_selected_frame,
         )

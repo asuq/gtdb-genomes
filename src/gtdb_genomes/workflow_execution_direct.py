@@ -173,6 +173,7 @@ def run_direct_batch_phase(
         archive_path,
         args.include,
         debug=args.debug,
+        download_options=args.ncbi_download_options,
     )
     logger.debug(
         "Running %s",
@@ -424,10 +425,16 @@ def execute_direct_accession_plans(
     for _, grouped_plans in direct_phase.unresolved_groups:
         for plan in grouped_plans:
             direct_unresolved_plans.append(plan)
-            if plan.conversion_status == "paired_to_gca":
+            if plan.conversion_status == "paired_to_gca" and plan.fallback_allowed:
                 fallback_groups.append((plan.original_accession, (plan,)))
+            elif plan.conversion_status == "paired_to_gca":
+                logger.warning(
+                    "Skipping original fallback for %s: NCBI eligibility was not confirmed",
+                    plan.original_accession,
+                )
     failed_after_direct = tuple(
-        plan for plan in direct_unresolved_plans if plan.conversion_status != "paired_to_gca"
+        plan for plan in direct_unresolved_plans
+        if plan.conversion_status != "paired_to_gca" or not plan.fallback_allowed
     )
     propagate_shared_failures_to_failed_plans(
         failed_after_direct,

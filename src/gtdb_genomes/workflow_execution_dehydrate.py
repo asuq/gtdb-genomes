@@ -222,6 +222,7 @@ def execute_batch_dehydrate_plans(
         archive_path,
         args.include,
         debug=args.debug,
+        download_options=args.ncbi_download_options,
     )
     logger.debug("Running %s", redact_command(download_command, secrets))
     batch_download = run_retryable_command(
