@@ -137,6 +137,32 @@ def test_eligibility_pins_latest_and_checks_fallbacks(
     assert calls[1][0] == ("GCA_1.3", "GCF_1.2", "GCA_2.1")
 
 
+def test_verified_bacterial_and_archaeal_assembly_levels(monkeypatch, tmp_path: Path) -> None:
+    """Preserve the native NCBI result for GTDB complete and scaffold assemblies."""
+
+    fixture = json.loads((Path(__file__).parent / "fixtures/ncbi_eligibility.json").read_text())
+    records = fixture["unfiltered_records"]
+    accessions = tuple(record["accession"] for record in records)
+    expected = set(fixture["eligible_accessions"])
+    assert {lineage.split(";")[0] for lineage in fixture["gtdb_lineages"].values()} == {
+        "d__Bacteria", "d__Archaea",
+    }
+
+    def lookup(requests, inputfile, **kwargs):
+        selected = records
+        if kwargs.get("filter_args"):
+            selected = [record for record in records if record["accession"] in expected]
+        return lookup_result(selected, requests)
+
+    monkeypatch.setattr("gtdb_genomes.workflow_eligibility.run_summary_lookup_with_retries", lookup)
+    plans = tuple(AccessionPlan(accession, accession, "unchanged_original") for accession in accessions)
+    args = replace(build_cli_args(tmp_path), ncbi_filters=tuple(fixture["criteria"]))
+    eligible, terminal = resolve_eligible_plans(plans, args, LOGGER)
+    assert {plan.download_request_accession for plan in eligible} == expected
+    assert set(terminal) == set(fixture["excluded_accessions"])
+    assert all(execution.download_status == "excluded" for execution in terminal.values())
+
+
 def test_failed_filter_lookup_never_downloads_unfiltered(monkeypatch, tmp_path: Path) -> None:
     def lookup(requests, inputfile, **kwargs):
         if kwargs.get("filter_args"):

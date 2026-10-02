@@ -1,0 +1,49 @@
+{
+  "source": "NCBI Datasets summary genome accession --as-json-lines, with and without --assembly-level=complete",
+  "validation": [
+    {
+      "datasets_version": "datasets version: 18.4.0",
+      "checked_at_utc": "2026-09-27T15:49:29.672353+00:00"
+    },
+    {
+      "datasets_version": "datasets version: 18.35.0",
+      "checked_at_utc": "2026-09-27T15:56:03.413801+00:00"
+    }
+  ],
+  "gtdb_release": "226.0",
+  "gtdb_lineages": {
+    "GCA_001873845.1": "d__Archaea;p__Altiarchaeota;c__Altiarchaeia;o__Altiarchaeales;f__Altiarchaeaceae;g__Altiarchaeum;s__Altiarchaeum hamiconexum",
+    "GCF_000005845.2": "d__Bacteria;p__Pseudomonadota;c__Gammaproteobacteria;o__Enterobacterales;f__Enterobacteriaceae;g__Escherichia;s__Escherichia coli",
+    "GCA_002293605.1": "d__Bacteria;p__Desulfobacterota_I;c__Desulfovibrionia;o__Desulfovibrionales;f__Desulfovibrionaceae;g__Frigididesulfovibrio;s__Frigididesulfovibrio sp002293605"
+  },
+  "unfiltered_records": [
+    {
+      "accession": "GCA_001873845.1",
+      "assembly_info": {
+        "assembly_level": "Scaffold"
+      }
+    },
+    {
+      "accession": "GCA_002293605.1",
+      "assembly_info": {
+        "assembly_level": "Scaffold"
+      }
+    },
+    {
+      "accession": "GCF_000005845.2",
+      "assembly_info": {
+        "assembly_level": "Complete Genome"
+      }
+    }
+  ],
+  "criteria": [
+    "--assembly-level=complete"
+  ],
+  "eligible_accessions": [
+    "GCF_000005845.2"
+  ],
+  "excluded_accessions": [
+    "GCA_001873845.1",
+    "GCA_002293605.1"
+  ]
+}
